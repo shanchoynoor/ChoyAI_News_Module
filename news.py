@@ -1,9 +1,31 @@
+
 import os
 import requests
 import feedparser
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import re
+import json
+import time
+
+# File to persist sent news links
+SENT_NEWS_FILE = "sent_news.json"
+
+def load_sent_news():
+    if not os.path.exists(SENT_NEWS_FILE):
+        return set()
+    try:
+        with open(SENT_NEWS_FILE, "r") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+def save_sent_news(sent_links):
+    try:
+        with open(SENT_NEWS_FILE, "w") as f:
+            json.dump(list(sent_links), f)
+    except Exception as e:
+        print("Failed to save sent news:", e)
 
 def escape_markdown_v2(text):
     """
@@ -50,25 +72,34 @@ def send_telegram(msg):
 
 def get_hours_ago(published):
     try:
-        if not published or not isinstance(published, tuple):
-            return "unknown"
-        dt = datetime(*published[:6], tzinfo=timezone.utc)
+        if not published:
+            return None
+        # Accept time.struct_time or tuple
+        if isinstance(published, time.struct_time):
+            dt = datetime(*published[:6], tzinfo=timezone.utc)
+        elif isinstance(published, tuple):
+            dt = datetime(*published[:6], tzinfo=timezone.utc)
+        else:
+            return None
         now = datetime.now(timezone.utc)
         delta = now - dt
-        if delta.total_seconds() < 60:  # If less than 1 minute difference
-            return "unknown"
+        # If published in the future or less than 1 minute ago, skip
+        if delta.total_seconds() < 60 or delta.total_seconds() < 0:
+            return None
         hours = int(delta.total_seconds() // 3600)
-        if hours > 30 * 24:
-            return ">30d ago"
+        if hours > 36:
+            return None  # Too old
         return f"{hours}hr ago" if hours < 24 else f"{hours // 24}d ago"
     except Exception:
-        return "unknown"
+        return None
 
 def fetch_rss_entries(sources, limit=5):
     entries = []
+    sent_links = load_sent_news()
+    new_links = set()
     for name, url in sources.items():
         feed = feedparser.parse(url)
-        for entry in feed.entries[:limit]:
+        for entry in feed.entries:
             published_parsed = None
 
             if hasattr(entry, "published_parsed") and entry.published_parsed:
@@ -76,7 +107,6 @@ def fetch_rss_entries(sources, limit=5):
             elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
                 published_parsed = entry.updated_parsed
             else:
-                # Try parsing string manually
                 for key in ['published', 'updated']:
                     try:
                         published_str = getattr(entry, key, None)
@@ -87,14 +117,28 @@ def fetch_rss_entries(sources, limit=5):
                     except Exception:
                         continue
 
-            entries.append({
-                "title": entry.title.replace('[', '').replace(']', ''),
-                "link": entry.link,
-                "source": name,
-                "published": get_hours_ago(published_parsed)
-            })
+            title = getattr(entry, "title", "No Title").replace('[', '').replace(']', '')
+            link = getattr(entry, "link", "#")
 
-    return entries[:5]
+            published_str = get_hours_ago(published_parsed)
+            # Only add if not already sent, has valid link, and valid publish date
+            if link not in sent_links and link != "#" and published_str:
+                entries.append({
+                    "title": title,
+                    "link": link,
+                    "source": name,
+                    "published": published_str
+                })
+                new_links.add(link)
+            if len(entries) >= limit:
+                # Save new sent links before returning
+                sent_links.update(new_links)
+                save_sent_news(sent_links)
+                return entries
+    # Save new sent links before returning
+    sent_links.update(new_links)
+    save_sent_news(sent_links)
+    return entries
 
 def format_news(title, entries):
     msg = f"*{title}:*\n"
