@@ -1,4 +1,3 @@
-
 import os
 import requests
 import feedparser
@@ -39,7 +38,6 @@ def escape_markdown_v2(text):
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 FINNHUB_API = os.getenv("FINNHUB_API_KEY")
 
 # ===================== UTILITIES =====================
@@ -57,10 +55,10 @@ def human_readable_number(num):
     else:
         return f"${num:.2f}"
 
-def send_telegram(msg):
+def send_telegram(msg, chat_id):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {
-        "chat_id": CHAT_ID,
+        "chat_id": chat_id,
         "text": msg,
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
@@ -300,6 +298,45 @@ def main():
     msg += fetch_big_cap_prices()
     msg += fetch_top_movers()
     send_telegram(msg)
+
+# --- Telegram polling bot ---
+def get_updates(offset=None):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    params = {"timeout": 100, "offset": offset}
+    resp = requests.get(url, params=params)
+    return resp.json().get("result", [])
+
+def handle_updates(updates):
+    for update in updates:
+        message = update.get("message")
+        if not message:
+            continue
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "").lower()
+        if text in ["/start", "/news"]:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            msg = f"*\U0001F9E0 6-Hourly Global Digest*\n_{now}_\n\n"
+            msg += get_local_news()
+            msg += get_global_news()
+            msg += get_tech_news()
+            msg += get_sports_news()
+            msg += get_crypto_news()
+            msg += fetch_crypto_market()
+            msg += fetch_big_cap_prices()
+            msg += fetch_top_movers()
+            send_telegram(msg, chat_id)
+        else:
+            send_telegram("Send /news to get the latest digest!", chat_id)
+
+def main():
+    print("Bot started. Listening for messages...")
+    last_update_id = None
+    while True:
+        updates = get_updates(last_update_id)
+        if updates:
+            handle_updates(updates)
+            last_update_id = updates[-1]["update_id"] + 1
+        time.sleep(2)
 
 if __name__ == "__main__":
     main()
