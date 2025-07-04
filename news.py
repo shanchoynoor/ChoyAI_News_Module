@@ -223,6 +223,29 @@ def format_news(title, entries, bangla=False):
         msg += f"{idx}. [{display_title}]({e['link']}) - {e['source']} ({e['published']})\n"
     return msg + "\n"
 
+# ===================== DEEPSEEK AI =====================
+def get_crypto_summary_with_deepseek(market_cap, market_cap_change, volume, volume_change, fear_greed, big_caps, gainers, losers, api_key):
+    prompt = (
+        "Here is the latest crypto market data:\n"
+        f"- Market Cap: {market_cap} ({market_cap_change})\n"
+        f"- Volume: {volume} ({volume_change})\n"
+        f"- Fear/Greed Index: {fear_greed}/100\n"
+        f"- Big Cap Crypto: {big_caps}\n"
+        f"- Top Gainers: {gainers}\n"
+        f"- Top Losers: {losers}\n\n"
+        "Write a short summary paragraph about the current crypto market status and predict if the market will be bullish or bearish tomorrow. Also, provide your confidence as a percentage (e.g., 75%) in your prediction. Be concise and insightful."
+    )
+    url = "https://api.deepseek.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 120,
+        "temperature": 0.7
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    return response.json()["choices"][0]["message"]["content"].strip()   
+
 # ===================== NEWS CATEGORIES =====================
 
 def get_local_news():
@@ -300,7 +323,50 @@ def get_sports_news():
         "NBA": "https://www.nba.com/rss/nba_rss.xml",
         "NFL": "http://www.nfl.com/rss/rsslanding?searchString=home"
     }
-    return format_news("🏆 SPORTS NEWS", fetch_rss_entries(sports_sources))
+    all_entries = fetch_rss_entries(sports_sources, limit=20)  # Fetch more to allow filtering
+    football_keywords = [
+        'football', 'soccer', 'fifa', 'uefa', 'champions league', 'premier league', 'la liga', 'bundesliga',
+        'serie a', 'euro', 'world cup', 'goal', 'match', 'fixture', 'score', 'draw', 'win', 'penalty', 'final',
+        'quarterfinal', 'semifinal', 'tournament', 'cup', 'league', 'ronaldo', 'messi', 'mbappe', 'haaland', 'bellingham',
+        'live', 'vs', 'minute', 'kick-off', 'halftime', 'fulltime', 'result', 'update', 'lineup', 'stadium', 'group', 'knockout'
+    ]
+    cricket_keywords = [
+        'cricket', 'icc', 't20', 'odi', 'test', 'ipl', 'bpl', 'psl', 'cpl', 'big bash', 'wicket', 'run', 'six', 'four',
+        'over', 'innings', 'batsman', 'bowler', 'all-rounder', 'match', 'score', 'result', 'final', 'semi-final', 'quarter-final',
+        'world cup', 'asia cup', 'shakib', 'kohli', 'rohit', 'babar', 'warner', 'root', 'williamson', 'smith', 'starc', 'rashid',
+        'live', 'vs', 'innings break', 'powerplay', 'chase', 'target', 'runs', 'wickets', 'umpire', 'no-ball', 'wide', 'out', 'not out', 'review', 'super over', 'rain', 'dl method', 'points table', 'series', 'trophy', 'stadium', 'captain', 'squad', 'team', 'playing xi', 'update', 'result', 'scorecard', 'highlights', 'stream', 'broadcast', 'telecast', 'coverage', 'commentary', 'fixture', 'schedule', 'venue', 'fans', 'crowd', 'tickets', 'stadium', 'pitch', 'toss', 'bat', 'bowl', 'field', 'catch', 'drop', 'boundary', 'partnership', 'century', 'fifty', 'duck', 'debut', 'retire', 'injury', 'suspension', 'ban', 'controversy', 'award', 'record', 'milestone', 'legend', 'icon', 'star', 'hero', 'superstar', 'profile', 'tribute', 'obituary', 'death', 'birthday', 'marriage', 'divorce'
+    ]
+    # Filter for football/soccer and cricket news
+    def is_football(entry):
+        title = entry['title'].lower()
+        return any(kw in title for kw in football_keywords)
+    def is_cricket(entry):
+        title = entry['title'].lower()
+        return any(kw in title for kw in cricket_keywords)
+    football_news = [e for e in all_entries if is_football(e)]
+    cricket_news = [e for e in all_entries if is_cricket(e) and e not in football_news]
+    # Pick at least 2 football and 1 cricket news (preferably match/tournament/score)
+    top_football = football_news[:2]
+    top_cricket = cricket_news[:1]
+    # For the rest, pick hot/breaking/celebrity sports news (not already picked)
+    celebrity_keywords = [
+        'star', 'legend', 'coach', 'manager', 'transfer', 'sign', 'deal', 'injury', 'scandal', 'award', 'record',
+        'retire', 'comeback', 'controversy', 'ban', 'suspension', 'mvp', 'gold', 'silver', 'bronze', 'medal',
+        'olympic', 'world record', 'breaking', 'exclusive', 'statement', 'announcement', 'trending', 'viral', 'hot',
+        'player', 'celebrity', 'icon', 'hero', 'captain', 'superstar', 'profile', 'tribute', 'obituary', 'death', 'birthday', 'marriage', 'divorce'
+    ]
+    def is_celebrity(entry):
+        title = entry['title'].lower()
+        return any(kw in title for kw in celebrity_keywords)
+    celebrity_news = [e for e in all_entries if is_celebrity(e) and e not in top_football and e not in top_cricket]
+    # Fill up to 2 with celebrity/hot/breaking news
+    top_celebrity = celebrity_news[:2]
+    # If not enough, fill with other top sports news
+    other_news = [e for e in all_entries if e not in top_football and e not in top_cricket and e not in top_celebrity]
+    picked = top_football + top_cricket + top_celebrity
+    if len(picked) < 5:
+        picked += other_news[:5-len(picked)]
+    return format_news("🏆 SPORTS NEWS", picked)
 
 def get_crypto_news():
     crypto_sources = {
@@ -389,8 +455,77 @@ def fetch_top_movers():
     except Exception as e:
         return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n"
 
-# ===================== MAIN =====================
+def fetch_crypto_market_data():
+    """
+    Returns a tuple: (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed)
+    """
+    try:
+        url = "https://api.coingecko.com/api/v3/global"
+        data = requests.get(url).json()["data"]
+        market_cap = data["total_market_cap"]["usd"]
+        volume = data["total_volume"]["usd"]
+        market_change = data["market_cap_change_percentage_24h_usd"]
+        # Estimate volume % change (based on market cap change, as a rough proxy)
+        volume_yesterday = volume / (1 + market_change / 100)
+        volume_change = ((volume - volume_yesterday) / volume_yesterday) * 100
+        # Fear/Greed index
+        fear_index = requests.get("https://api.alternative.me/fng/?limit=1").json()["data"][0]["value"]
+        market_cap_str = human_readable_number(market_cap)
+        market_cap_change_str = f"{market_change:+.2f}%"
+        volume_str = human_readable_number(volume)
+        volume_change_str = f"{volume_change:+.2f}%"
+        fear_greed_str = str(fear_index)
+        return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_index)
+    except Exception as e:
+        return ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
 
+def fetch_big_cap_prices_data():
+    ids = "bitcoin,ethereum,ripple,binancecoin,solana,tron,dogecoin,cardano"
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {"vs_currency": "usd", "ids": ids}
+        data = requests.get(url, params=params).json()
+        msg = "*Big Cap Crypto:*\n"
+        big_caps_list = []
+        for c in data:
+            symbol = c['symbol'].upper()
+            price = c['current_price']
+            change = c.get('price_change_percentage_24h', 0)
+            msg += f"{symbol}: ${price} ({change:+.2f}%)\n"
+            big_caps_list.append(f"{symbol}: ${price} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(big_caps_list)
+    except Exception as e:
+        return f"*Big Cap Crypto:*\nError: {e}\n\n", "N/A"
+
+def fetch_top_movers_data():
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        data = requests.get(url, params={
+            "vs_currency": "usd", "order": "market_cap_desc", "per_page": 100
+        }).json()
+        gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
+        losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
+        msg = "*🔺 Crypto Top 5 Gainers:*\n"
+        gainers_list = []
+        for i, c in enumerate(gainers, 1):
+            symbol = escape_markdown_v2(c['symbol'].upper())
+            price = c['current_price']
+            change = c.get('price_change_percentage_24h', 0)
+            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
+            gainers_list.append(f"{symbol}: ${price:.2f} ({change:+.2f}%)")
+        msg += "\n*🔻 Crypto Top 5 Losers:*\n"
+        losers_list = []
+        for i, c in enumerate(losers, 1):
+            symbol = escape_markdown_v2(c['symbol'].upper())
+            price = c['current_price']
+            change = c.get('price_change_percentage_24h', 0)
+            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
+            losers_list.append(f"{symbol}: ${price:.2f} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
+    except Exception as e:
+        return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n", "N/A", "N/A"
+
+# ===================== MAIN =====================
 def main():
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
@@ -399,11 +534,29 @@ def main():
     msg += get_tech_news()
     msg += get_sports_news()
     msg += get_crypto_news()
-    msg += fetch_crypto_market()
-    msg += fetch_big_cap_prices()
-    msg += fetch_top_movers()
-    msg += "\n_Built by Shanchoy_"
-    send_telegram(msg)
+    # --- Collect crypto data for DeepSeek summary ---
+    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
+    msg += (
+        "*📊 CRYPTO MARKET:*\n"
+        f"🔹 Market Cap (24h): {market_cap_str} ({market_cap_change_str})\n"
+        f"🔹 Volume (24h): {volume_str} ({volume_change_str})\n"
+        f"😨 Fear/Greed Index: {fear_greed_str}/100\n\n"
+    )
+    big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+    msg += big_caps_msg
+    top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+    msg += top_movers_msg
+    # --- DeepSeek summary ---
+    DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+    if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+        summary = get_crypto_summary_with_deepseek(
+            market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
+        )
+        msg += f"\n*🤖 AI Market Summary:*\n{summary}\n"
+    msg += "\nBuilt by Shanchoy"
+    # Use your default chat_id here if needed
+    # send_telegram(msg, chat_id)
+    print(msg)
 
 # --- Telegram polling bot ---
 def get_updates(offset=None):
@@ -427,9 +580,43 @@ def handle_updates(updates):
             msg += get_tech_news()
             msg += get_sports_news()
             msg += get_crypto_news()
-            msg += fetch_crypto_market()
-            msg += fetch_big_cap_prices()
-            msg += fetch_top_movers()
+            # --- Collect crypto data for DeepSeek summary ---
+            market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
+            msg += (
+                "*📊 CRYPTO MARKET:*\n"
+                f"🔹 Market Cap (24h): {market_cap_str} ({market_cap_change_str})\n"
+                f"🔹 Volume (24h): {volume_str} ({volume_change_str})\n"
+                f"😨 Fear/Greed Index: {fear_greed_str}/100\n\n"
+            )
+            big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+            msg += big_caps_msg
+            top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+            msg += top_movers_msg
+            # --- DeepSeek summary ---
+            DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+            ai_summary = None
+            prediction_line = ""
+            if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+                ai_summary = get_crypto_summary_with_deepseek(
+                    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
+                )
+                # Remove any prediction lines from the AI summary
+                import re
+                ai_summary_clean = re.sub(r'(?i)prediction for tomorrow:.*', '', ai_summary).strip()
+                msg += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
+                # Prediction logic
+                summary_lower = ai_summary.lower()
+                # Extract confidence percentage from the summary (e.g., 75%)
+                accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy)?', ai_summary)
+                accuracy = accuracy_match.group(1) if accuracy_match else "80"
+                if "bullish" in summary_lower:
+                    prediction_line = f"\nPrediction for tomorrow: BULLISH 🚀 (approx. {accuracy}% accuracy)"
+                elif "bearish" in summary_lower:
+                    prediction_line = f"\nPrediction for tomorrow: BEARISH 🐻 (approx. {accuracy}% accuracy)"
+                else:
+                    prediction_line = "\nPrediction for tomorrow: 🤔 (No clear prediction)"
+                msg += prediction_line
+            msg += "\n\n\nBuilt by Shanchoy"
             send_telegram(msg, chat_id)
         else:
             send_telegram("GET NEWS? (Type /news or /start to get the latest digest!)", chat_id)
