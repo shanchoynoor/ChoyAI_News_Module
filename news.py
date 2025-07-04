@@ -159,6 +159,7 @@ def fetch_rss_entries(sources, limit=5, max_per_source=3, max_age_hours=12):
                     results_older.append(entry_obj)
         except Exception as e:
             print(f"Error fetching {name}: {e}")
+        
         # Sort by recency
         results_recent.sort(key=lambda x: x["timestamp"], reverse=True)
         results_older.sort(key=lambda x: x["timestamp"], reverse=True)
@@ -186,6 +187,7 @@ def fetch_rss_entries(sources, limit=5, max_per_source=3, max_age_hours=12):
             per_source_count[entry["source"]] = count + 1
         if len(picked) >= limit:
             break
+    
     # If still not enough, fill with older news (beyond max_age_hours), still respecting max_per_source
     if len(picked) < limit:
         for entry in older_entries:
@@ -195,6 +197,7 @@ def fetch_rss_entries(sources, limit=5, max_per_source=3, max_age_hours=12):
                 per_source_count[entry["source"]] = count + 1
             if len(picked) >= limit:
                 break
+    
     # Save sent links
     for entry in picked:
         new_links.add(entry["link"])
@@ -355,6 +358,7 @@ def get_sports_news():
         'olympic', 'world record', 'breaking', 'exclusive', 'statement', 'announcement', 'trending', 'viral', 'hot',
         'player', 'celebrity', 'icon', 'hero', 'captain', 'superstar', 'profile', 'tribute', 'obituary', 'death', 'birthday', 'marriage', 'divorce'
     ]
+    
     def is_celebrity(entry):
         title = entry['title'].lower()
         return any(kw in title for kw in celebrity_keywords)
@@ -420,7 +424,7 @@ def fetch_big_cap_prices():
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
         data = requests.get(url, params=params).json()
-        msg = "*💎 Big Cap Crypto:*\n"
+        msg = "*Big Cap Crypto:*\n"
         for c in data:
             msg += f"{c['symbol'].upper()}: ${c['current_price']} ({c['price_change_percentage_24h']:+.2f}%)\n"
         return msg + "\n"
@@ -485,7 +489,7 @@ def fetch_big_cap_prices_data():
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
         data = requests.get(url, params=params).json()
-        msg = "*Big Cap Crypto:*\n"
+        msg = "*💎 Big Cap Crypto:*\n"
         big_caps_list = []
         for c in data:
             symbol = c['symbol'].upper()
@@ -542,6 +546,7 @@ def main():
     msg += get_tech_news()
     msg += get_sports_news()
     msg += get_crypto_news()
+    
     # --- Collect crypto data for DeepSeek summary ---
     market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
     msg += (
@@ -554,6 +559,7 @@ def main():
     msg += big_caps_msg
     top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
     msg += top_movers_msg
+    
     # --- DeepSeek summary ---
     DEEPSEEK_API = os.getenv("DEEPSEEK_API")
     if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
@@ -581,6 +587,8 @@ def handle_updates(updates):
         chat_id = message["chat"]["id"]
         text = message.get("text", "").lower()
         if text in ["/start", "/news"]:
+            # Send immediate feedback to user
+            send_telegram("Loading news...", chat_id)
             # Use Dhaka time (UTC+6) and AM/PM, date as 'Jul 4, 2025 08:40am'
             from datetime import timedelta
             dhaka_tz = timezone(timedelta(hours=6))
@@ -589,25 +597,244 @@ def handle_updates(updates):
             now_str = now_str.replace('AM', 'am').replace('PM', 'pm')
             if now_str[4] == '0':
                 now_str = now_str[:4] + now_str[5:]
-            msg = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
-            msg += get_local_news()
-            msg += get_global_news()
-            msg += get_tech_news()
-            msg += get_sports_news()
-            msg += get_crypto_news()
+
+            # --- Bangladesh holiday info ---
+            def get_bd_holiday():
+                try:
+                    api_key = os.getenv("CALENDARIFIC_API_KEY")
+                    if not api_key:
+                        return ""
+                    url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=BD&year={now_dt.year}"
+                    resp = requests.get(url)
+                    data = resp.json()
+                    holidays = data.get("response", {}).get("holidays", [])
+                    today_str = now_dt.strftime("%Y-%m-%d")
+                    upcoming = None
+                    for h in holidays:
+                        h_date = h.get("date", {}).get("iso", "")
+                        if h_date == today_str:
+                            return f"🎉 *Today's Holiday:* {h['name']}"
+                        elif h_date > today_str:
+                            if not upcoming or h_date < upcoming["date"]:
+                                upcoming = {"date": h_date, "name": h["name"]}
+                    if upcoming:
+                        # Format date as 'Jul 4, 2025'
+                        up_date = datetime.strptime(upcoming["date"], "%Y-%m-%d").strftime("%b %d, %Y")
+                        return f"🎉 *Next Holiday:* {upcoming['name']} ({up_date})"
+                    return ""
+                except Exception as e:
+                    return ""
+            
+            # --- Weather for Dhaka, Bangladesh ---
+            def get_dhaka_weather():
+                try:
+                    api_key = os.getenv("WEATHERAPI_KEY")
+                    if not api_key:
+                        return "🌦️ Dhaka: Weather N/A"
+                    url = f"https://api.weatherapi.com/v1/forecast.json?key={api_key}&q=Dhaka&days=1&aqi=yes&alerts=no"
+                    resp = requests.get(url)
+                    data = resp.json()
+                    forecast = data["forecast"]["forecastday"][0]
+                    day = forecast["day"]
+                    temp_min = day["mintemp_c"]
+                    temp_max = day["maxtemp_c"]
+                    rain_chance = day.get("daily_chance_of_rain", 0)
+                    uv_val = day.get("uv", "N/A")
+                    # Air quality index (AQI, short)
+                    aq = data.get("current", {}).get("air_quality", {})
+                    pm25 = aq.get("pm2_5")
+                    # AQI calculation from PM2.5 (EPA formula)
+                    def pm25_to_aqi(pm25):
+                        # https://forum.airnowtech.org/t/the-aqi-equation/169
+                        # Breakpoints for PM2.5 (ug/m3)
+                        breakpoints = [
+                            (0.0, 12.0, 0, 50),
+                            (12.1, 35.4, 51, 100),
+                            (35.5, 55.4, 101, 150),
+                            (55.5, 150.4, 151, 200),
+                            (150.5, 250.4, 201, 300),
+                            (250.5, 500.4, 301, 500)
+                        ]
+                        try:
+                            pm25 = float(pm25)
+                            for bp in breakpoints:
+                                if bp[0] <= pm25 <= bp[1]:
+                                    Clow, Chigh, Ilow, Ihigh = bp[0], bp[1], bp[2], bp[3]
+                                    aqi = ((Ihigh - Ilow) / (Chigh - Clow)) * (pm25 - Clow) + Ilow
+                                    return round(aqi)
+                        except Exception:
+                            pass
+                        return None
+                    aqi_val = None
+                    if pm25 is not None:
+                        aqi_val = pm25_to_aqi(pm25)
+                    if aqi_val is None:
+                        # fallback to us-epa-index (1-6)
+                        epa_index = aq.get("us-epa-index")
+                        if epa_index is not None:
+                            epa_index = int(epa_index)
+                            # Map to AQI category
+                            if epa_index == 1:
+                                aqi_val = 50
+                            elif epa_index == 2:
+                                aqi_val = 100
+                            elif epa_index == 3:
+                                aqi_val = 150
+                            elif epa_index == 4:
+                                aqi_val = 200
+                            elif epa_index == 5:
+                                aqi_val = 300
+                            elif epa_index == 6:
+                                aqi_val = 400
+                    # AQI label
+                    if aqi_val is not None:
+                        if aqi_val <= 50:
+                            aq_str = "Good"
+                        elif aqi_val <= 100:
+                            aq_str = "Moderate"
+                        elif aqi_val <= 150:
+                            aq_str = "Unhealthy for Sensitive Groups"
+                        elif aqi_val <= 200:
+                            aq_str = "Unhealthy"
+                        elif aqi_val <= 300:
+                            aq_str = "Very Unhealthy"
+                        else:
+                            aq_str = "Hazardous"
+                    else:
+                        aq_str = "N/A"
+                        aqi_val = "N/A"
+                    # UV index (not UV range, which is nm)
+                    # WeatherAPI gives UV index (unitless, 0-11+), not wavelength
+                    try:
+                        uv_val_num = float(uv_val)
+                        if uv_val_num < 3:
+                            uv_str = "Low"
+                        elif uv_val_num < 6:
+                            uv_str = "Moderate"
+                        elif uv_val_num < 8:
+                            uv_str = "High"
+                        elif uv_val_num < 11:
+                            uv_str = "Very High"
+                        else:
+                            uv_str = "Extreme"
+                    except Exception:
+                        uv_str = str(uv_val)
+                    # Emojis
+                    rain_emoji = "🌧️ "
+                    aq_emoji = "🫧 "
+                    uv_emoji = "🔆 "
+                    # Output as requested: city line, then each stat on its own line
+                    lines = [
+                        f"🌦️ Dhaka: {temp_min:.1f}°C ~ {temp_max:.1f}°C",
+                        f"{rain_emoji}Rain: {rain_chance}%",
+                        f"{aq_emoji}AQI: {aq_str} ({aqi_val})",
+                        f"{uv_emoji}UV: {uv_str} ({uv_val})"
+                    ]
+                    return "\n".join(lines)
+                except Exception:
+                    return "🌦️ Dhaka: Weather N/A"
+
+            holiday_line = get_bd_holiday()
+            # Build the full digest as before
+            digest = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
+            digest += get_dhaka_weather() + "\n"
+            if holiday_line:
+                digest += f"{holiday_line}\n"
+            digest += "\n"
+            digest += get_local_news()
+            digest += get_global_news()
+            digest += get_tech_news()
+            digest += get_sports_news()
+            digest += get_crypto_news()
+            
             # --- Collect crypto data for DeepSeek summary ---
             market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
-            msg += (
-                "*📊 CRYPTO MARKET:*\n"
-                f"📈 Market Cap (24h): {market_cap_str} ({market_cap_change_str})\n"
-                f"🔄 Volume (24h): {volume_str} ({volume_change_str})\n"
-                f"😨 Fear/Greed Index: {fear_greed_str}/100\n\n"
+            def arrow_only(val):
+                try:
+                    v = float(val.replace('%','').replace('+','').replace(',',''))
+                except Exception:
+                    return ''
+                if v > 0:
+                    return '▲'
+                elif v < 0:
+                    return '▼'
+                else:
+                    return ''
+            cap_arrow = arrow_only(market_cap_change_str)
+            vol_arrow = arrow_only(volume_change_str)
+            def fetch_binance_market_data():
+                try:
+                    url = "https://api.binance.com/api/v3/ticker/24hr"
+                    btc = requests.get(url, params={"symbol": "BTCUSDT"}).json()
+                    eth = requests.get(url, params={"symbol": "ETHUSDT"}).json()
+                    try:
+                        cmc_url = "https://api.coinmarketcap.com/data-api/v3/global-metrics/quotes/latest"
+                        cmc_data = requests.get(cmc_url).json()
+                        g = cmc_data["data"]["quote"]["USD"]
+                        market_cap = g["totalMarketCap"]
+                        volume = g["totalVolume24h"]
+                        market_cap_change = g.get("marketCapChange24h", 0)
+                        volume_change = g.get("volumeChange24h", 0)
+                        def human(num):
+                            abs_num = abs(num)
+                            if abs_num >= 1_000_000_000_000:
+                                return f"${num / 1_000_000_000_000:.2f}T"
+                            elif abs_num >= 1_000_000_000:
+                                return f"${num / 1_000_000_000:.2f}B"
+                            elif abs_num >= 1_000_000:
+                                return f"${num / 1_000_000:.2f}M"
+                            elif abs_num >= 1_000:
+                                return f"${num / 1_000:.2f}K"
+                            else:
+                                return f"${num:.2f}"
+                        market_cap_str = human(market_cap)
+                        market_cap_change_str = f"{market_cap_change:+.2f}%"
+                        volume_str = human(volume)
+                        volume_change_str = f"{volume_change:+.2f}%"
+                        return market_cap_str, market_cap_change_str, volume_str, volume_change_str
+                    except Exception:
+                        btc_vol = float(btc.get("quoteVolume", 0))
+                        eth_vol = float(eth.get("quoteVolume", 0))
+                        volume = btc_vol + eth_vol
+                        btc_price_change = float(btc.get("priceChangePercent", 0))
+                        try:
+                            cg = requests.get("https://api.coingecko.com/api/v3/global").json()["data"]
+                            market_cap = cg["total_market_cap"]["usd"]
+                        except Exception:
+                            market_cap = 0
+                        def human(num):
+                            abs_num = abs(num)
+                            if abs_num >= 1_000_000_000_000:
+                                return f"${num / 1_000_000_000_000:.2f}T"
+                            elif abs_num >= 1_000_000_000:
+                                return f"${num / 1_000_000_000:.2f}B"
+                            elif abs_num >= 1_000_000:
+                                return f"${num / 1_000_000:.2f}M"
+                            elif abs_num >= 1_000:
+                                return f"${num / 1_000:.2f}K"
+                            else:
+                                return f"${num:.2f}"
+                        market_cap_str = human(market_cap)
+                        market_cap_change_str = f"{btc_price_change:+.2f}%"
+                        volume_str = human(volume)
+                        volume_change_str = f"{btc_price_change:+.2f}%"
+                        return market_cap_str, market_cap_change_str, volume_str, volume_change_str
+                except Exception:
+                    return "N/A", "N/A", "N/A", "N/A"
+            market_cap_str, market_cap_change_str, volume_str, volume_change_str = fetch_binance_market_data()
+            cap_arrow = arrow_only(market_cap_change_str)
+            vol_arrow = arrow_only(volume_change_str)
+            fear_greed_str = str(fear_greed)
+            crypto_section = (
+                f"*📊 CRYPTO MARKET:*\n"
+                f"💰 Market Cap (24h): {market_cap_str} {market_cap_change_str}{cap_arrow}\n"
+                f"💵 Volume (24h): {volume_str} {volume_change_str}{vol_arrow}\n"
+                f"😨 Fear/Greed: {fear_greed_str}/100\n\n"
             )
             big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
-            msg += big_caps_msg
+            crypto_section += big_caps_msg
             top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-            msg += top_movers_msg
-            # --- DeepSeek summary ---
+            crypto_section += top_movers_msg
             DEEPSEEK_API = os.getenv("DEEPSEEK_API")
             ai_summary = None
             prediction_line = ""
@@ -615,24 +842,39 @@ def handle_updates(updates):
                 ai_summary = get_crypto_summary_with_deepseek(
                     market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
                 )
-                # Remove any prediction lines from the AI summary
                 import re
-                ai_summary_clean = re.sub(r'(?i)prediction for tomorrow:.*', '', ai_summary).strip()
-                msg += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
-                # Prediction logic
+                ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+                if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+                    ai_summary_clean = ai_summary_clean.rstrip() + '.'
+                crypto_section += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
                 summary_lower = ai_summary.lower()
-                # Extract confidence percentage from the summary (e.g., 75%)
-                accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy)?', ai_summary)
-                accuracy = accuracy_match.group(1) if accuracy_match else "80"
-                if "bullish" in summary_lower:
-                    prediction_line = f"\nPrediction for tomorrow: BULLISH 🟢 (approx. {accuracy}% accuracy)"
-                elif "bearish" in summary_lower:
-                    prediction_line = f"\nPrediction for tomorrow: BEARISH 🔴 (approx. {accuracy}% accuracy)"
+                accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
+                try:
+                    accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
+                except Exception:
+                    accuracy = 80
+                if accuracy <= 60:
+                    prediction_line = "\nPrediction for tomorrow: 🤔 (No clear prediction)"
+                elif "bullish" in summary_lower and accuracy > 60:
+                    prediction_line = f"\nPrediction for tomorrow: BULLISH 🟢 ({accuracy}% probability)"
+                elif "bearish" in summary_lower and accuracy > 60:
+                    prediction_line = f"\nPrediction for tomorrow: BEARISH 🔴 ({accuracy}% probability)"
                 else:
                     prediction_line = "\nPrediction for tomorrow: 🤔 (No clear prediction)"
-                msg += prediction_line
-            msg += "\n\n\n- Built by Shanchoy"
-            send_telegram(msg, chat_id)
+                crypto_section += prediction_line
+            crypto_section += "\n\n\n- Built by Shanchoy"
+            # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
+            marker = "*📊 CRYPTO MARKET:*\n"
+            idx = digest.find(marker)
+            if idx != -1:
+                news_part = digest[:idx]
+                crypto_part = digest[idx:] + crypto_section[len(marker):]  # Avoid duplicate marker
+                send_telegram(news_part, chat_id)
+                send_telegram(crypto_part, chat_id)
+            else:
+                # fallback: send as two messages
+                send_telegram(digest, chat_id)
+                send_telegram(crypto_section, chat_id)
         else:
             send_telegram("GET NEWS? (Type /news or /start to get the latest digest!)", chat_id)
 
