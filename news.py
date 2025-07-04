@@ -485,6 +485,7 @@ def fetch_crypto_market_data():
 
 def fetch_big_cap_prices_data():
     ids = "bitcoin,ethereum,ripple,binancecoin,solana,tron,dogecoin,cardano"
+    # No coin logos, just use symbol
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
@@ -502,6 +503,7 @@ def fetch_big_cap_prices_data():
         return f"*Big Cap Crypto:*\nError: {e}\n\n", "N/A"
 
 def fetch_top_movers_data():
+    # No coin logos, just use symbol
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         data = requests.get(url, params={
@@ -512,7 +514,7 @@ def fetch_top_movers_data():
         msg = "*🔺 Crypto Top 5 Gainers:*\n"
         gainers_list = []
         for i, c in enumerate(gainers, 1):
-            symbol = escape_markdown_v2(c['symbol'].upper())
+            symbol = c['symbol'].upper()
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
             msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
@@ -520,7 +522,7 @@ def fetch_top_movers_data():
         msg += "\n*🔻 Crypto Top 5 Losers:*\n"
         losers_list = []
         for i, c in enumerate(losers, 1):
-            symbol = escape_markdown_v2(c['symbol'].upper())
+            symbol = c['symbol'].upper()
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
             msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
@@ -530,47 +532,25 @@ def fetch_top_movers_data():
         return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n", "N/A", "N/A"
 
 # ===================== MAIN =====================
-def main():
-    # Use Dhaka time (UTC+6) and AM/PM, date as 'Jul 4, 2025 08:40am'
-    from datetime import timedelta
-    dhaka_tz = timezone(timedelta(hours=6))
-    now_dt = datetime.now(dhaka_tz)
-    now_str = now_dt.strftime("%b %d, %Y %I:%M%p")
-    # Remove leading zero from day and AM/PM to am/pm
-    now_str = now_str.replace('AM', 'am').replace('PM', 'pm')
-    if now_str[4] == '0':
-        now_str = now_str[:4] + now_str[5:]
-    msg = f"*DAILY NEWS DIGEST*\n_{now_str}_\n\n"
+def main(return_msg=False, chat_id=None):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
     msg += get_local_news()
     msg += get_global_news()
     msg += get_tech_news()
     msg += get_sports_news()
     msg += get_crypto_news()
-    
-    # --- Collect crypto data for DeepSeek summary ---
-    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
-    msg += (
-        "*📊 CRYPTO MARKET:*\n"
-        f"🔹 Market Cap (24h): {market_cap_str} ({market_cap_change_str})\n"
-        f"🔹 Volume (24h): {volume_str} ({volume_change_str})\n"
-        f"😨 Fear/Greed Index: {fear_greed_str}/100\n\n"
-    )
-    big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
-    msg += big_caps_msg
-    top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-    msg += top_movers_msg
-    
-    # --- DeepSeek summary ---
-    DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-    if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
-        summary = get_crypto_summary_with_deepseek(
-            market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
-        )
-        msg += f"\n*🤖 AI Market Summary:*\n{summary}\n"
+    msg += fetch_crypto_market()
+    msg += fetch_big_cap_prices()
+    msg += fetch_top_movers()
     msg += "\nBuilt by Shanchoy"
-    # Use your default chat_id here if needed
-    # send_telegram(msg, chat_id)
-    print(msg)
+    if return_msg:
+        return msg
+    # Default: send to Telegram (for legacy usage)
+    if chat_id is not None:
+        send_telegram(msg, chat_id)
+    else:
+        print("No chat_id provided for sending news digest.")
 
 # --- Telegram polling bot ---
 def get_updates(offset=None):
