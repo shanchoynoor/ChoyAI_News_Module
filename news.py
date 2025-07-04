@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import re
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -69,6 +70,10 @@ def send_telegram(msg, chat_id):
     return r.ok
 
 def get_hours_ago(published):
+    """
+    Returns a string like 'Xhr ago' or 'Yd ago' for any valid date in the past.
+    Returns None only if the date is invalid or in the future/less than 1 minute ago.
+    """
     try:
         if not published:
             return None
@@ -85,63 +90,137 @@ def get_hours_ago(published):
         if delta.total_seconds() < 60 or delta.total_seconds() < 0:
             return None
         hours = int(delta.total_seconds() // 3600)
-        if hours > 36:
-            return None  # Too old
-        return f"{hours}hr ago" if hours < 24 else f"{hours // 24}d ago"
+        days = int(hours // 24)
+        if days > 0:
+            return f"{days}d ago"
+        elif hours > 0:
+            return f"{hours}hr ago"
+        else:
+            minutes = int((delta.total_seconds() % 3600) // 60)
+            return f"{minutes}min ago"
     except Exception:
         return None
 
-def fetch_rss_entries(sources, limit=5):
-    entries = []
+def fetch_rss_entries(sources, limit=5, max_per_source=3, max_age_hours=12):
+    """
+    Always return `limit` news entries per category.
+    Strictly prefer news within `max_age_hours`, up to `max_per_source` per source.
+    If not enough, fill with older news from the same sources (never more than max_per_source per source).
+    """
     sent_links = load_sent_news()
     new_links = set()
-    for name, url in sources.items():
-        feed = feedparser.parse(url)
-        for entry in feed.entries:
-            published_parsed = None
+    now = datetime.now(timezone.utc)
+    min_timestamp = now.timestamp() - max_age_hours * 3600
+    all_entries = []
+    recent_entries = []
+    older_entries = []
 
-            if hasattr(entry, "published_parsed") and entry.published_parsed:
-                published_parsed = entry.published_parsed
-            elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                published_parsed = entry.updated_parsed
-            else:
-                for key in ['published', 'updated']:
-                    try:
-                        published_str = getattr(entry, key, None)
-                        if published_str:
-                            published_parsed = feedparser._parse_date(published_str)
-                            if published_parsed:
-                                break
-                    except Exception:
-                        continue
-
-            title = getattr(entry, "title", "No Title").replace('[', '').replace(']', '')
-            link = getattr(entry, "link", "#")
-
-            published_str = get_hours_ago(published_parsed)
-            # Only add if not already sent, has valid link, and valid publish date
-            if link not in sent_links and link != "#" and published_str:
-                entries.append({
+    def fetch_source(name_url):
+        name, url = name_url
+        results = []
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                published_parsed = None
+                if hasattr(entry, "published_parsed") and entry.published_parsed:
+                    published_parsed = entry.published_parsed
+                elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+                    published_parsed = entry.updated_parsed
+                else:
+                    for key in ['published', 'updated']:
+                        try:
+                            published_str = getattr(entry, key, None)
+                            if published_str:
+                                published_parsed = feedparser._parse_date(published_str)
+                                if published_parsed:
+                                    break
+                        except Exception:
+                            continue
+                if not published_parsed:
+                    continue
+                published_dt = datetime(*published_parsed[:6], tzinfo=timezone.utc)
+                title = escape_markdown_v2(getattr(entry, "title", "No Title").replace('[', '').replace(']', ''))
+                link = getattr(entry, "link", "#")
+                if link in sent_links or link == "#":
+                    continue
+                published_str = get_hours_ago(published_parsed)
+                if not published_str:
+                    continue
+                entry_obj = {
                     "title": title,
                     "link": link,
-                    "source": name,
-                    "published": published_str
-                })
-                new_links.add(link)
-            if len(entries) >= limit:
-                # Save new sent links before returning
-                sent_links.update(new_links)
-                save_sent_news(sent_links)
-                return entries
-    # Save new sent links before returning
+                    "source": escape_markdown_v2(name),
+                    "published": published_str,
+                    "timestamp": published_dt.timestamp()
+                }
+                # Classify as recent or older
+                if published_dt.timestamp() >= min_timestamp:
+                    results.append(("recent", entry_obj))
+                else:
+                    results.append(("older", entry_obj))
+        except Exception as e:
+            print(f"Error fetching {name}: {e}")
+        return results
+
+    # Fetch all feeds in parallel
+    with ThreadPoolExecutor(max_workers=min(8, len(sources))) as executor:
+        futures = [executor.submit(fetch_source, item) for item in sources.items()]
+        for future in as_completed(futures):
+            for kind, entry in future.result():
+                if kind == "recent":
+                    recent_entries.append(entry)
+                else:
+                    older_entries.append(entry)
+
+    # Sort by recency
+    recent_entries.sort(key=lambda x: x["timestamp"], reverse=True)
+    older_entries.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    # Pick up to limit, max max_per_source per source, from recent_entries
+    picked = []
+    per_source_count = {}
+    for entry in recent_entries:
+        count = per_source_count.get(entry["source"], 0)
+        if count < max_per_source and entry not in picked:
+            picked.append(entry)
+            per_source_count[entry["source"]] = count + 1
+        if len(picked) >= limit:
+            break
+    # If still not enough, fill with older news (beyond max_age_hours), still respecting max_per_source
+    if len(picked) < limit:
+        for entry in older_entries:
+            count = per_source_count.get(entry["source"], 0)
+            if count < max_per_source and entry not in picked:
+                picked.append(entry)
+                per_source_count[entry["source"]] = count + 1
+            if len(picked) >= limit:
+                break
+    # Save sent links
+    for entry in picked:
+        new_links.add(entry["link"])
     sent_links.update(new_links)
     save_sent_news(sent_links)
-    return entries
+    # Remove timestamp before returning
+    for entry in picked:
+        entry.pop("timestamp", None)
+    return picked
 
-def format_news(title, entries):
+# Bangla font conversion utility (simple Unicode mapping for demonstration)
+def to_bangla(text):
+    # This is a placeholder for a real Bangla font conversion.
+    # For now, just return the text as is, assuming the news titles are already in Bangla from the sources.
+    return text
+
+# Updated format_news to support Bangla for local news
+def format_news(title, entries, bangla=False):
     msg = f"*{title}:*\n"
     for idx, e in enumerate(entries, 1):
-        msg += f"{idx}. [{e['title']}]({e['link']}) - {e['source']} ({e['published']})\n"
+        if bangla:
+            # Show title in Bangla (assume already Bangla from source)
+            display_title = to_bangla(e['title'])
+        else:
+            display_title = e['title']
+        msg += f"{idx}. [{display_title}]({e['link']}) - {e['source']} ({e['published']})\n"
     return msg + "\n"
 
 # ===================== NEWS CATEGORIES =====================
@@ -160,7 +239,7 @@ def get_local_news():
         "Shomoy TV": "https://www.shomoynews.com/rss.xml",
         "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml"
     }
-    return format_news("🇧🇩 LOCAL NEWS", fetch_rss_entries(bd_sources))
+    return format_news("🇧🇩 LOCAL NEWS", fetch_rss_entries(bd_sources), bangla=True)
 
 def get_global_news():
     global_sources = {
@@ -288,7 +367,7 @@ def fetch_top_movers():
 
 def main():
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    msg = f"*🧠 6-Hourly Global Digest*\n_{now}_\n\n"
+    msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
     msg += get_local_news()
     msg += get_global_news()
     msg += get_tech_news()
@@ -315,7 +394,7 @@ def handle_updates(updates):
         text = message.get("text", "").lower()
         if text in ["/start", "/news"]:
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            msg = f"*\U0001F9E0 6-Hourly Global Digest*\n_{now}_\n\n"
+            msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
             msg += get_local_news()
             msg += get_global_news()
             msg += get_tech_news()
@@ -326,7 +405,7 @@ def handle_updates(updates):
             msg += fetch_top_movers()
             send_telegram(msg, chat_id)
         else:
-            send_telegram("Send /news to get the latest digest!", chat_id)
+            send_telegram("GET NEWS? (Type /news or /start to get the latest digest!)", chat_id)
 
 def main():
     print("Bot started. Listening for messages...")
