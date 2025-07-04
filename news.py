@@ -104,20 +104,20 @@ def get_hours_ago(published):
 def fetch_rss_entries(sources, limit=5, max_per_source=3, max_age_hours=12):
     """
     Always return `limit` news entries per category.
-    Strictly prefer news within `max_age_hours`, up to `max_per_source` per source.
-    If not enough, fill with older news from the same sources (never more than max_per_source per source).
+    Strictly prefer the 5 most recent news overall (from any source, max 3 per source).
+    Only use older news if not enough recent items.
     """
     sent_links = load_sent_news()
     new_links = set()
     now = datetime.now(timezone.utc)
     min_timestamp = now.timestamp() - max_age_hours * 3600
-    all_entries = []
     recent_entries = []
     older_entries = []
 
     def fetch_source(name_url):
         name, url = name_url
-        results = []
+        results_recent = []
+        results_older = []
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries:
@@ -153,26 +153,26 @@ def fetch_rss_entries(sources, limit=5, max_per_source=3, max_age_hours=12):
                     "published": published_str,
                     "timestamp": published_dt.timestamp()
                 }
-                # Classify as recent or older
                 if published_dt.timestamp() >= min_timestamp:
-                    results.append(("recent", entry_obj))
+                    results_recent.append(entry_obj)
                 else:
-                    results.append(("older", entry_obj))
+                    results_older.append(entry_obj)
         except Exception as e:
             print(f"Error fetching {name}: {e}")
-        return results
+        # Sort by recency
+        results_recent.sort(key=lambda x: x["timestamp"], reverse=True)
+        results_older.sort(key=lambda x: x["timestamp"], reverse=True)
+        return (results_recent, results_older)
 
     # Fetch all feeds in parallel
     with ThreadPoolExecutor(max_workers=min(8, len(sources))) as executor:
         futures = [executor.submit(fetch_source, item) for item in sources.items()]
         for future in as_completed(futures):
-            for kind, entry in future.result():
-                if kind == "recent":
-                    recent_entries.append(entry)
-                else:
-                    older_entries.append(entry)
+            recents, olders = future.result()
+            recent_entries.extend(recents)
+            older_entries.extend(olders)
 
-    # Sort by recency
+    # Sort all recent entries by recency
     recent_entries.sort(key=lambda x: x["timestamp"], reverse=True)
     older_entries.sort(key=lambda x: x["timestamp"], reverse=True)
 
@@ -228,8 +228,8 @@ def format_news(title, entries, bangla=False):
 def get_local_news():
     bd_sources = {
         "Prothom Alo": "https://www.prothomalo.com/feed",
-        "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
         "BDNews24": "https://bdnews24.com/feed",
+        "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml",
         "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
         "Jugantor": "https://www.jugantor.com/rss.xml",
         "Samakal": "https://samakal.com/rss.xml",
@@ -237,7 +237,6 @@ def get_local_news():
         "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
         "Ittefaq": "https://www.ittefaq.com.bd/rss.xml",
         "Shomoy TV": "https://www.shomoynews.com/rss.xml",
-        "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml"
     }
     return format_news("🇧🇩 LOCAL NEWS", fetch_rss_entries(bd_sources), bangla=True)
 
@@ -268,7 +267,17 @@ def get_tech_news():
         "Social Media Today": "https://www.socialmediatoday.com/rss.xml",
         "Tech Times": "https://www.techtimes.com/rss/tech.xml",
         "Droid Life": "https://www.droid-life.com/feed/",
-        "Live Science": "https://www.livescience.com/home/feed/site.xml"
+        "Live Science": "https://www.livescience.com/home/feed/site.xml",
+        "Ars Technica": "https://feeds.arstechnica.com/arstechnica/index",
+        "Engadget": "https://www.engadget.com/rss.xml",
+        "Mashable": "https://mashable.com/feed",
+        "Gizmodo": "https://gizmodo.com/rss",
+        "ZDNet": "https://www.zdnet.com/news/rss.xml",
+        "VentureBeat": "https://venturebeat.com/feed/",
+        "The Next Web": "https://thenextweb.com/feed/",
+        "TechRadar": "https://www.techradar.com/rss",
+        "Android Authority": "https://www.androidauthority.com/feed",
+        "MacRumors": "https://www.macrumors.com/macrumors.xml"
     }
     return format_news("💻 TECH NEWS", fetch_rss_entries(tech_sources))
 
@@ -279,7 +288,17 @@ def get_sports_news():
         "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
         "NBC Sports": "https://scores.nbcsports.com/rss/headlines.asp",
         "Yahoo Sports": "https://sports.yahoo.com/rss/",
-        "The Guardian Sport": "https://www.theguardian.com/sport/rss"
+        "The Guardian Sport": "https://www.theguardian.com/sport/rss",
+        "CBS Sports": "https://www.cbssports.com/rss/headlines/",
+        "Bleacher Report": "https://bleacherreport.com/articles/feed",
+        "Sports Illustrated": "https://www.si.com/rss/si_topstories.rss",
+        "Reuters Sports": "http://feeds.reuters.com/reuters/sportsNews",
+        "Fox Sports": "https://www.foxsports.com/feedout/syndicatedContent?categoryId=0",
+        "USA Today Sports": "https://rssfeeds.usatoday.com/usatodaycomsports-topstories",
+        "Sporting News": "https://www.sportingnews.com/us/rss",
+        "Goal.com": "https://www.goal.com/en/feeds/news?fmt=rss",
+        "NBA": "https://www.nba.com/rss/nba_rss.xml",
+        "NFL": "http://www.nfl.com/rss/rsslanding?searchString=home"
     }
     return format_news("🏆 SPORTS NEWS", fetch_rss_entries(sports_sources))
 
@@ -291,7 +310,14 @@ def get_crypto_news():
         "Forbes Crypto": "https://www.forbes.com/crypto-blockchain/feed/",
         "Bloomberg Crypto": "https://www.bloomberg.com/crypto/rss",
         "Yahoo Finance": "https://finance.yahoo.com/news/rssindex",
-        "CNBC Finance": "https://www.cnbc.com/id/10001147/device/rss/rss.html"
+        "CNBC Finance": "https://www.cnbc.com/id/10001147/device/rss/rss.html",
+        "Financial Times": "https://www.ft.com/?format=rss",
+        "MarketWatch": "https://www.marketwatch.com/rss/topstories",
+        "Bloomberg Markets": "https://www.bloomberg.com/feed/podcast/etf-report.xml",
+        "The Block": "https://www.theblock.co/rss",
+        "CryptoSlate": "https://cryptoslate.com/feed/",
+        "Bitcoin Magazine": "https://bitcoinmagazine.com/.rss/full/",
+        "Investing.com": "https://www.investing.com/rss/news_301.rss"
     }
     return format_news("🪙  CRYPTO & FINANCE NEWS", fetch_rss_entries(crypto_sources))
 
@@ -376,6 +402,7 @@ def main():
     msg += fetch_crypto_market()
     msg += fetch_big_cap_prices()
     msg += fetch_top_movers()
+    msg += "\n_Built by Shanchoy_"
     send_telegram(msg)
 
 # --- Telegram polling bot ---
@@ -394,7 +421,7 @@ def handle_updates(updates):
         text = message.get("text", "").lower()
         if text in ["/start", "/news"]:
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+            msg = f"*😐  DAILY NEWS DIGEST*\n_{now}_\n\n"
             msg += get_local_news()
             msg += get_global_news()
             msg += get_tech_news()
