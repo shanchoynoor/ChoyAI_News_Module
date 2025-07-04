@@ -421,7 +421,7 @@ def handle_updates(updates):
         text = message.get("text", "").lower()
         if text in ["/start", "/news"]:
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            msg = f"*😐  DAILY NEWS DIGEST*\n_{now}_\n\n"
+            msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
             msg += get_local_news()
             msg += get_global_news()
             msg += get_tech_news()
