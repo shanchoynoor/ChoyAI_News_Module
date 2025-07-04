@@ -302,7 +302,7 @@ def get_tech_news():
         "Android Authority": "https://www.androidauthority.com/feed",
         "MacRumors": "https://www.macrumors.com/macrumors.xml"
     }
-    return format_news("💻 TECH NEWS", fetch_rss_entries(tech_sources))
+    return format_news("🚀 TECH NEWS", fetch_rss_entries(tech_sources))
 
 def get_sports_news():
     sports_sources = {
@@ -420,7 +420,7 @@ def fetch_big_cap_prices():
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
         data = requests.get(url, params=params).json()
-        msg = "*Big Cap Crypto:*\n"
+        msg = "*💎 Big Cap Crypto:*\n"
         for c in data:
             msg += f"{c['symbol'].upper()}: ${c['current_price']} ({c['price_change_percentage_24h']:+.2f}%)\n"
         return msg + "\n"
@@ -527,8 +527,16 @@ def fetch_top_movers_data():
 
 # ===================== MAIN =====================
 def main():
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+    # Use Dhaka time (UTC+6) and AM/PM, date as 'Jul 4, 2025 08:40am'
+    from datetime import timedelta
+    dhaka_tz = timezone(timedelta(hours=6))
+    now_dt = datetime.now(dhaka_tz)
+    now_str = now_dt.strftime("%b %d, %Y %I:%M%p")
+    # Remove leading zero from day and AM/PM to am/pm
+    now_str = now_str.replace('AM', 'am').replace('PM', 'pm')
+    if now_str[4] == '0':
+        now_str = now_str[:4] + now_str[5:]
+    msg = f"*DAILY NEWS DIGEST*\n_{now_str}_\n\n"
     msg += get_local_news()
     msg += get_global_news()
     msg += get_tech_news()
@@ -573,8 +581,15 @@ def handle_updates(updates):
         chat_id = message["chat"]["id"]
         text = message.get("text", "").lower()
         if text in ["/start", "/news"]:
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+            # Use Dhaka time (UTC+6) and AM/PM, date as 'Jul 4, 2025 08:40am'
+            from datetime import timedelta
+            dhaka_tz = timezone(timedelta(hours=6))
+            now_dt = datetime.now(dhaka_tz)
+            now_str = now_dt.strftime("%b %d, %Y %I:%M%p")
+            now_str = now_str.replace('AM', 'am').replace('PM', 'pm')
+            if now_str[4] == '0':
+                now_str = now_str[:4] + now_str[5:]
+            msg = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
             msg += get_local_news()
             msg += get_global_news()
             msg += get_tech_news()
@@ -584,8 +599,8 @@ def handle_updates(updates):
             market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
             msg += (
                 "*📊 CRYPTO MARKET:*\n"
-                f"🔹 Market Cap (24h): {market_cap_str} ({market_cap_change_str})\n"
-                f"🔹 Volume (24h): {volume_str} ({volume_change_str})\n"
+                f"📈 Market Cap (24h): {market_cap_str} ({market_cap_change_str})\n"
+                f"🔄 Volume (24h): {volume_str} ({volume_change_str})\n"
                 f"😨 Fear/Greed Index: {fear_greed_str}/100\n\n"
             )
             big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
@@ -610,13 +625,13 @@ def handle_updates(updates):
                 accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy)?', ai_summary)
                 accuracy = accuracy_match.group(1) if accuracy_match else "80"
                 if "bullish" in summary_lower:
-                    prediction_line = f"\nPrediction for tomorrow: BULLISH 🚀 (approx. {accuracy}% accuracy)"
+                    prediction_line = f"\nPrediction for tomorrow: BULLISH 🟢 (approx. {accuracy}% accuracy)"
                 elif "bearish" in summary_lower:
-                    prediction_line = f"\nPrediction for tomorrow: BEARISH 🐻 (approx. {accuracy}% accuracy)"
+                    prediction_line = f"\nPrediction for tomorrow: BEARISH 🔴 (approx. {accuracy}% accuracy)"
                 else:
                     prediction_line = "\nPrediction for tomorrow: 🤔 (No clear prediction)"
                 msg += prediction_line
-            msg += "\n\n\nBuilt by Shanchoy"
+            msg += "\n\n\n- Built by Shanchoy"
             send_telegram(msg, chat_id)
         else:
             send_telegram("GET NEWS? (Type /news or /start to get the latest digest!)", chat_id)
