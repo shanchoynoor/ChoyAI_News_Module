@@ -7,6 +7,7 @@ import re
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from user_logging import init_db, log_user_interaction
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -533,6 +534,7 @@ def fetch_top_movers_data():
 
 # ===================== MAIN =====================
 def main(return_msg=False, chat_id=None):
+    init_db()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
     msg += get_local_news()
@@ -565,6 +567,20 @@ def handle_updates(updates):
         if not message:
             continue
         chat_id = message["chat"]["id"]
+        user = message["from"]
+        user_id = user.get("id")
+        username = user.get("username")
+        first_name = user.get("first_name")
+        last_name = user.get("last_name")
+        # Log user interaction
+        log_user_interaction(
+            user_id=user_id,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            message_type=message.get("text", "other"),
+            location=str(message.get("location")) if message.get("location") else None
+        )
         text = message.get("text", "").lower()
         if text in ["/start", "/news"]:
             # Send immediate feedback to user
@@ -859,6 +875,7 @@ def handle_updates(updates):
             send_telegram("GET NEWS? (Type /news or /start to get the latest digest!)", chat_id)
 
 def main():
+    init_db()
     print("Bot started. Listening for messages...")
     last_update_id = None
     while True:
