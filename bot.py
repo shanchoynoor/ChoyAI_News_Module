@@ -1,11 +1,20 @@
 import os
+<<<<<<< HEAD
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import news
 from user_logging import log_user_interaction, init_db
+=======
+import logging
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+>>>>>>> 5295c2b (updated from vps. fixed running issues)
 
+# Load environment variables
 load_dotenv()
+<<<<<<< HEAD
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 print("Loaded token:", BOT_TOKEN)  # DEBUG: Show which token is loaded
 
@@ -66,3 +75,57 @@ def main():
 
 if __name__ == "__main__":
     main()
+=======
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN not set in environment")
+
+# Configure logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+TELEGRAM_MESSAGE_LIMIT = 4096  # Character limit per message
+
+async def send_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        # Replace with your news fetching logic
+        news_text = "Latest news updates would appear here"
+        
+        if not news_text:
+            await update.message.reply_text("No updates available.")
+            return
+            
+        # Split long messages to avoid truncation
+        for i in range(0, len(news_text), TELEGRAM_MESSAGE_LIMIT):
+            await update.message.reply_text(news_text[i:i+TELEGRAM_MESSAGE_LIMIT])
+            
+    except Exception as e:
+        logger.error(f"Error in news handler: {e}")
+        await update.message.reply_text("⚠️ Error fetching news updates")
+
+def main():
+    try:
+        logger.info("Starting bot in polling mode...")
+        
+        # Build application
+        app = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Add command handler
+        app.add_handler(CommandHandler("news", send_news))
+        
+        # Start polling
+        app.run_polling(
+            drop_pending_updates=True,  # Skip old updates
+            allowed_updates=["message", "callback_query"]  # Only listen to these
+        )
+        
+    except Exception as e:
+        logger.critical(f"Bot failed: {e}")
+        raise
+
+if __name__ == "__main__":
+    main()
+>>>>>>> 5295c2b (updated from vps. fixed running issues)
