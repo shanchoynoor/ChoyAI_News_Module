@@ -756,15 +756,40 @@ def get_coin_stats_ai(symbol):
             except Exception:
                 ai_summary = "AI summary not available."
         import re
-        ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
-        if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
-            ai_summary_clean = ai_summary_clean.rstrip() + '.'
+        # Remove HTML tags
+        ai_summary_clean = re.sub(r'<[^>]+>', '', ai_summary)
+        # Remove any '###' and 'Current Market:'
+        ai_summary_clean = re.sub(r'^#+\s*', '', ai_summary_clean, flags=re.MULTILINE)
+        ai_summary_clean = re.sub(r'^Current Market:.*$', '', ai_summary_clean, flags=re.MULTILINE)
+        # Extract prediction (trend and probability)
+        prediction_line = ""
+        trend = None
+        prob = None
+        match = re.search(r'(bullish|bearish|neutral)[^\d]*(\d{2,3})\s*%\s*(?:confidence|probability)?', ai_summary, re.IGNORECASE)
+        if match:
+            trend = match.group(1).upper()
+            prob = int(match.group(2))
+        if trend and prob:
+            if trend == "BULLISH" and prob > 60:
+                prediction_line = f"Prediction For {symbol.upper()}: BULLISH \U0001F7E2 ({prob}% Probability)\n"
+            elif trend == "BEARISH" and prob > 60:
+                prediction_line = f"Prediction For {symbol.upper()}: BEARISH \U0001F534 ({prob}% Probability)\n"
+            elif trend == "NEUTRAL" and prob > 60:
+                prediction_line = f"Prediction For {symbol.upper()}: NEUTRAL ({prob}% Probability)\n"
+            else:
+                prediction_line = f"Prediction For {symbol.upper()}: 🤔 (No clear prediction)\n"
+        else:
+            prediction_line = f"Prediction For {symbol.upper()}: 🤔 (No clear prediction)\n"
+        # Remove extra blank lines
+        ai_summary_clean = re.sub(r'\n{3,}', '\n\n', ai_summary_clean).strip()
+        # Compose message
         msg = (
             f"*{name}* ({symbol.upper()}): ${price} ({change:+.2f}% 24h)\n"
-            f"{ai_summary_clean}\n"
-            "\n- Built by Shanchoy"
+            f"\n({symbol.upper()}) Current Market Summary\n"
+            f"\n{ai_summary_clean}\n"
+            f"\n{prediction_line}"
         )
-        return msg
+        return msg.strip()
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
