@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from user_logging import init_db, log_user_interaction
+import threading
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -447,7 +448,7 @@ def fetch_top_movers():
 
 def fetch_crypto_market_data():
     """
-    Returns a tuple: (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed)
+    Returns a tuple: (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_greed)
     """
     try:
         url = "https://api.coingecko.com/api/v3/global"
@@ -615,6 +616,32 @@ def get_dhaka_weather():
     except Exception:
         return "🌦️ Dhaka: Weather N/A"
 
+# ===================== COINLIST LOADING =====================
+COINLIST_PATH = os.path.join(os.path.dirname(__file__), "coinlist.json")
+_coinlist_cache = None
+_coinlist_lock = threading.Lock()
+def load_coinlist():
+    global _coinlist_cache
+    with _coinlist_lock:
+        if _coinlist_cache is not None:
+            return _coinlist_cache
+        try:
+            with open(COINLIST_PATH, "r") as f:
+                _coinlist_cache = json.load(f)
+        except Exception as e:
+            print(f"Failed to load coinlist.json: {e}")
+            _coinlist_cache = []
+        return _coinlist_cache
+
+# Helper: symbol to id lookup (case-insensitive)
+def get_coin_id_from_symbol(symbol):
+    coinlist = load_coinlist()
+    symbol = symbol.lower()
+    for c in coinlist:
+        if c["symbol"].lower() == symbol:
+            return c["id"], c["name"]
+    return None, None
+
 # ===================== MAIN ENTRY =====================
 def main(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
@@ -659,42 +686,27 @@ def get_crypto_ai_summary():
 def get_coin_stats(symbol):
     """Return price and 24h % change for a given coin symbol (e.g. BTC, ETH)."""
     try:
-        url = "https://api.coingecko.com/api/v3/coins/markets"
-        params = {"vs_currency": "usd", "ids": "", "order": "market_cap_desc", "per_page": 100}
-        # Map symbol to id
-        coinlist = requests.get("https://api.coingecko.com/api/v3/coins/list").json()
-        symbol = symbol.lower()
-        coin_id = None
-        for c in coinlist:
-            if c['symbol'].lower() == symbol:
-                coin_id = c['id']
-                break
+        coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
-            return f"Coin '{symbol.upper()}' not found."
-        params['ids'] = coin_id
+            return f"Coin '{symbol.upper()}' not found in local list."
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {"vs_currency": "usd", "ids": coin_id}
         data = requests.get(url, params=params).json()
         if not data:
             return f"Coin '{symbol.upper()}' not found."
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
-        return f"*{c['name']}* ({c['symbol'].upper()}): ${price} ({change:+.2f}% 24h)"
+        return f"*{coin_name}* ({symbol.upper()}): ${price} ({change:+.2f}% 24h)"
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
 def get_coin_stats_ai(symbol):
     """Return price, 24h % change, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
     try:
-        # Map symbol to id
-        coinlist = requests.get("https://api.coingecko.com/api/v3/coins/list").json()
-        symbol = symbol.lower()
-        coin_id = None
-        for c in coinlist:
-            if c['symbol'].lower() == symbol:
-                coin_id = c['id']
-                break
+        coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
-            return f"Coin '{symbol.upper()}' not found."
+            return f"Coin '{symbol.upper()}' not found in local list."
         # Fetch coin market data
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": coin_id}
@@ -708,7 +720,7 @@ def get_coin_stats_ai(symbol):
         volume = c.get('total_volume', 0)
         high_24h = c.get('high_24h', 0)
         low_24h = c.get('low_24h', 0)
-        name = c['name']
+        name = coin_name
         # Compose prompt for DeepSeek AI
         prompt = (
             f"Coin: {name} ({symbol.upper()})\n"
@@ -738,7 +750,6 @@ def get_coin_stats_ai(symbol):
                 ai_summary = response.json()["choices"][0]["message"]["content"].strip()
             except Exception:
                 ai_summary = "AI summary not available."
-        # Clean up summary
         import re
         ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
         if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
@@ -759,6 +770,7 @@ def get_help_text():
         "/cryptostats - Get only the crypto AI market summary\n"
         "/weather - Get Dhaka weather\n"
         "/<coin> - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
+        "/<coin>stats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
         "/help - Show this help message\n"
     )
 
