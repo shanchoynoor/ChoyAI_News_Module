@@ -517,6 +517,104 @@ def fetch_top_movers_data():
     except Exception as e:
         return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n", "N/A", "N/A"
 
+# ===================== WEATHER =====================
+def get_dhaka_weather():
+    try:
+        api_key = os.getenv("WEATHERAPI_KEY")
+        if not api_key:
+            return "🌦️ Dhaka: Weather N/A"
+        url = f"https://api.weatherapi.com/v1/forecast.json?key={api_key}&q=Dhaka&days=1&aqi=yes&alerts=no"
+        resp = requests.get(url)
+        data = resp.json()
+        forecast = data["forecast"]["forecastday"][0]
+        day = forecast["day"]
+        temp_min = day["mintemp_c"]
+        temp_max = day["maxtemp_c"]
+        rain_chance = day.get("daily_chance_of_rain", 0)
+        uv_val = day.get("uv", "N/A")
+        aq = data.get("current", {}).get("air_quality", {})
+        pm25 = aq.get("pm2_5")
+        def pm25_to_aqi(pm25):
+            breakpoints = [
+                (0.0, 12.0, 0, 50),
+                (12.1, 35.4, 51, 100),
+                (35.5, 55.4, 101, 150),
+                (55.5, 150.4, 151, 200),
+                (150.5, 250.4, 201, 300),
+                (250.5, 500.4, 301, 500)
+            ]
+            try:
+                pm25 = float(pm25)
+                for bp in breakpoints:
+                    if bp[0] <= pm25 <= bp[1]:
+                        Clow, Chigh, Ilow, Ihigh = bp[0], bp[1], bp[2], bp[3]
+                        aqi = ((Ihigh - Ilow) / (Chigh - Clow)) * (pm25 - Clow) + Ilow
+                        return round(aqi)
+            except Exception:
+                pass
+            return None
+        aqi_val = None
+        if pm25 is not None:
+            aqi_val = pm25_to_aqi(pm25)
+        if aqi_val is None:
+            epa_index = aq.get("us-epa-index")
+            if epa_index is not None:
+                epa_index = int(epa_index)
+                if epa_index == 1:
+                    aqi_val = 50
+                elif epa_index == 2:
+                    aqi_val = 100
+                elif epa_index == 3:
+                    aqi_val = 150
+                elif epa_index == 4:
+                    aqi_val = 200
+                elif epa_index == 5:
+                    aqi_val = 300
+                elif epa_index == 6:
+                    aqi_val = 400
+        if aqi_val is not None:
+            if aqi_val <= 50:
+                aq_str = "Good"
+            elif aqi_val <= 100:
+                aq_str = "Moderate"
+            elif aqi_val <= 150:
+                aq_str = "Unhealthy for Sensitive Groups"
+            elif aqi_val <= 200:
+                aq_str = "Unhealthy"
+            elif aqi_val <= 300:
+                aq_str = "Very Unhealthy"
+            else:
+                aq_str = "Hazardous"
+        else:
+            aq_str = "N/A"
+            aqi_val = "N/A"
+        try:
+            uv_val_num = float(uv_val)
+            if uv_val_num < 3:
+                uv_str = "Low"
+            elif uv_val_num < 6:
+                uv_str = "Moderate"
+            elif uv_val_num < 8:
+                uv_str = "High"
+            elif uv_val_num < 11:
+                uv_str = "Very High"
+            else:
+                uv_str = "Extreme"
+        except Exception:
+            uv_str = str(uv_val)
+        rain_emoji = "🌧️ "
+        aq_emoji = "🫧 "
+        uv_emoji = "🔆 "
+        lines = [
+            f"🌦️ Dhaka: {temp_min:.1f}°C ~ {temp_max:.1f}°C",
+            f"{rain_emoji}Rain: {rain_chance}%",
+            f"{aq_emoji}AQI: {aq_str} ({aqi_val})",
+            f"{uv_emoji}UV: {uv_str} ({uv_val})"
+        ]
+        return "\n".join(lines)
+    except Exception:
+        return "🌦️ Dhaka: Weather N/A"
+
 # ===================== MAIN ENTRY =====================
 def main(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
@@ -706,16 +804,6 @@ def handle_updates(updates):
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
             continue
-        # /[coin]stats command
-        if text.startswith("/") and text.endswith("stats") and len(text) > 6 and text[1:-5].isalpha():
-            coin = text[1:-5]
-            send_telegram(get_coin_stats_ai(coin), chat_id)
-            continue
-        # /[coin] command
-        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
-            coin = text[1:]
-            send_telegram(get_coin_stats(coin), chat_id)
-            continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
             # --- Bangladesh holiday info ---
@@ -746,115 +834,6 @@ def handle_updates(updates):
                     return ""
                 except Exception as e:
                     return ""
-            
-            # --- Weather for Dhaka, Bangladesh ---
-            def get_dhaka_weather():
-                try:
-                    api_key = os.getenv("WEATHERAPI_KEY")
-                    if not api_key:
-                        return "🌦️ Dhaka: Weather N/A"
-                    url = f"https://api.weatherapi.com/v1/forecast.json?key={api_key}&q=Dhaka&days=1&aqi=yes&alerts=no"
-                    resp = requests.get(url)
-                    data = resp.json()
-                    forecast = data["forecast"]["forecastday"][0]
-                    day = forecast["day"]
-                    temp_min = day["mintemp_c"]
-                    temp_max = day["maxtemp_c"]
-                    rain_chance = day.get("daily_chance_of_rain", 0)
-                    uv_val = day.get("uv", "N/A")
-                    aq = data.get("current", {}).get("air_quality", {})
-                    pm25 = aq.get("pm2_5")
-                    # AQI calculation from PM2.5 (EPA formula)
-                    def pm25_to_aqi(pm25):
-                        # https://forum.airnowtech.org/t/the-aqi-equation/169
-                        # Breakpoints for PM2.5 (ug/m3)
-                        breakpoints = [
-                            (0.0, 12.0, 0, 50),
-                            (12.1, 35.4, 51, 100),
-                            (35.5, 55.4, 101, 150),
-                            (55.5, 150.4, 151, 200),
-                            (150.5, 250.4, 201, 300),
-                            (250.5, 500.4, 301, 500)
-                        ]
-                        try:
-                            pm25 = float(pm25)
-                            for bp in breakpoints:
-                                if bp[0] <= pm25 <= bp[1]:
-                                    Clow, Chigh, Ilow, Ihigh = bp[0], bp[1], bp[2], bp[3]
-                                    aqi = ((Ihigh - Ilow) / (Chigh - Clow)) * (pm25 - Clow) + Ilow
-                                    return round(aqi)
-                        except Exception:
-                            pass
-                        return None
-                    aqi_val = None
-                    if pm25 is not None:
-                        aqi_val = pm25_to_aqi(pm25)
-                    if aqi_val is None:
-                        # fallback to us-epa-index (1-6)
-                        epa_index = aq.get("us-epa-index")
-                        if epa_index is not None:
-                            epa_index = int(epa_index)
-                            # Map to AQI category
-                            if epa_index == 1:
-                                aqi_val = 50
-                            elif epa_index == 2:
-                                aqi_val = 100
-                            elif epa_index == 3:
-                                aqi_val = 150
-                            elif epa_index == 4:
-                                aqi_val = 200
-                            elif epa_index == 5:
-                                aqi_val = 300
-                            elif epa_index == 6:
-                                aqi_val = 400
-                    # AQI label
-                    if aqi_val is not None:
-                        if aqi_val <= 50:
-                            aq_str = "Good"
-                        elif aqi_val <= 100:
-                            aq_str = "Moderate"
-                        elif aqi_val <= 150:
-                            aq_str = "Unhealthy for Sensitive Groups"
-                        elif aqi_val <= 200:
-                            aq_str = "Unhealthy"
-                        elif aqi_val <= 300:
-                            aq_str = "Very Unhealthy"
-                        else:
-                            aq_str = "Hazardous"
-                    else:
-                        aq_str = "N/A"
-                        aqi_val = "N/A"
-                    # UV index (not UV range, which is nm)
-                    # WeatherAPI gives UV index (unitless, 0-11+), not wavelength
-                    try:
-                        uv_val_num = float(uv_val)
-                        if uv_val_num < 3:
-                            uv_str = "Low"
-                        elif uv_val_num < 6:
-                            uv_str = "Moderate"
-                        elif uv_val_num < 8:
-                            uv_str = "High"
-                        elif uv_val_num < 11:
-                            uv_str = "Very High"
-                        else:
-                            uv_str = "Extreme"
-                    except Exception:
-                        uv_str = str(uv_val)
-                    # Emojis
-                    rain_emoji = "🌧️ "
-                    aq_emoji = "🫧 "
-                    uv_emoji = "🔆 "
-                    # Output as requested: city line, then each stat on its own line
-                    lines = [
-                        f"🌦️ Dhaka: {temp_min:.1f}°C ~ {temp_max:.1f}°C",
-                        f"{rain_emoji}Rain: {rain_chance}%",
-                        f"{aq_emoji}AQI: {aq_str} ({aqi_val})",
-                        f"{uv_emoji}UV: {uv_str} ({uv_val})"
-                    ]
-                    return "\n".join(lines)
-                except Exception:
-                    return "🌦️ Dhaka: Weather N/A"
-
             holiday_line = get_bd_holiday()
             # Build the full digest as before
             digest = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
