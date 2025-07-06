@@ -705,38 +705,22 @@ def main(return_msg=False, chat_id=None):
         print("No chat_id provided for sending news digest.")
 
 def get_crypto_ai_summary():
-    """Return the AI crypto market summary block, matching the /news output exactly."""
-    # --- Collect crypto data for DeepSeek summary ---
-    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
+    """Return only the AI crypto market summary (for /cryptostats)."""
+    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, _, _, _, _, _ = fetch_crypto_market_data()
     big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
     top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
     DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-    ai_summary = None
-    prediction_line = ""
-    if not DEEPSEEK_API or any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+    if not DEEPSEEK_API:
+        return "AI summary not available."
+    if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
         return "AI summary not available."
     ai_summary = get_crypto_summary_with_deepseek(
         market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
     )
-    import re
     ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
     if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
         ai_summary_clean = ai_summary_clean.rstrip() + '.'
-    summary_lower = ai_summary.lower()
-    accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
-    try:
-        accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
-    except Exception:
-        accuracy = 80
-    if accuracy <= 60:
-        prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
-    elif "bullish" in summary_lower and accuracy > 60:
-        prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
-    elif "bearish" in summary_lower and accuracy > 60:
-        prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
-    else:
-        prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
-    return f"🤖 AI Market Summary:\n{ai_summary_clean}\n{prediction_line}"
+    return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
 
 def get_coin_stats(symbol):
     """Return price and 24h % change for a given coin symbol (e.g. BTC, ETH)."""
@@ -1062,7 +1046,7 @@ def handle_updates(updates):
                 elif "bearish" in summary_lower and accuracy > 60:
                     prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
                 else:
-                    prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
+                    prediction_line = "\nPrediction For Tomorrow: 🤔 (No clear prediction)"
                 crypto_section += prediction_line
             crypto_section += "\n\n\n- Built by Shanchoy"
             # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
