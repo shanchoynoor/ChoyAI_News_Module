@@ -11,7 +11,7 @@ from user_logging import init_db, log_user_interaction
 import threading
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -842,20 +842,6 @@ def handle_updates(updates):
             continue
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
-            continue
-        # --- Coin stats handlers ---
-        # /[coin]stats (e.g. /btcstats)
-        if text.startswith("/") and text.endswith("stats") and len(text) > 6:
-            symbol = text[1:-5]  # remove leading / and trailing stats
-            if symbol:
-                reply = get_coin_stats_ai(symbol)
-                send_telegram(reply, chat_id)
-                continue
-        # /[coin] (e.g. /btc)
-        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
-            symbol = text[1:]
-            reply = get_coin_stats(symbol)
-            send_telegram(reply, chat_id)
             continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
