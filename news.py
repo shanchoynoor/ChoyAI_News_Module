@@ -959,8 +959,7 @@ def handle_updates(updates):
             continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
-            # Build and send the full digest using build_news_digest
-            build_news_digest(return_msg=False, chat_id=chat_id)
+            build_news_digest(chat_id=chat_id)
             continue
         # --- Coin stats handlers ---
         # /[coin]stats (e.g. /btcstats)
