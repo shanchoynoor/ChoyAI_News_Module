@@ -22,3 +22,5 @@ coinlist = [
 
 with open("coinlist.json", "w") as f:
     json.dump(coinlist, f, indent=2)
+
+    #latest commit
