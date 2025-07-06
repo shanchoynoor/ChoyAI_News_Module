@@ -1,9 +1,9 @@
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from news import handle_updates, get_updates, send_telegram, get_help_text
-from news import main as news_main
+from news import build_news_digest  # Use the correct function
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,7 +11,7 @@ TELEGRAM_CHAT_ID = os.getenv("AUTO_NEWS_CHAT_ID")  # Set this in your .env or pa
 
 # Bangladesh is UTC+6
 def get_bd_now():
-    return datetime.utcnow() + timedelta(hours=6)
+    return datetime.now(timezone.utc) + timedelta(hours=6)
 
 def should_send_news(now=None):
     """
@@ -21,7 +21,7 @@ def should_send_news(now=None):
     if now is None:
         now = get_bd_now()
     # List of (hour, minute) tuples for sending news
-    send_times = [(0, 30), (8, 0), (13, 0), (19, 0), (23, 0)]
+    send_times = [(0, 40), (8, 0), (13, 0), (19, 0), (23, 0)]
     return (now.hour, now.minute) in send_times
 
 def main():
@@ -39,8 +39,7 @@ def main():
         if should_send_news(now) and key not in sent_today:
             print(f"[auto_news] Sending news for {now.strftime('%Y-%m-%d %H:%M')} (BD time)", flush=True)
             try:
-                # Use the same logic as /news handler in news.py
-                news_main(return_msg=False, chat_id=chat_id)
+                build_news_digest(return_msg=False, chat_id=chat_id)
                 sent_today.add(key)
             except Exception as e:
                 print(f"[auto_news] Error sending news: {e}", flush=True)
