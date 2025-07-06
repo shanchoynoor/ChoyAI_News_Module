@@ -394,21 +394,34 @@ def fetch_crypto_market():
     """Fetch and format global crypto market data."""
     try:
         url = "https://api.coingecko.com/api/v3/global"
-        data = requests.get(url).json()["data"]
-        market_cap = data["total_market_cap"]["usd"]
-        volume = data["total_volume"]["usd"]
-        market_change = data["market_cap_change_percentage_24h_usd"]
+        resp = requests.get(url)
+        if not resp.ok:
+            raise Exception("CoinGecko API error")
+        data = resp.json().get("data", {})
+        market_cap = data.get("total_market_cap", {}).get("usd")
+        volume = data.get("total_volume", {}).get("usd")
+        market_change = data.get("market_cap_change_percentage_24h_usd")
+        if None in (market_cap, volume, market_change):
+            raise Exception("Missing market data")
         volume_yesterday = volume / (1 + market_change / 100)
         volume_change = ((volume - volume_yesterday) / volume_yesterday) * 100
-        fear_index = requests.get("https://api.alternative.me/fng/?limit=1").json()["data"][0]["value"]
-        return (
-            "*📊 CRYPTO MARKET:*\n"
-            f"💰 Market Cap: {human_readable_number(market_cap)} ({market_change:+.2f}%)\n"
-            f"💵 Volume: {human_readable_number(volume)} ({volume_change:+.2f}%)\n"
-            f"😨 Fear/Greed: {fear_index}/100\n\n"
-        )
-    except Exception as e:
-        return f"*📊 CRYPTO MARKET:*\nError: {escape_markdown_v2(str(e))}\n\n"
+        # Fear/Greed index
+        try:
+            fg_resp = requests.get("https://api.alternative.me/fng/?limit=1")
+            fg_data = fg_resp.json().get("data", [{}])
+            fear_index = fg_data[0].get("value")
+            if not fear_index or not str(fear_index).isdigit():
+                fear_index = "N/A"
+        except Exception:
+            fear_index = "N/A"
+        market_cap_str = human_readable_number(market_cap) if market_cap else "N/A"
+        market_cap_change_str = f"{market_change:+.2f}%" if market_change is not None else "N/A"
+        volume_str = human_readable_number(volume) if volume else "N/A"
+        volume_change_str = f"{volume_change:+.2f}%" if volume_change is not None else "N/A"
+        fear_greed_str = str(fear_index)
+        return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_index)
+    except Exception:
+        return ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
 
 def fetch_big_cap_prices():
     """Fetch and format big cap crypto prices."""
@@ -416,38 +429,70 @@ def fetch_big_cap_prices():
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
-        data = requests.get(url, params=params).json()
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise Exception("Invalid CoinGecko response")
         msg = "*💎 Crypto Big Cap:*\n"
+        big_caps_list = []
         for c in data:
-            msg += f"{c['symbol'].upper()}: ${c['current_price']} ({c['price_change_percentage_24h']:+.2f}%)\n"
-        return msg + "\n"
-    except Exception as e:
-        return f"*Crypto Big Cap:*\nError: {e}\n\n"
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
+            change = c.get('price_change_percentage_24h', 0)
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
+            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(big_caps_list)
+    except Exception:
+        return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers():
     """Fetch and format top crypto gainers and losers."""
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
-        data = requests.get(url, params={
-            "vs_currency": "usd", "order": "market_cap_desc", "per_page": 100
-        }).json()
+        params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100}
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise Exception("Invalid CoinGecko response")
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
+        gainers_list = []
         for i, c in enumerate(gainers, 1):
-            symbol = escape_markdown_v2(c['symbol'].upper())
-            price = c['current_price']
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
         msg += "\n*🔻 Crypto Top Losers:*\n"
+        losers_list = []
         for i, c in enumerate(losers, 1):
-            symbol = escape_markdown_v2(c['symbol'].upper())
-            price = c['current_price']
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
-        return msg + "\n"
-    except Exception as e:
-        return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n"
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
+    except Exception:
+        return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
 
 def fetch_crypto_market_data():
     """
@@ -455,71 +500,103 @@ def fetch_crypto_market_data():
     """
     try:
         url = "https://api.coingecko.com/api/v3/global"
-        data = requests.get(url).json()["data"]
-        market_cap = data["total_market_cap"]["usd"]
-        volume = data["total_volume"]["usd"]
-        market_change = data["market_cap_change_percentage_24h_usd"]
-        # Estimate volume % change (based on market cap change, as a rough proxy)
+        resp = requests.get(url)
+        if not resp.ok:
+            raise Exception("CoinGecko API error")
+        data = resp.json().get("data", {})
+        market_cap = data.get("total_market_cap", {}).get("usd")
+        volume = data.get("total_volume", {}).get("usd")
+        market_change = data.get("market_cap_change_percentage_24h_usd")
+        if None in (market_cap, volume, market_change):
+            raise Exception("Missing market data")
         volume_yesterday = volume / (1 + market_change / 100)
         volume_change = ((volume - volume_yesterday) / volume_yesterday) * 100
         # Fear/Greed index
-        fear_index = requests.get("https://api.alternative.me/fng/?limit=1").json()["data"][0]["value"]
-        market_cap_str = human_readable_number(market_cap)
-        market_cap_change_str = f"{market_change:+.2f}%"
-        volume_str = human_readable_number(volume)
-        volume_change_str = f"{volume_change:+.2f}%"
+        try:
+            fg_resp = requests.get("https://api.alternative.me/fng/?limit=1")
+            fg_data = fg_resp.json().get("data", [{}])
+            fear_index = fg_data[0].get("value")
+            if not fear_index or not str(fear_index).isdigit():
+                fear_index = "N/A"
+        except Exception:
+            fear_index = "N/A"
+        market_cap_str = human_readable_number(market_cap) if market_cap else "N/A"
+        market_cap_change_str = f"{market_change:+.2f}%" if market_change is not None else "N/A"
+        volume_str = human_readable_number(volume) if volume else "N/A"
+        volume_change_str = f"{volume_change:+.2f}%" if volume_change is not None else "N/A"
         fear_greed_str = str(fear_index)
         return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_index)
-    except Exception as e:
+    except Exception:
         return ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
 
 def fetch_big_cap_prices_data():
     ids = "bitcoin,ethereum,ripple,binancecoin,solana,tron,dogecoin,cardano"
-    # No coin logos, just use symbol
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
-        data = requests.get(url, params=params).json()
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise Exception("Invalid CoinGecko response")
         msg = "*💎 Crypto Big Cap:*\n"
         big_caps_list = []
         for c in data:
-            symbol = c['symbol'].upper()
-            price = c['current_price']
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{symbol}: ${price} ({change:+.2f}%)\n"
-            big_caps_list.append(f"{symbol}: ${price} ({change:+.2f}%)")
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
+            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
         return msg + "\n", ", ".join(big_caps_list)
-    except Exception as e:
-        return f"*Crypto Big Cap:*\nError: {e}\n\n", "N/A"
+    except Exception:
+        return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers_data():
-    # No coin logos, just use symbol
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
-        data = requests.get(url, params={
-            "vs_currency": "usd", "order": "market_cap_desc", "per_page": 100
-        }).json()
+        params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100}
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise Exception("Invalid CoinGecko response")
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
         gainers_list = []
         for i, c in enumerate(gainers, 1):
-            symbol = c['symbol'].upper()
-            price = c['current_price']
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
-            gainers_list.append(f"{symbol}: ${price:.2f} ({change:+.2f}%)")
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
         msg += "\n*🔻 Crypto Top Losers:*\n"
         losers_list = []
         for i, c in enumerate(losers, 1):
-            symbol = c['symbol'].upper()
-            price = c['current_price']
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
-            losers_list.append(f"{symbol}: ${price:.2f} ({change:+.2f}%)")
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
         return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
-    except Exception as e:
-        return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n", "N/A", "N/A"
+    except Exception:
+        return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
 
 # ===================== WEATHER =====================
 def get_dhaka_weather():
