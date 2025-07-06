@@ -11,7 +11,7 @@ from user_logging import init_db, log_user_interaction
 import threading
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -403,9 +403,9 @@ def fetch_crypto_market():
         fear_index = requests.get("https://api.alternative.me/fng/?limit=1").json()["data"][0]["value"]
         return (
             "*📊 CRYPTO MARKET:*\n"
-            f"💰 Market Cap (24h): {human_readable_number(market_cap)} ({market_change:+.2f}%)\n"
-            f"💵 Volume (24h): {human_readable_number(volume)} ({volume_change:+.2f}%)\n"
-            f"😨 Fear/Greed Index: {fear_index}/100\n\n"
+            f"💰 Market Cap: {human_readable_number(market_cap)} ({market_change:+.2f}%)\n"
+            f"💵 Volume: {human_readable_number(volume)} ({volume_change:+.2f}%)\n"
+            f"😨 Fear/Greed: {fear_index}/100\n\n"
         )
     except Exception as e:
         return f"*📊 CRYPTO MARKET:*\nError: {escape_markdown_v2(str(e))}\n\n"
@@ -417,12 +417,12 @@ def fetch_big_cap_prices():
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
         data = requests.get(url, params=params).json()
-        msg = "*💎 Big Cap Crypto:*\n"
+        msg = "*💎 Crypto Big Cap:*\n"
         for c in data:
             msg += f"{c['symbol'].upper()}: ${c['current_price']} ({c['price_change_percentage_24h']:+.2f}%)\n"
         return msg + "\n"
     except Exception as e:
-        return f"*Big Cap Crypto:*\nError: {e}\n\n"
+        return f"*Crypto Big Cap:*\nError: {e}\n\n"
 
 def fetch_top_movers():
     """Fetch and format top crypto gainers and losers."""
@@ -433,13 +433,13 @@ def fetch_top_movers():
         }).json()
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
-        msg = "*🔺 Crypto Top 5 Gainers:*\n"
+        msg = "*🔺 Crypto Top Gainers:*\n"
         for i, c in enumerate(gainers, 1):
             symbol = escape_markdown_v2(c['symbol'].upper())
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
             msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
-        msg += "\n*🔻 Crypto Top 5 Losers:*\n"
+        msg += "\n*🔻 Crypto Top Losers:*\n"
         for i, c in enumerate(losers, 1):
             symbol = escape_markdown_v2(c['symbol'].upper())
             price = c['current_price']
@@ -480,7 +480,7 @@ def fetch_big_cap_prices_data():
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
         data = requests.get(url, params=params).json()
-        msg = "*💎 Big Cap Crypto:*\n"
+        msg = "*💎 Crypto Big Cap:*\n"
         big_caps_list = []
         for c in data:
             symbol = c['symbol'].upper()
@@ -490,7 +490,7 @@ def fetch_big_cap_prices_data():
             big_caps_list.append(f"{symbol}: ${price} ({change:+.2f}%)")
         return msg + "\n", ", ".join(big_caps_list)
     except Exception as e:
-        return f"*Big Cap Crypto:*\nError: {e}\n\n", "N/A"
+        return f"*Crypto Big Cap:*\nError: {e}\n\n", "N/A"
 
 def fetch_top_movers_data():
     # No coin logos, just use symbol
@@ -501,7 +501,7 @@ def fetch_top_movers_data():
         }).json()
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
-        msg = "*🔺 Crypto Top 5 Gainers:*\n"
+        msg = "*🔺 Crypto Top Gainers:*\n"
         gainers_list = []
         for i, c in enumerate(gainers, 1):
             symbol = c['symbol'].upper()
@@ -509,7 +509,7 @@ def fetch_top_movers_data():
             change = c.get('price_change_percentage_24h', 0)
             msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
             gainers_list.append(f"{symbol}: ${price:.2f} ({change:+.2f}%)")
-        msg += "\n*🔻 Crypto Top 5 Losers:*\n"
+        msg += "\n*🔻 Crypto Top Losers:*\n"
         losers_list = []
         for i, c in enumerate(losers, 1):
             symbol = c['symbol'].upper()
@@ -702,7 +702,14 @@ def get_coin_stats(symbol):
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
-        return f"*{coin_name}* ({symbol.upper()}): ${price} ({change:+.2f}% 24h)"
+        # Format price: 2 decimals if >=1, 6 decimals if <1
+        if price >= 1:
+            price_str = f"${price:,.2f}"
+        else:
+            price_str = f"${price:.6f}"
+        symbol_upper = c['symbol'].upper()
+        change_str = f"({change:+.2f}%)"
+        return f"{symbol_upper}: {price_str} {change_str}"
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
@@ -712,7 +719,6 @@ def get_coin_stats_ai(symbol):
         coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
             return f"Coin '{symbol.upper()}' not found in local list."
-        # Fetch coin market data
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": coin_id}
         data = requests.get(url, params=params).json()
@@ -721,15 +727,21 @@ def get_coin_stats_ai(symbol):
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
+        # Format price: 2 decimals if >=1, 6 decimals if <1
+        if price >= 1:
+            price_str = f"${price:,.2f}"
+        else:
+            price_str = f"${price:.6f}"
+        symbol_upper = c['symbol'].upper()
+        change_str = f"({change:+.2f}%)"
+        # Compose prompt for DeepSeek AI
         market_cap = c.get('market_cap', 0)
         volume = c.get('total_volume', 0)
         high_24h = c.get('high_24h', 0)
         low_24h = c.get('low_24h', 0)
-        name = coin_name
-        # Compose prompt for DeepSeek AI
         prompt = (
-            f"Coin: {name} ({symbol.upper()})\n"
-            f"Current Price: ${price} ({change:+.2f}% 24h)\n"
+            f"Coin: {symbol_upper}\n"
+            f"Current Price: {price_str} {change_str}\n"
             f"Market Cap: {human_readable_number(market_cap)}\n"
             f"24h Volume: {human_readable_number(volume)}\n"
             f"24h High/Low: ${high_24h} / ${low_24h}\n"
@@ -760,9 +772,8 @@ def get_coin_stats_ai(symbol):
         if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
             ai_summary_clean = ai_summary_clean.rstrip() + '.'
         msg = (
-            f"*{name}* ({symbol.upper()}): ${price} ({change:+.2f}% 24h)\n"
-            f"{ai_summary_clean}\n"
-            "\n- Built by Shanchoy"
+            f"{symbol_upper}: {price_str} {change_str}\n"
+            f"{ai_summary_clean}"
         )
         return msg
     except Exception:
@@ -782,7 +793,7 @@ def format_ai_prediction(summary):
         if percent > 60 and ("BULLISH" in trend or "BEARISH" in trend):
             new_line = f"Prediction For Tomorrow: {trend} ({percent}% Probability)"
         else:
-            new_line = "Prediction For Tomorrow: No consolidation"
+            new_line = "Prediction For Tomorrow: CONSOLIDATION"
         summary = re.sub(r'Prediction For Tomorrow: .+?\(\d{2,3}% (confidence|probability)\)', new_line, summary, flags=re.IGNORECASE)
     else:
         # If not matching, just replace 'confidence' with 'Probability' if present
@@ -842,20 +853,6 @@ def handle_updates(updates):
             continue
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
-            continue
-        # --- Coin stats handlers ---
-        # /[coin]stats (e.g. /btcstats)
-        if text.startswith("/") and text.endswith("stats") and len(text) > 6:
-            symbol = text[1:-5]  # remove leading / and trailing stats
-            if symbol:
-                reply = get_coin_stats_ai(symbol)
-                send_telegram(reply, chat_id)
-                continue
-        # /[coin] (e.g. /btc)
-        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
-            symbol = text[1:]
-            reply = get_coin_stats(symbol)
-            send_telegram(reply, chat_id)
             continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
@@ -1028,9 +1025,21 @@ def handle_updates(updates):
                 # fallback: send as two messages
                 send_telegram(digest, chat_id)
                 send_telegram(crypto_section, chat_id)
-        else:
-            send_telegram("TO GET NEWS? (Type /news or /start to get the latest news!)", chat_id)
-
+            continue
+        # --- Coin stats handlers ---
+        # /[coin]stats (e.g. /btcstats)
+        if text.startswith("/") and text.endswith("stats") and len(text) > 6:
+            symbol = text[1:-5]  # remove leading / and trailing stats
+            if symbol:
+                reply = get_coin_stats_ai(symbol)
+                send_telegram(reply, chat_id)
+                continue
+        # /[coin] (e.g. /btc)
+        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
+            symbol = text[1:]
+            reply = get_coin_stats(symbol)
+            send_telegram(reply, chat_id)
+            continue
 def main():
     init_db()
     print("Bot started. Listening for messages...")
