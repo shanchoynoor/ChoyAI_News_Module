@@ -763,6 +763,22 @@ def get_coin_stats_ai(symbol):
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
+def format_ai_prediction(summary):
+    # Find prediction line and probability
+    match = re.search(r'Prediction For Tomorrow: (.+?) \((\d{2,3})% (confidence|probability)\)', summary, re.IGNORECASE)
+    if match:
+        trend = match.group(1).strip().upper()
+        percent = int(match.group(2))
+        if percent > 60 and ("BULLISH" in trend or "BEARISH" in trend):
+            new_line = f"Prediction For Tomorrow: {trend} ({percent}% Probability)"
+        else:
+            new_line = "Prediction For Tomorrow: No consolidation"
+        summary = re.sub(r'Prediction For Tomorrow: .+?\(\d{2,3}% (confidence|probability)\)', new_line, summary, flags=re.IGNORECASE)
+    else:
+        # If not matching, just replace 'confidence' with 'Probability' if present
+        summary = re.sub(r'(\d{2,3})% confidence', r'\1% Probability', summary, flags=re.IGNORECASE)
+    return summary
+
 def get_help_text():
     return (
         "*ChoyNewsBot Commands:*\n"
@@ -801,7 +817,7 @@ def handle_updates(updates):
             message_type=message.get("text", "other"),
             location=str(message.get("location")) if message.get("location") else None
         )
-        text = message.get("text", "").lower()
+        text = message.get("text", "").lower().strip()
         # Welcome message for new users (first interaction)
         if message.get("new_chat_members") or text in ["/start"]:
             send_telegram("Welcome to ChoyNewsBot!", chat_id)
