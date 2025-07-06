@@ -14,11 +14,15 @@ def get_bd_now():
     return datetime.utcnow() + timedelta(hours=6)
 
 def should_send_news(now=None):
+    """
+    Check if the current time (BDT) matches one of the scheduled send times:
+    12:05am, 8:00, 13:00, 19:00, or 23:00.
+    """
     if now is None:
         now = get_bd_now()
-    # Send at 8:00, 13:00, 19:00, 23:00 (BD time)
-    send_hours = [8, 13, 19, 23]
-    return now.hour in send_hours and now.minute == 0
+    # List of (hour, minute) tuples for sending news
+    send_times = [(0, 30), (8, 0), (13, 0), (19, 0), (23, 0)]
+    return (now.hour, now.minute) in send_times
 
 def main():
     chat_id = TELEGRAM_CHAT_ID
@@ -31,7 +35,7 @@ def main():
     while True:
         now = get_bd_now()
         print(f"[auto_news] Loop running at {now.strftime('%Y-%m-%d %H:%M:%S')} (BD time)", flush=True)
-        key = (now.date(), now.hour)
+        key = (now.date(), now.hour, now.minute)
         if should_send_news(now) and key not in sent_today:
             print(f"[auto_news] Sending news for {now.strftime('%Y-%m-%d %H:%M')} (BD time)", flush=True)
             try:
