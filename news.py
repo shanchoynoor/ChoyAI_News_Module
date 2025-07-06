@@ -419,7 +419,17 @@ def fetch_big_cap_prices():
         data = requests.get(url, params=params).json()
         msg = "*💎 Crypto Big Cap:*\n"
         for c in data:
-            msg += f"{c['symbol'].upper()}: ${c['current_price']} ({c['price_change_percentage_24h']:+.2f}%)\n"
+            symbol = c['symbol'].upper()
+            price = c['current_price']
+            change = c.get('price_change_percentage_24h', 0)
+            # Format price: 2 decimals if >=1, 6 decimals if <1
+            if price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            change_str = f"({change:+.2f}%)"
+            arrow = get_arrow(change)
+            msg += f"{symbol}: {price_str} {change_str}{arrow}\n"
         return msg + "\n"
     except Exception as e:
         return f"*Crypto Big Cap:*\nError: {e}\n\n"
@@ -435,16 +445,28 @@ def fetch_top_movers():
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
         for i, c in enumerate(gainers, 1):
-            symbol = escape_markdown_v2(c['symbol'].upper())
+            symbol = c['symbol'].upper()
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
+            if price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            change_str = f"({change:+.2f}%)"
+            arrow = get_arrow(change)
+            msg += f"{i}. {symbol}: {price_str} {change_str}{arrow}\n"
         msg += "\n*🔻 Crypto Top Losers:*\n"
         for i, c in enumerate(losers, 1):
-            symbol = escape_markdown_v2(c['symbol'].upper())
+            symbol = c['symbol'].upper()
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
-            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
+            if price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            change_str = f"({change:+.2f}%)"
+            arrow = get_arrow(change)
+            msg += f"{i}. {symbol}: {price_str} {change_str}{arrow}\n"
         return msg + "\n"
     except Exception as e:
         return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n"
@@ -647,6 +669,18 @@ def get_coin_id_from_symbol(symbol):
     logging.debug(f"Symbol not found: {symbol}")
     return None, None
 
+# ===================== ARROW HELPERS =====================
+def get_arrow(change):
+    try:
+        if change > 0:
+            return ' ▲'
+        elif change < 0:
+            return ' ▼'
+        else:
+            return ''
+    except Exception:
+        return ''
+
 # ===================== MAIN ENTRY =====================
 def main(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
@@ -671,22 +705,38 @@ def main(return_msg=False, chat_id=None):
         print("No chat_id provided for sending news digest.")
 
 def get_crypto_ai_summary():
-    """Return only the AI crypto market summary (for /cryptostats)."""
-    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, _, _, _, _, _ = fetch_crypto_market_data()
+    """Return the AI crypto market summary block, matching the /news output exactly."""
+    # --- Collect crypto data for DeepSeek summary ---
+    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
     big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
     top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
     DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-    if not DEEPSEEK_API:
-        return "AI summary not available."
-    if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+    ai_summary = None
+    prediction_line = ""
+    if not DEEPSEEK_API or any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
         return "AI summary not available."
     ai_summary = get_crypto_summary_with_deepseek(
         market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
     )
+    import re
     ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
     if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
         ai_summary_clean = ai_summary_clean.rstrip() + '.'
-    return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
+    summary_lower = ai_summary.lower()
+    accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
+    try:
+        accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
+    except Exception:
+        accuracy = 80
+    if accuracy <= 60:
+        prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
+    elif "bullish" in summary_lower and accuracy > 60:
+        prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
+    elif "bearish" in summary_lower and accuracy > 60:
+        prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
+    else:
+        prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
+    return f"🤖 AI Market Summary:\n{ai_summary_clean}\n{prediction_line}"
 
 def get_coin_stats(symbol):
     """Return price and 24h % change for a given coin symbol (e.g. BTC, ETH)."""
@@ -709,7 +759,8 @@ def get_coin_stats(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
-        return f"{symbol_upper}: {price_str} {change_str}"
+        arrow = get_arrow(change)
+        return f"{symbol_upper}: {price_str} {change_str}{arrow}"
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
@@ -734,6 +785,7 @@ def get_coin_stats_ai(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
+        arrow = get_arrow(change)
         # Compose prompt for DeepSeek AI
         market_cap = c.get('market_cap', 0)
         volume = c.get('total_volume', 0)
@@ -741,7 +793,7 @@ def get_coin_stats_ai(symbol):
         low_24h = c.get('low_24h', 0)
         prompt = (
             f"Coin: {symbol_upper}\n"
-            f"Current Price: {price_str} {change_str}\n"
+            f"Current Price: {price_str} {change_str}{arrow}\n"
             f"Market Cap: {human_readable_number(market_cap)}\n"
             f"24h Volume: {human_readable_number(volume)}\n"
             f"24h High/Low: ${high_24h} / ${low_24h}\n"
@@ -772,7 +824,7 @@ def get_coin_stats_ai(symbol):
         if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
             ai_summary_clean = ai_summary_clean.rstrip() + '.'
         msg = (
-            f"{symbol_upper}: {price_str} {change_str}\n"
+            f"{symbol_upper}: {price_str} {change_str}{arrow}\n"
             f"{ai_summary_clean}"
         )
         return msg
@@ -977,8 +1029,8 @@ def handle_updates(updates):
             fear_greed_str = str(fear_greed)
             crypto_section = (
                 f"*📊 CRYPTO MARKET:*\n"
-                f"💰 Market Cap (24h): {market_cap_str} {market_cap_change_str}{cap_arrow}\n"
-                f"💵 Volume (24h): {volume_str} {volume_change_str}{vol_arrow}\n"
+                f"💰 Market Cap: {market_cap_str} {market_cap_change_str}{cap_arrow}\n"
+                f"💵 Volume: {volume_str} {volume_change_str}{vol_arrow}\n"
                 f"😨 Fear/Greed: {fear_greed_str}/100\n\n"
             )
             big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
@@ -1010,7 +1062,7 @@ def handle_updates(updates):
                 elif "bearish" in summary_lower and accuracy > 60:
                     prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
                 else:
-                    prediction_line = "\nPrediction For Tomorrow: 🤔 (No clear prediction)"
+                    prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
                 crypto_section += prediction_line
             crypto_section += "\n\n\n- Built by Shanchoy"
             # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
