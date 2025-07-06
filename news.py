@@ -11,7 +11,7 @@ from user_logging import init_db, log_user_interaction
 import threading
 import logging
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -756,40 +756,15 @@ def get_coin_stats_ai(symbol):
             except Exception:
                 ai_summary = "AI summary not available."
         import re
-        # Remove HTML tags
-        ai_summary_clean = re.sub(r'<[^>]+>', '', ai_summary)
-        # Remove any '###' and 'Current Market:'
-        ai_summary_clean = re.sub(r'^#+\s*', '', ai_summary_clean, flags=re.MULTILINE)
-        ai_summary_clean = re.sub(r'^Current Market:.*$', '', ai_summary_clean, flags=re.MULTILINE)
-        # Extract prediction (trend and probability)
-        prediction_line = ""
-        trend = None
-        prob = None
-        match = re.search(r'(bullish|bearish|neutral)[^\d]*(\d{2,3})\s*%\s*(?:confidence|probability)?', ai_summary, re.IGNORECASE)
-        if match:
-            trend = match.group(1).upper()
-            prob = int(match.group(2))
-        if trend and prob:
-            if trend == "BULLISH" and prob > 60:
-                prediction_line = f"Prediction For {symbol.upper()}: BULLISH \U0001F7E2 ({prob}% Probability)\n"
-            elif trend == "BEARISH" and prob > 60:
-                prediction_line = f"Prediction For {symbol.upper()}: BEARISH \U0001F534 ({prob}% Probability)\n"
-            elif trend == "NEUTRAL" and prob > 60:
-                prediction_line = f"Prediction For {symbol.upper()}: NEUTRAL ({prob}% Probability)\n"
-            else:
-                prediction_line = f"Prediction For {symbol.upper()}: 🤔 (No clear prediction)\n"
-        else:
-            prediction_line = f"Prediction For {symbol.upper()}: 🤔 (No clear prediction)\n"
-        # Remove extra blank lines
-        ai_summary_clean = re.sub(r'\n{3,}', '\n\n', ai_summary_clean).strip()
-        # Compose message
+        ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+        if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+            ai_summary_clean = ai_summary_clean.rstrip() + '.'
         msg = (
             f"*{name}* ({symbol.upper()}): ${price} ({change:+.2f}% 24h)\n"
-            f"\n({symbol.upper()}) Current Market Summary\n"
-            f"\n{ai_summary_clean}\n"
-            f"\n{prediction_line}"
+            f"{ai_summary_clean}\n"
+            "\n- Built by Shanchoy"
         )
-        return msg.strip()
+        return msg
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
@@ -867,6 +842,20 @@ def handle_updates(updates):
             continue
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
+            continue
+        # --- Coin stats handlers ---
+        # /[coin]stats (e.g. /btcstats)
+        if text.startswith("/") and text.endswith("stats") and len(text) > 6:
+            symbol = text[1:-5]  # remove leading / and trailing stats
+            if symbol:
+                reply = get_coin_stats_ai(symbol)
+                send_telegram(reply, chat_id)
+                continue
+        # /[coin] (e.g. /btc)
+        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
+            symbol = text[1:]
+            reply = get_coin_stats(symbol)
+            send_telegram(reply, chat_id)
             continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
