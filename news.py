@@ -434,6 +434,7 @@ def fetch_big_cap_prices():
         if not isinstance(data, list):
             raise Exception("Invalid CoinGecko response")
         msg = "*💎 Crypto Big Cap:*\n"
+        big_caps_list = []
         for c in data:
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
@@ -444,11 +445,11 @@ def fetch_big_cap_prices():
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-            msg += f"{symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
-        return msg + "\n"
+            msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
+            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(big_caps_list)
     except Exception:
-        return "*Crypto Big Cap:*\nN/A\n\n"
+        return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers():
     """Fetch and format top crypto gainers and losers."""
@@ -462,6 +463,7 @@ def fetch_top_movers():
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
+        gainers_list = []
         for i, c in enumerate(gainers, 1):
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
@@ -472,9 +474,10 @@ def fetch_top_movers():
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
         msg += "\n*🔻 Crypto Top Losers:*\n"
+        losers_list = []
         for i, c in enumerate(losers, 1):
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
@@ -485,11 +488,11 @@ def fetch_top_movers():
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
-        return msg + "\n"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
     except Exception:
-        return "*Top Movers Error:* N/A\n\n"
+        return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
 
 def fetch_crypto_market_data():
     """
@@ -525,6 +528,75 @@ def fetch_crypto_market_data():
         return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_index)
     except Exception:
         return ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
+
+def fetch_big_cap_prices_data():
+    ids = "bitcoin,ethereum,ripple,binancecoin,solana,tron,dogecoin,cardano"
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {"vs_currency": "usd", "ids": ids}
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise Exception("Invalid CoinGecko response")
+        msg = "*💎 Crypto Big Cap:*\n"
+        big_caps_list = []
+        for c in data:
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
+            change = c.get('price_change_percentage_24h', 0)
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
+            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(big_caps_list)
+    except Exception:
+        return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
+
+def fetch_top_movers_data():
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100}
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise Exception("Invalid CoinGecko response")
+        gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
+        losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
+        msg = "*🔺 Crypto Top Gainers:*\n"
+        gainers_list = []
+        for i, c in enumerate(gainers, 1):
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
+            change = c.get('price_change_percentage_24h', 0)
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        msg += "\n*🔻 Crypto Top Losers:*\n"
+        losers_list = []
+        for i, c in enumerate(losers, 1):
+            symbol = c.get('symbol', '').upper()
+            price = c.get('current_price')
+            change = c.get('price_change_percentage_24h', 0)
+            if price is None:
+                price_str = "N/A"
+            elif price >= 1:
+                price_str = f"${price:,.2f}"
+            else:
+                price_str = f"${price:.6f}"
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
+            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+        return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
+    except Exception:
+        return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
 
 # ===================== WEATHER =====================
 def get_dhaka_weather():
@@ -678,57 +750,20 @@ def main(return_msg=False, chat_id=None):
 def get_crypto_ai_summary():
     """Return only the AI crypto market summary (for /cryptostats)."""
     market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, _, _, _, _, _ = fetch_crypto_market_data()
-    big_caps_msg = fetch_big_cap_prices()
-    top_movers_msg = fetch_top_movers()
+    big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+    top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
     DEEPSEEK_API = os.getenv("DEEPSEEK_API")
     if not DEEPSEEK_API:
         return "AI summary not available."
-    if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str]):
+    if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
         return "AI summary not available."
-    # Compose the same prompt as in /news
-    big_caps_str = big_caps_msg.replace('*💎 Crypto Big Cap:*\n', '').replace('\n', ', ').strip(', ')
-    gainers_str = ''
-    losers_str = ''
-    # Extract gainers/losers from top_movers_msg
-    lines = top_movers_msg.splitlines()
-    gainers = []
-    losers = []
-    section = None
-    for line in lines:
-        if 'Top Gainers' in line:
-            section = 'gainers'
-            continue
-        if 'Top Losers' in line:
-            section = 'losers'
-            continue
-        if section == 'gainers' and line.strip():
-            gainers.append(line.strip())
-        if section == 'losers' and line.strip():
-            losers.append(line.strip())
-    gainers_str = ', '.join([l.split('. ',1)[-1] for l in gainers])
-    losers_str = ', '.join([l.split('. ',1)[-1] for l in losers])
     ai_summary = get_crypto_summary_with_deepseek(
         market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
     )
     ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
     if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
         ai_summary_clean = ai_summary_clean.rstrip() + '.'
-    # Add prediction line logic as in /news
-    summary_lower = ai_summary.lower()
-    accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
-    try:
-        accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
-    except Exception:
-        accuracy = 80
-    if accuracy <= 60:
-        prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
-    elif "bullish" in summary_lower and accuracy > 60:
-        prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
-    elif "bearish" in summary_lower and accuracy > 60:
-        prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
-    else:
-        prediction_line = "\nPrediction For Tomorrow: 🤔 (No clear prediction)"
-    return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n{prediction_line}"
+    return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
 
 def get_coin_stats(symbol):
     """Return price and 24h % change for a given coin symbol (e.g. BTC, ETH)."""
@@ -744,19 +779,19 @@ def get_coin_stats(symbol):
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
+        # Format price: 2 decimals if >=1, 6 decimals if <1
         if price >= 1:
             price_str = f"${price:,.2f}"
         else:
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
-        arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
         change_str = f"({change:+.2f}%)"
-        return f"{symbol_upper}: {price_str} {change_str}{arrow}"
+        return f"{symbol_upper}: {price_str} {change_str}"
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
 def get_coin_stats_ai(symbol):
-    """Return price, 24h % change, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH), in a professional, structured format."""
+    """Return price, 24h % change, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
     try:
         coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
@@ -769,39 +804,28 @@ def get_coin_stats_ai(symbol):
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
-        high_24h = c.get('high_24h', 0)
-        low_24h = c.get('low_24h', 0)
-        market_cap = c.get('market_cap', 0)
-        volume = c.get('total_volume', 0)
-        symbol_upper = c['symbol'].upper()
         # Format price: 2 decimals if >=1, 6 decimals if <1
         if price >= 1:
             price_str = f"${price:,.2f}"
         else:
             price_str = f"${price:.6f}"
+        symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
-        arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-        high_str = f"${high_24h:,.2f}" if high_24h >= 1 else f"${high_24h:.6f}"
-        low_str = f"${low_24h:,.2f}" if low_24h >= 1 else f"${low_24h:.6f}"
-        market_cap_str = human_readable_number(market_cap)
-        volume_str = human_readable_number(volume)
-        # Compose explicit prompt for DeepSeek AI
+        # Compose prompt for DeepSeek AI
+        market_cap = c.get('market_cap', 0)
+        volume = c.get('total_volume', 0)
+        high_24h = c.get('high_24h', 0)
+        low_24h = c.get('low_24h', 0)
         prompt = (
             f"Coin: {symbol_upper}\n"
-            f"Current Price: {price_str} {change_str}{arrow}\n"
-            f"24h High: {high_str}\n"
-            f"24h Low: {low_str}\n"
-            f"Market Cap: {market_cap_str}\n"
-            f"24h Volume: {volume_str}\n"
+            f"Current Price: {price_str} {change_str}\n"
+            f"Market Cap: {human_readable_number(market_cap)}\n"
+            f"24h Volume: {human_readable_number(volume)}\n"
+            f"24h High/Low: ${high_24h} / ${low_24h}\n"
             "\n"
-            "Write a concise, professional summary of the current market, technicals, and sentiment for this coin, using the data above. "
-            "Format your answer in these sections (use the exact section headers):\n"
-            "Summary: [1-2 sentences about price, range, cap, volume, and sentiment]\n"
-            "Key Levels: [List resistance/support, e.g. Resistance: $X (24h high), Support: $Y (24h low)]\n"
-            "Sentiment: [Short, clear sentiment line]\n"
-            "Technicals: [Short-term trend, e.g. Neutral, Bullish, Bearish]\n"
-            "Prediction For Tomorrow: [BULLISH/BEARISH/NEUTRAL/NO CLEAR PREDICTION] ([probability% if possible])\n"
-            "Do not include extra text, disclaimers, or markdown."
+            "Give a short summary of the current market, technicals, and sentiment for this coin. "
+            "Include a forecast for the next 24h (bullish/bearish/neutral), and mention key resistance/support levels if possible. "
+            "Be concise and insightful."
         )
         DEEPSEEK_API = os.getenv("DEEPSEEK_API")
         if not DEEPSEEK_API:
@@ -812,62 +836,21 @@ def get_coin_stats_ai(symbol):
             payload = {
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 180,
+                "max_tokens": 120,
                 "temperature": 0.7
             }
             try:
-                response = requests.post(url, headers=headers, json=payload, timeout=20)
+                response = requests.post(url, headers=headers, json=payload, timeout=15)
                 ai_summary = response.json()["choices"][0]["message"]["content"].strip()
             except Exception:
                 ai_summary = "AI summary not available."
-        # Post-process to enforce format
         import re
-        def extract_section(text, header):
-            pat = rf"{header}:(.*?)(?=\n[A-Z][a-zA-Z ]+:|$)"
-            m = re.search(pat, text, re.DOTALL)
-            return m.group(1).strip() if m else None
-        summary = extract_section(ai_summary, "Summary")
-        key_levels = extract_section(ai_summary, "Key Levels")
-        sentiment = extract_section(ai_summary, "Sentiment")
-        technicals = extract_section(ai_summary, "Technicals")
-        prediction = extract_section(ai_summary, "Prediction For Tomorrow")
-        # Fallbacks if missing
-        if not summary:
-            summary = f"{symbol_upper} is trading at {price_str} {change_str}{arrow}, 24h range {low_str} - {high_str}. Market cap: {market_cap_str}, 24h volume: {volume_str}."
-        if not key_levels:
-            key_levels = f"  - Resistance: {high_str} (24h high)\n  - Support: {low_str} (24h low)"
-        if not sentiment:
-            sentiment = "Mixed."
-        if not technicals:
-            technicals = "Neutral."
-        # Prediction line logic
-        pred_line = prediction if prediction else "🤔 (No clear prediction)"
-        # Try to extract probability and trend
-        pred_prob = re.search(r'(\d{2,3})\s*%.*', pred_line)
-        pred_trend = None
-        if any(x in pred_line.lower() for x in ["bullish", "bearish", "neutral"]):
-            if "bullish" in pred_line.lower():
-                pred_trend = "BULLISH 🟢"
-            elif "bearish" in pred_line.lower():
-                pred_trend = "BEARISH 🔴"
-            elif "neutral" in pred_line.lower():
-                pred_trend = "NEUTRAL 🟡"
-        else:
-            pred_trend = "🤔 (No clear prediction)"
-        if pred_prob and pred_trend and pred_trend != "🤔 (No clear prediction)":
-            pred_line = f"{pred_trend} ({pred_prob.group(1)}% probability)"
-        elif pred_trend:
-            pred_line = pred_trend
-        else:
-            pred_line = "🤔 (No clear prediction)"
-        # Compose final message
+        ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+        if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+            ai_summary_clean = ai_summary_clean.rstrip() + '.'
         msg = (
-            f"Price: {symbol_upper} {price_str} {change_str}{arrow}\n"
-            f"Summary: {summary}\n\n"
-            f"Key Levels:\n  {key_levels}\n\n"
-            f"Sentiment: {sentiment}\n\n"
-            f"Technicals: {technicals}\n\n"
-            f"Prediction For Tomorrow: {pred_line}"
+            f"{symbol_upper}: {price_str} {change_str}\n"
+            f"{ai_summary_clean}"
         )
         return msg
     except Exception:
@@ -1071,8 +1054,8 @@ def handle_updates(updates):
             fear_greed_str = str(fear_greed)
             crypto_section = (
                 f"*📊 CRYPTO MARKET:*\n"
-                f"💰 Market Cap: {market_cap_str} ({market_cap_change_str}){cap_arrow}\n"
-                f"💵 Volume: {volume_str} ({volume_change_str}){vol_arrow}\n"
+                f"💰 Market Cap: {market_cap_str} {market_cap_change_str}{cap_arrow}\n"
+                f"💵 Volume: {volume_str} {volume_change_str}{vol_arrow}\n"
                 f"😨 Fear/Greed: {fear_greed_str}/100\n\n"
             )
             big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
