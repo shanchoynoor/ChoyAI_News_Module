@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from user_logging import init_db, log_user_interaction
 import threading
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -638,8 +641,10 @@ def get_coin_id_from_symbol(symbol):
     coinlist = load_coinlist()
     symbol = symbol.lower()
     for c in coinlist:
-        if c["symbol"].lower() == symbol:
+        if c.get("symbol", "").lower() == symbol:
+            logging.debug(f"Found symbol: {symbol} -> {c['id']}")
             return c["id"], c["name"]
+    logging.debug(f"Symbol not found: {symbol}")
     return None, None
 
 # ===================== MAIN ENTRY =====================
@@ -763,6 +768,11 @@ def get_coin_stats_ai(symbol):
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
+def clean_ai_summary(summary):
+    # Remove HTML tags
+    summary = re.sub(r'<[^>]+>', '', summary)
+    return summary
+
 def format_ai_prediction(summary):
     # Find prediction line and probability
     match = re.search(r'Prediction For Tomorrow: (.+?) \((\d{2,3})% (confidence|probability)\)', summary, re.IGNORECASE)
@@ -818,6 +828,7 @@ def handle_updates(updates):
             location=str(message.get("location")) if message.get("location") else None
         )
         text = message.get("text", "").lower().strip()
+        logging.debug(f"Received text: {text}")
         # Welcome message for new users (first interaction)
         if message.get("new_chat_members") or text in ["/start"]:
             send_telegram("Welcome to ChoyNewsBot!", chat_id)
