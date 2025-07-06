@@ -659,6 +659,7 @@ def get_help_text():
         "*ChoyNewsBot Commands:*\n"
         "/news - Get the full daily news digest\n"
         "/cryptostats - Get only the crypto AI market summary\n"
+        "/weather - Get Dhaka weather\n"
         "/<coin> - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
         "/help - Show this help message\n"
     )
