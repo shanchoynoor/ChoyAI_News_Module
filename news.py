@@ -725,6 +725,28 @@ def get_coin_id_from_symbol(symbol):
     return None, None
 
 # ===================== MAIN ENTRY =====================
+def build_news_digest(return_msg=False, chat_id=None):
+    """Main entry point: builds and prints or sends the news digest."""
+    init_db()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+    msg += get_local_news()
+    msg += get_global_news()
+    msg += get_tech_news()
+    msg += get_sports_news()
+    msg += get_crypto_news()
+    msg += fetch_crypto_market()
+    msg += fetch_big_cap_prices()
+    msg += fetch_top_movers()
+
+    if return_msg:
+        return msg
+    # Default: send to Telegram (for legacy usage)
+    if chat_id is not None:
+        send_telegram(msg, chat_id)
+    else:
+        print("No chat_id provided for sending news digest.")
+
 def main(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
     init_db()
