@@ -419,17 +419,7 @@ def fetch_big_cap_prices():
         data = requests.get(url, params=params).json()
         msg = "*💎 Crypto Big Cap:*\n"
         for c in data:
-            symbol = c['symbol'].upper()
-            price = c['current_price']
-            change = c.get('price_change_percentage_24h', 0)
-            # Format price: 2 decimals if >=1, 6 decimals if <1
-            if price >= 1:
-                price_str = f"${price:,.2f}"
-            else:
-                price_str = f"${price:.6f}"
-            change_str = f"({change:+.2f}%)"
-            arrow = get_arrow(change)
-            msg += f"{symbol}: {price_str} {change_str}{arrow}\n"
+            msg += f"{c['symbol'].upper()}: ${c['current_price']} ({c['price_change_percentage_24h']:+.2f}%)\n"
         return msg + "\n"
     except Exception as e:
         return f"*Crypto Big Cap:*\nError: {e}\n\n"
@@ -445,28 +435,16 @@ def fetch_top_movers():
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
         for i, c in enumerate(gainers, 1):
-            symbol = c['symbol'].upper()
+            symbol = escape_markdown_v2(c['symbol'].upper())
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
-            if price >= 1:
-                price_str = f"${price:,.2f}"
-            else:
-                price_str = f"${price:.6f}"
-            change_str = f"({change:+.2f}%)"
-            arrow = get_arrow(change)
-            msg += f"{i}. {symbol}: {price_str} {change_str}{arrow}\n"
+            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
         msg += "\n*🔻 Crypto Top Losers:*\n"
         for i, c in enumerate(losers, 1):
-            symbol = c['symbol'].upper()
+            symbol = escape_markdown_v2(c['symbol'].upper())
             price = c['current_price']
             change = c.get('price_change_percentage_24h', 0)
-            if price >= 1:
-                price_str = f"${price:,.2f}"
-            else:
-                price_str = f"${price:.6f}"
-            change_str = f"({change:+.2f}%)"
-            arrow = get_arrow(change)
-            msg += f"{i}. {symbol}: {price_str} {change_str}{arrow}\n"
+            msg += f"{i}. {symbol}: ${price:.2f} ({change:+.2f}%)\n"
         return msg + "\n"
     except Exception as e:
         return f"*Top Movers Error:* {escape_markdown_v2(str(e))}\n\n"
@@ -669,18 +647,6 @@ def get_coin_id_from_symbol(symbol):
     logging.debug(f"Symbol not found: {symbol}")
     return None, None
 
-# ===================== ARROW HELPERS =====================
-def get_arrow(change):
-    try:
-        if change > 0:
-            return ' ▲'
-        elif change < 0:
-            return ' ▼'
-        else:
-            return ''
-    except Exception:
-        return ''
-
 # ===================== MAIN ENTRY =====================
 def main(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
@@ -743,8 +709,7 @@ def get_coin_stats(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
-        arrow = get_arrow(change)
-        return f"{symbol_upper}: {price_str} {change_str}{arrow}"
+        return f"{symbol_upper}: {price_str} {change_str}"
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
@@ -769,7 +734,6 @@ def get_coin_stats_ai(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
-        arrow = get_arrow(change)
         # Compose prompt for DeepSeek AI
         market_cap = c.get('market_cap', 0)
         volume = c.get('total_volume', 0)
@@ -777,7 +741,7 @@ def get_coin_stats_ai(symbol):
         low_24h = c.get('low_24h', 0)
         prompt = (
             f"Coin: {symbol_upper}\n"
-            f"Current Price: {price_str} {change_str}{arrow}\n"
+            f"Current Price: {price_str} {change_str}\n"
             f"Market Cap: {human_readable_number(market_cap)}\n"
             f"24h Volume: {human_readable_number(volume)}\n"
             f"24h High/Low: ${high_24h} / ${low_24h}\n"
@@ -808,7 +772,7 @@ def get_coin_stats_ai(symbol):
         if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
             ai_summary_clean = ai_summary_clean.rstrip() + '.'
         msg = (
-            f"{symbol_upper}: {price_str} {change_str}{arrow}\n"
+            f"{symbol_upper}: {price_str} {change_str}\n"
             f"{ai_summary_clean}"
         )
         return msg
