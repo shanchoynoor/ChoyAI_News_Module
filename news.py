@@ -653,7 +653,7 @@ def get_coin_id_from_symbol(symbol):
     return None, None
 
 # ===================== MAIN ENTRY =====================
-def main(return_msg=False, chat_id=None):
+def build_news_digest(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
     init_db()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -834,8 +834,17 @@ def get_coin_stats_ai(symbol):
         # Fallbacks if missing
         if not summary:
             summary = f"{symbol_upper} is trading at {price_str} {change_str}{arrow}, 24h range {low_str} - {high_str}. Market cap: {market_cap_str}, 24h volume: {volume_str}."
-        if not key_levels:
-            key_levels = f"  - Resistance: {high_str} (24h high)\n  - Support: {low_str} (24h low)"
+        # --- Key Levels formatting ---
+        # Always print Resistance and Support on separate lines, with dash
+        if key_levels:
+            # Try to extract resistance/support from AI output, else fallback
+            res = re.search(r'Resist[a-zA-Z]*:?\s*([$\d.,]+).*?(24h high)?', key_levels, re.IGNORECASE)
+            sup = re.search(r'Support:?\s*([$\d.,]+).*?(24h low)?', key_levels, re.IGNORECASE)
+            res_val = res.group(1) if res else high_str
+            sup_val = sup.group(1) if sup else low_str
+            key_levels_fmt = f"- Resistance: {res_val} (24h high)\n- Support: {sup_val} (24h low)"
+        else:
+            key_levels_fmt = f"- Resistance: {high_str} (24h high)\n- Support: {low_str} (24h low)"
         if not sentiment:
             sentiment = "Mixed."
         if not technicals:
@@ -864,7 +873,7 @@ def get_coin_stats_ai(symbol):
         msg = (
             f"Price: {symbol_upper} {price_str} {change_str}{arrow}\n"
             f"Summary: {summary}\n\n"
-            f"Key Levels:\n  {key_levels}\n\n"
+            f"Key Levels:\n{key_levels_fmt}\n\n"
             f"Sentiment: {sentiment}\n\n"
             f"Technicals: {technicals}\n\n"
             f"Prediction For Tomorrow: {pred_line}"
