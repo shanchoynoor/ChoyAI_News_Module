@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from user_logging import init_db, log_user_interaction
 import threading
 import logging
+from pytz import timezone
+from timezonefinder import TimezoneFinder
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -730,6 +732,29 @@ def get_coin_id_from_symbol(symbol):
     logging.debug(f"Symbol not found: {symbol}")
     return None, None
 
+# ===================== TIME =====================
+def get_local_time_str(user_location=None):
+    """Return current time string in user's local timezone (default Asia/Dhaka)."""
+    try:
+        if user_location and isinstance(user_location, dict):
+            lat = user_location.get('latitude')
+            lon = user_location.get('longitude')
+            if lat is not None and lon is not None:
+                tf = TimezoneFinder()
+                tz_str = tf.timezone_at(lng=lon, lat=lat)
+                if tz_str:
+                    local_tz = timezone(tz_str)
+                else:
+                    local_tz = timezone('Asia/Dhaka')
+            else:
+                local_tz = timezone('Asia/Dhaka')
+        else:
+            local_tz = timezone('Asia/Dhaka')
+        now = datetime.now(local_tz)
+        return now.strftime("%Y-%m-%d %H:%M (%Z)")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d %H:%M")
+
 # ===================== MAIN ENTRY =====================
 def build_news_digest(return_msg=False, chat_id=None):
     """Main entry point: builds and prints or sends the news digest."""
@@ -1001,6 +1026,7 @@ def handle_updates(updates):
         )
         text = message.get("text", "").lower().strip()
         logging.debug(f"Received text: {text}")
+        user_location = message.get("location")
         # Welcome message for new users (first interaction)
         if message.get("new_chat_members") or text in ["/start"]:
             send_telegram("Welcome to ChoyNewsBot!", chat_id)
@@ -1017,6 +1043,7 @@ def handle_updates(updates):
             continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
+            now_str = get_local_time_str(user_location)
             # --- Bangladesh holiday info ---
             now_dt = datetime.now()
             now_str = now_dt.strftime("%Y-%m-%d %H:%M")
