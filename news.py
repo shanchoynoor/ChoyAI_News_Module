@@ -13,6 +13,9 @@ import logging
 
 logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for troubleshooting
 
+# Set API key globals early so helpers can use them
+TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
+
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
 
@@ -608,92 +611,13 @@ def fetch_top_movers_data():
     except Exception:
         return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
 
-# ===================== TWELVE DATA INTEGRATION =====================
-TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-
-def fetch_twelvedata_stats(symbol, asset_type="crypto"):
-    """Fetch price, change, RSI, MA30, 52w range, support/resistance for a symbol from Twelve Data."""
-    if not TWELVE_DATA_API_KEY:
-        return f"Twelve Data API key not set."
-    base_url = "https://api.twelvedata.com"
-    params = {"symbol": symbol.upper(), "apikey": TWELVE_DATA_API_KEY}
-    # Determine exchange for crypto
-    if asset_type == "crypto":
-        params["exchange"] = "BINANCE"
-        params["interval"] = "1day"
-    # 1. Price & Change
-    try:
-        price_url = f"{base_url}/price"
-        price_resp = requests.get(price_url, params=params, timeout=10)
-        price_data = price_resp.json()
-        price = float(price_data.get("price"))
-    except Exception:
-        price = None
-    try:
-        quote_url = f"{base_url}/quote"
-        quote_resp = requests.get(quote_url, params=params, timeout=10)
-        quote_data = quote_resp.json()
-        change = float(quote_data.get("percent_change", 0))
-        high_24h = float(quote_data.get("high", 0))
-        low_24h = float(quote_data.get("low", 0))
-    except Exception:
-        change = 0
-        high_24h = low_24h = 0
-    arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-    price_str = f"${price:,.2f}" if price and price >= 1 else (f"${price:.6f}" if price else "N/A")
-    change_str = f"({change:+.2f}%)"
-    # 2. RSI
-    try:
-        rsi_url = f"{base_url}/rsi"
-        rsi_params = params.copy()
-        rsi_params["interval"] = "1day"
-        rsi_params["time_period"] = 14
-        rsi_resp = requests.get(rsi_url, params=rsi_params, timeout=10)
-        rsi_data = rsi_resp.json()
-        rsi_val = list(rsi_data.get("values", [{}]))[0].get("rsi", "N/A")
-    except Exception:
-        rsi_val = "N/A"
-    # 3. MA30
-    try:
-        ma_url = f"{base_url}/ma"
-        ma_params = params.copy()
-        ma_params["interval"] = "1day"
-        ma_params["time_period"] = 30
-        ma_params["series_type"] = "close"
-        ma_resp = requests.get(ma_url, params=ma_params, timeout=10)
-        ma_data = ma_resp.json()
-        ma30_val = list(ma_data.get("values", [{}]))[0].get("ma", "N/A")
-        if ma30_val != "N/A":
-            ma30_val = float(ma30_val)
-            ma30_val = f"${ma30_val:,.2f}" if ma30_val >= 1 else f"${ma30_val:.6f}"
-    except Exception:
-        ma30_val = "N/A"
-    # 4. 52w range
-    try:
-        hist_url = f"{base_url}/time_series"
-        hist_params = params.copy()
-        hist_params["interval"] = "1day"
-        hist_params["outputsize"] = 365
-        hist_resp = requests.get(hist_url, params=hist_params, timeout=10)
-        hist_data = hist_resp.json()
-        closes = [float(x["close"]) for x in hist_data.get("values", []) if "close" in x]
-        if closes:
-            min_52w = min(closes)
-            max_52w = max(closes)
-            range_52w = f"${min_52w:,.2f} ~ ${max_52w:,.2f}" if max_52w >= 1 else f"${min_52w:.6f} ~ ${max_52w:.6f}"
-        else:
-            range_52w = "N/A"
-    except Exception:
-        range_52w = "N/A"
-    # 5. Support/Resistance (use 24h low/high as proxy)
-    support = f"${low_24h:,.2f}" if low_24h else "N/A"
-    resistance = f"${high_24h:,.2f}" if high_24h else "N/A"
-    # Compose message
-    msg = (
-        f"Price: {symbol.upper()} {price_str} {change_str}{arrow}\n"
-        f"Technicals:\n- Support: {support}\n- Resistance: {resistance}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n- Price Range (52w): {range_52w}\n"
-    )
-    return msg
+def get_coin_id_from_symbol(symbol):
+    """Return CoinGecko coin id for a given symbol (case-insensitive), or None if not found."""
+    symbol = symbol.lower()
+    for entry in load_coinlist():
+        if entry.get("symbol", "").lower() == symbol:
+            return entry.get("id"), entry.get("name")
+    return None, None
 
 def get_asset_stats(symbol, asset_type="crypto", ai_summary=True):
     """Unified handler for /coin, /coinstats, /stock, /forex commands using Twelve Data."""
@@ -753,12 +677,10 @@ def get_asset_stats(symbol, asset_type="crypto", ai_summary=True):
             pred_line = "Prediction (24hr): 🤔"
     return f"{base_msg}\nMarket Summary: {ai_summary_clean}\n\n{pred_line}"
 
-# ===================== COINLIST LOADING =====================
-_coinlist_cache = None
-
+# ===================== HELPER AND PLACEHOLDER DEFINITIONS =====================
 def load_coinlist():
     global _coinlist_cache
-    if _coinlist_cache is not None:
+    if '_coinlist_cache' in globals() and _coinlist_cache is not None:
         return _coinlist_cache
     try:
         with open("coinlist.json", "r") as f:
@@ -767,13 +689,121 @@ def load_coinlist():
         _coinlist_cache = []
     return _coinlist_cache
 
-def get_coin_id_from_symbol(symbol):
-    """Return CoinGecko coin id for a given symbol (case-insensitive), or None if not found."""
-    symbol = symbol.lower()
-    for entry in load_coinlist():
-        if entry.get("symbol", "").lower() == symbol:
-            return entry.get("id"), entry.get("name")
-    return None, None
+def fetch_twelvedata_stats(symbol, asset_type="crypto"):
+    if not TWELVE_DATA_API_KEY:
+        return f"Twelve Data API key not set."
+    base_url = "https://api.twelvedata.com"
+    params = {"symbol": symbol.upper(), "apikey": TWELVE_DATA_API_KEY}
+    if asset_type == "crypto":
+        params["exchange"] = "BINANCE"
+        params["interval"] = "1day"
+    try:
+        price_url = f"{base_url}/price"
+        price_resp = requests.get(price_url, params=params, timeout=10)
+        price_data = price_resp.json()
+        price = float(price_data.get("price"))
+    except Exception:
+        price = None
+    try:
+        quote_url = f"{base_url}/quote"
+        quote_resp = requests.get(quote_url, params=params, timeout=10)
+        quote_data = quote_resp.json()
+        change = float(quote_data.get("percent_change", 0))
+        high_24h = float(quote_data.get("high", 0))
+        low_24h = float(quote_data.get("low", 0))
+    except Exception:
+        change = 0
+        high_24h = low_24h = 0
+    arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
+    price_str = f"${price:,.2f}" if price and price >= 1 else (f"${price:.6f}" if price else "N/A")
+    change_str = f"({change:+.2f}%)"
+    try:
+        rsi_url = f"{base_url}/rsi"
+        rsi_params = params.copy()
+        rsi_params["interval"] = "1day"
+        rsi_params["time_period"] = 14
+        rsi_resp = requests.get(rsi_url, params=rsi_params, timeout=10)
+        rsi_data = rsi_resp.json()
+        rsi_val = list(rsi_data.get("values", [{}]))[0].get("rsi", "N/A")
+    except Exception:
+        rsi_val = "N/A"
+    try:
+        ma_url = f"{base_url}/ma"
+        ma_params = params.copy()
+        ma_params["interval"] = "1day"
+        ma_params["time_period"] = 30
+        ma_params["series_type"] = "close"
+        ma_resp = requests.get(ma_url, params=ma_params, timeout=10)
+        ma_data = ma_resp.json()
+        ma30_val = list(ma_data.get("values", [{}]))[0].get("ma", "N/A")
+        if ma30_val != "N/A":
+            ma30_val = float(ma30_val)
+            ma30_val = f"${ma30_val:,.2f}" if ma30_val >= 1 else f"${ma30_val:.6f}"
+    except Exception:
+        ma30_val = "N/A"
+    try:
+        hist_url = f"{base_url}/time_series"
+        hist_params = params.copy()
+        hist_params["interval"] = "1day"
+        hist_params["outputsize"] = 365
+        hist_resp = requests.get(hist_url, params=hist_params, timeout=10)
+        hist_data = hist_resp.json()
+        closes = [float(x["close"]) for x in hist_data.get("values", []) if "close" in x]
+        if closes:
+            min_52w = min(closes)
+            max_52w = max(closes)
+            range_52w = f"${min_52w:,.2f} ~ ${max_52w:,.2f}" if max_52w >= 1 else f"${min_52w:.6f} ~ ${max_52w:.6f}"
+        else:
+            range_52w = "N/A"
+    except Exception:
+        range_52w = "N/A"
+    support = f"${low_24h:,.2f}" if low_24h else "N/A"
+    resistance = f"${high_24h:,.2f}" if high_24h else "N/A"
+    msg = (
+        f"Price: {symbol.upper()} {price_str} {change_str}{arrow}\n"
+        f"Technicals:\n- Support: {support}\n- Resistance: {resistance}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n- Price Range (52w): {range_52w}\n"
+    )
+    return msg
+
+def get_help_text():
+    logging.debug("get_help_text called")
+    return (
+        """*ChoyNewsBot Help:*
+/start - Welcome message
+/help - Show this help message
+/support - Contact developer
+/news - Daily news digest
+/cryptostats - Crypto market summary
+/weather - Dhaka weather
+/[symbol] - Asset stats (e.g. /btc, /aapl, /eurusd)
+/[symbol]stats - Asset stats + AI summary (e.g. /btcstats, /aaplstats)
+"""
+    )
+
+def get_support_text():
+    logging.debug("get_support_text called")
+    return (
+        """*Support:*
+[Contact Developer](https://t.me/shanchoy)
+Email: shanchoyzone@gmail.com
+"""
+    )
+
+def get_crypto_ai_summary():
+    logging.debug("get_crypto_ai_summary called")
+    return "Crypto AI summary is temporarily unavailable."
+
+def get_dhaka_weather():
+    logging.debug("get_dhaka_weather called")
+    return "Weather for Dhaka: 30°C, Partly Cloudy. (Demo)"
+
+def get_coin_stats_ai(symbol):
+    logging.debug(f"get_coin_stats_ai called for {symbol}")
+    return f"Stats+AI for {symbol.upper()} are temporarily unavailable."
+
+def get_coin_stats(symbol):
+    logging.debug(f"get_coin_stats called for {symbol}")
+    return f"Stats for {symbol.upper()} are temporarily unavailable."
 
 # ===================== HANDLER REFACTOR =====================
 def handle_updates(updates):
@@ -1029,44 +1059,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# ===================== PLACEHOLDER DEFINITIONS FOR UNDEFINED FUNCTIONS =====================
-def get_help_text():
-    logging.debug("get_help_text called")
-    return (
-        """*ChoyNewsBot Help:*
-/start - Welcome message
-/help - Show this help message
-/support - Contact developer
-/news - Daily news digest
-/cryptostats - Crypto market summary
-/weather - Dhaka weather
-/[symbol] - Asset stats (e.g. /btc, /aapl, /eurusd)
-/[symbol]stats - Asset stats + AI summary (e.g. /btcstats, /aaplstats)
-"""
-    )
-
-def get_support_text():
-    logging.debug("get_support_text called")
-    return (
-        """*Support:*
-[Contact Developer](https://t.me/shanchoy)
-Email: shanchoyzone@gmail.com
-"""
-    )
-
-def get_crypto_ai_summary():
-    logging.debug("get_crypto_ai_summary called")
-    return "Crypto AI summary is temporarily unavailable."
-
-def get_dhaka_weather():
-    logging.debug("get_dhaka_weather called")
-    return "Weather for Dhaka: 30°C, Partly Cloudy. (Demo)"
-
-def get_coin_stats_ai(symbol):
-    logging.debug(f"get_coin_stats_ai called for {symbol}")
-    return f"Stats+AI for {symbol.upper()} are temporarily unavailable."
-
-def get_coin_stats(symbol):
-    logging.debug(f"get_coin_stats called for {symbol}")
-    return f"Stats for {symbol.upper()} are temporarily unavailable."
