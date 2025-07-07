@@ -792,11 +792,12 @@ def parse_timezone_input(tz_input):
     return None
 
 def get_local_time_str(user_location=None, user_id=None):
-    """Return current time string in user's local timezone (default Asia/Dhaka)."""
+    """Return current time string in user's local timezone (e.g. Jul 7, 2025 8:38PM (+6 Dhaka))."""
     try:
         tz_str = None
         if user_id:
             tz_str = get_user_timezone(user_id)
+        city_label = None
         if tz_str:
             local_tz = pytz_timezone(tz_str)
         elif user_location and isinstance(user_location, dict):
@@ -814,9 +815,40 @@ def get_local_time_str(user_location=None, user_id=None):
         else:
             local_tz = pytz_timezone('Asia/Dhaka')
         now = datetime.now(local_tz)
-        return now.strftime("%Y-%m-%d %H:%M (%Z)")
+        # Format: Jul 7, 2025 8:38PM
+        date_str = now.strftime("%b %-d, %Y %-I:%M%p")
+        # Get UTC offset in hours
+        offset_sec = local_tz.utcoffset(now).total_seconds()
+        offset_hr = int(offset_sec // 3600)
+        # Try to get a friendly city label
+        tz_to_city = {
+            'Asia/Dhaka': 'Dhaka',
+            'Asia/Kolkata': 'Kolkata',
+            'Europe/Berlin': 'Berlin',
+            'America/New_York': 'New York',
+            'America/Los_Angeles': 'Los Angeles',
+            'Europe/London': 'London',
+            'Europe/Paris': 'Paris',
+            'Asia/Tokyo': 'Tokyo',
+            'Asia/Singapore': 'Singapore',
+            'Australia/Sydney': 'Sydney',
+            'UTC': 'UTC',
+        }
+        city_label = tz_to_city.get(tz_str, None)
+        # If not found, try to extract city from tz_str
+        if not city_label and tz_str:
+            parts = tz_str.split('/')
+            if len(parts) > 1:
+                city_label = parts[-1].replace('_', ' ')
+        # Format offset with sign
+        offset_str = f"{offset_hr:+d}"
+        # Compose final string
+        if city_label:
+            return f"{date_str} ({offset_str} {city_label})"
+        else:
+            return f"{date_str} ({offset_str})"
     except Exception:
-        return datetime.now().strftime("%Y-%m-%d %H:%M")
+        return datetime.now().strftime("%b %-d, %Y %-I:%M%p (%Z)")
 
 # ===================== MAIN ENTRY =====================
 def build_news_digest(return_msg=False, chat_id=None):
