@@ -439,14 +439,15 @@ def fetch_big_cap_prices():
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
+            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
             if price is None:
                 price_str = "N/A"
             elif price >= 1:
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
-            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+            msg += f"{symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
         return msg + "\n", ", ".join(big_caps_list)
     except Exception:
         return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
@@ -468,28 +469,30 @@ def fetch_top_movers():
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
+            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
             if price is None:
                 price_str = "N/A"
             elif price >= 1:
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
-            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
         msg += "\n*🔻 Crypto Top Losers:*\n"
         losers_list = []
         for i, c in enumerate(losers, 1):
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
+            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
             if price is None:
                 price_str = "N/A"
             elif price >= 1:
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
-            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
         return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
     except Exception:
         return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
@@ -544,14 +547,15 @@ def fetch_big_cap_prices_data():
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
+            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
             if price is None:
                 price_str = "N/A"
             elif price >= 1:
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
-            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+            msg += f"{symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
         return msg + "\n", ", ".join(big_caps_list)
     except Exception:
         return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
@@ -572,28 +576,30 @@ def fetch_top_movers_data():
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
+            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
             if price is None:
                 price_str = "N/A"
             elif price >= 1:
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
-            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
         msg += "\n*🔻 Crypto Top Losers:*\n"
         losers_list = []
         for i, c in enumerate(losers, 1):
             symbol = c.get('symbol', '').upper()
             price = c.get('current_price')
             change = c.get('price_change_percentage_24h', 0)
+            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
             if price is None:
                 price_str = "N/A"
             elif price >= 1:
                 price_str = f"${price:,.2f}"
             else:
                 price_str = f"${price:.6f}"
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)\n"
-            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)")
+            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
+            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
         return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
     except Exception:
         return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
@@ -801,6 +807,7 @@ def get_coin_stats(symbol):
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
+        arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
         # Format price: 2 decimals if >=1, 6 decimals if <1
         if price >= 1:
             price_str = f"${price:,.2f}"
@@ -808,7 +815,7 @@ def get_coin_stats(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
-        return f"{symbol_upper}: {price_str} {change_str}"
+        return f"{symbol_upper}: {price_str} {change_str}{arrow}"
     except Exception:
         return f"Error fetching data for '{symbol.upper()}'."
 
@@ -826,6 +833,7 @@ def get_coin_stats_ai(symbol):
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
+        arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
         # Format price: 2 decimals if >=1, 6 decimals if <1
         if price >= 1:
             price_str = f"${price:,.2f}"
@@ -840,7 +848,7 @@ def get_coin_stats_ai(symbol):
         low_24h = c.get('low_24h', 0)
         prompt = (
             f"Coin: {symbol_upper}\n"
-            f"Current Price: {price_str} {change_str}\n"
+            f"Current Price: {price_str} {change_str}{arrow}\n"
             f"Market Cap: {human_readable_number(market_cap)}\n"
             f"24h Volume: {human_readable_number(volume)}\n"
             f"24h High/Low: ${high_24h} / ${low_24h}\n"
@@ -871,7 +879,7 @@ def get_coin_stats_ai(symbol):
         if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
             ai_summary_clean = ai_summary_clean.rstrip() + '.'
         msg = (
-            f"{symbol_upper}: {price_str} {change_str}\n"
+            f"{symbol_upper}: {price_str} {change_str}{arrow}\n"
             f"{ai_summary_clean}"
         )
         return msg
@@ -1011,74 +1019,33 @@ def handle_updates(updates):
                     return ''
             cap_arrow = arrow_only(market_cap_change_str)
             vol_arrow = arrow_only(volume_change_str)
-            def fetch_binance_market_data():
+            # --- FEAR/GREED EMOJI & SUGGESTION ---
+            def fear_greed_emoji_suggestion(fear_val):
                 try:
-                    url = "https://api.binance.com/api/v3/ticker/24hr"
-                    btc = requests.get(url, params={"symbol": "BTCUSDT"}).json()
-                    eth = requests.get(url, params={"symbol": "ETHUSDT"}).json()
-                    try:
-                        cmc_url = "https://api.coinmarketcap.com/data-api/v3/global-metrics/quotes/latest"
-                        cmc_data = requests.get(cmc_url).json()
-                        g = cmc_data["data"]["quote"]["USD"]
-                        market_cap = g["totalMarketCap"]
-                        volume = g["totalVolume24h"]
-                        market_cap_change = g.get("marketCapChange24h", 0)
-                        volume_change = g.get("volumeChange24h", 0)
-                        def human(num):
-                            abs_num = abs(num)
-                            if abs_num >= 1_000_000_000_000:
-                                return f"${num / 1_000_000_000_000:.2f}T"
-                            elif abs_num >= 1_000_000_000:
-                                return f"${num / 1_000_000_000:.2f}B"
-                            elif abs_num >= 1_000_000:
-                                return f"${num / 1_000_000:.2f}M"
-                            elif abs_num >= 1_000:
-                                return f"${num / 1_000:.2f}K"
-                            else:
-                                return f"${num:.2f}"
-                        market_cap_str = human(market_cap)
-                        market_cap_change_str = f"{market_cap_change:+.2f}%"
-                        volume_str = human(volume)
-                        volume_change_str = f"{volume_change:+.2f}%"
-                        return market_cap_str, market_cap_change_str, volume_str, volume_change_str
-                    except Exception:
-                        btc_vol = float(btc.get("quoteVolume", 0))
-                        eth_vol = float(eth.get("quoteVolume", 0))
-                        volume = btc_vol + eth_vol
-                        btc_price_change = float(btc.get("priceChangePercent", 0))
-                        try:
-                            cg = requests.get("https://api.coingecko.com/api/v3/global").json()["data"]
-                            market_cap = cg["total_market_cap"]["usd"]
-                        except Exception:
-                            market_cap = 0
-                        def human(num):
-                            abs_num = abs(num)
-                            if abs_num >= 1_000_000_000_000:
-                                return f"${num / 1_000_000_000_000:.2f}T"
-                            elif abs_num >= 1_000_000_000:
-                                return f"${num / 1_000_000_000:.2f}B"
-                            elif abs_num >= 1_000_000:
-                                return f"${num / 1_000_000:.2f}M"
-                            elif abs_num >= 1_000:
-                                return f"${num / 1_000:.2f}K"
-                            else:
-                                return f"${num:.2f}"
-                        market_cap_str = human(market_cap)
-                        market_cap_change_str = f"{btc_price_change:+.2f}%"
-                        volume_str = human(volume)
-                        volume_change_str = f"{btc_price_change:+.2f}%"
-                        return market_cap_str, market_cap_change_str, volume_str, volume_change_str
+                    fg = int(fear_val)
                 except Exception:
-                    return "N/A", "N/A", "N/A", "N/A"
-            market_cap_str, market_cap_change_str, volume_str, volume_change_str = fetch_binance_market_data()
-            cap_arrow = arrow_only(market_cap_change_str)
-            vol_arrow = arrow_only(volume_change_str)
-            fear_greed_str = str(fear_greed)
+                    return '😨', '(N/A)'
+                if fg <= 24:
+                    return '😱', '(🟢 Buy)'
+                elif fg <= 49:
+                    return '😨', '(🟡 Buy Slowly)'
+                elif fg <= 74:
+                    return '😏', '(🟠 Hold)'
+                else:
+                    return '🤯', '(🔴 Sell)'
+            fg_emoji, fg_suggestion = fear_greed_emoji_suggestion(fear_greed)
+            # Format with brackets for percentage
+            def add_brackets(val):
+                if val and not val.startswith('('):
+                    return f'({val})'
+                return val
+            market_cap_change_str_b = add_brackets(market_cap_change_str)
+            volume_change_str_b = add_brackets(volume_change_str)
             crypto_section = (
                 f"*📊 CRYPTO MARKET:*\n"
-                f"💰 Market Cap: {market_cap_str} {market_cap_change_str}{cap_arrow}\n"
-                f"💵 Volume: {volume_str} {volume_change_str}{vol_arrow}\n"
-                f"😨 Fear/Greed: {fear_greed_str}/100\n\n"
+                f"💰 Market Cap: {market_cap_str} {market_cap_change_str_b}{cap_arrow}\n"
+                f"💵 Volume: {volume_str} {volume_change_str_b}{vol_arrow}\n"
+                f"{fg_emoji} Fear/Greed: {fear_greed_str}/100 → {fg_suggestion}\n\n"
             )
             big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
             crypto_section += big_caps_msg
