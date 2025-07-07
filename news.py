@@ -1051,7 +1051,7 @@ def get_support_text():
     return (
         """*Support:*
 [Contact Developer](https://t.me/shanchoy)
-Email: shanchoy@gmail.com
+Email: shanchoyzone@gmail.com
 """
     )
 
