@@ -11,10 +11,7 @@ from user_logging import init_db, log_user_interaction
 import threading
 import logging
 
-logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for troubleshooting
-
-# Set API key globals early so helpers can use them
-TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
+logging.basicConfig(level=logging.WARNING)
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -75,13 +72,9 @@ def send_telegram(msg, chat_id):
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
     }
-    logging.debug(f"Sending message to chat_id={chat_id}: {msg[:100]}...")
     r = requests.post(url, data=data)
     if not r.ok:
         print("Telegram send failed:", r.text)
-        logging.error(f"Telegram send failed: {r.text}")
-    else:
-        logging.debug(f"Telegram send succeeded: {r.text}")
     return r.ok
 
 def get_hours_ago(published):
@@ -611,207 +604,385 @@ def fetch_top_movers_data():
     except Exception:
         return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
 
-def get_coin_id_from_symbol(symbol):
-    """Return CoinGecko coin id for a given symbol (case-insensitive), or None if not found."""
-    symbol = symbol.lower()
-    for entry in load_coinlist():
-        if entry.get("symbol", "").lower() == symbol:
-            return entry.get("id"), entry.get("name")
-    return None, None
-
-def get_asset_stats(symbol, asset_type="crypto", ai_summary=True):
-    """Unified handler for /coin, /coinstats, /stock, /forex commands using Twelve Data."""
-    base_msg = fetch_twelvedata_stats(symbol, asset_type)
-    if not ai_summary:
-        return base_msg
-    # Compose prompt for DeepSeek AI
-    prompt = (
-        f"Asset: {symbol.upper()}\n"
-        f"{base_msg}\n"
-        "Give a short summary of the current market, technicals, and sentiment for this asset. "
-        "Include a forecast for the next 24h (bullish/bearish/neutral), and mention key resistance/support levels if possible. "
-        "Be concise and insightful."
-    )
-    DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-    if not DEEPSEEK_API:
-        ai_summary = "AI summary not available."
-    else:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API}"}
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 180,
-            "temperature": 0.7
-        }
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=15)
-            ai_summary = response.json()["choices"][0]["message"]["content"].strip()
-        except Exception:
-            ai_summary = "AI summary not available."
-    import re
-    ai_summary_clean = re.sub(r'^#+\\s*'+symbol.upper()+r'.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
-    if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
-        ai_summary_clean = ai_summary_clean.rstrip() + '.'
-    # --- Prediction extraction ---
-    pred = 'N/A'
-    pred_emoji = '🤔'
-    pred_map = {
-        'buy': '🟢 Buy',
-        'hold': '🟠 Hold',
-        'sell': '🔴 Sell',
-    }
-    pred_line = ''
-    pred_match = re.search(r'\\b(buy|hold|sell)\\b', ai_summary.lower())
-    if pred_match:
-        pred = pred_map.get(pred_match.group(1), '🤔')
-        pred_line = f"Prediction (24hr): {pred}"
-    else:
-        if 'bullish' in ai_summary.lower():
-            pred_line = "Prediction (24hr): 🟢 Buy"
-        elif 'bearish' in ai_summary.lower():
-            pred_line = "Prediction (24hr): 🔴 Sell"
-        elif 'neutral' in ai_summary.lower():
-            pred_line = "Prediction (24hr): 🟠 Hold"
+# ===================== WEATHER =====================
+def get_dhaka_weather():
+    try:
+        api_key = os.getenv("WEATHERAPI_KEY")
+        if not api_key:
+            return "🌦️ Dhaka: Weather N/A"
+        url = f"https://api.weatherapi.com/v1/forecast.json?key={api_key}&q=Dhaka&days=1&aqi=yes&alerts=no"
+        resp = requests.get(url)
+        data = resp.json()
+        forecast = data["forecast"]["forecastday"][0]
+        day = forecast["day"]
+        temp_min = day["mintemp_c"]
+        temp_max = day["maxtemp_c"]
+        rain_chance = day.get("daily_chance_of_rain", 0)
+        uv_val = day.get("uv", "N/A")
+        aq = data.get("current", {}).get("air_quality", {})
+        pm25 = aq.get("pm2_5")
+        def pm25_to_aqi(pm25):
+            breakpoints = [
+                (0.0, 12.0, 0, 50),
+                (12.1, 35.4, 51, 100),
+                (35.5, 55.4, 101, 150),
+                (55.5, 150.4, 151, 200),
+                (150.5, 250.4, 201, 300),
+                (250.5, 500.4, 301, 500)
+            ]
+            try:
+                pm25 = float(pm25)
+                for bp in breakpoints:
+                    if bp[0] <= pm25 <= bp[1]:
+                        Clow, Chigh, Ilow, Ihigh = bp[0], bp[1], bp[2], bp[3]
+                        aqi = ((Ihigh - Ilow) / (Chigh - Clow)) * (pm25 - Clow) + Ilow
+                        return round(aqi)
+            except Exception:
+                pass
+            return None
+        aqi_val = None
+        if pm25 is not None:
+            aqi_val = pm25_to_aqi(pm25)
+        if aqi_val is None:
+            epa_index = aq.get("us-epa-index")
+            if epa_index is not None:
+                epa_index = int(epa_index)
+                if epa_index == 1:
+                    aqi_val = 50
+                elif epa_index == 2:
+                    aqi_val = 100
+                elif epa_index == 3:
+                    aqi_val = 150
+                elif epa_index == 4:
+                    aqi_val = 200
+                elif epa_index == 5:
+                    aqi_val = 300
+                elif epa_index == 6:
+                    aqi_val = 400
+        if aqi_val is not None:
+            if aqi_val <= 50:
+                aq_str = "Good"
+            elif aqi_val <= 100:
+                aq_str = "Moderate"
+            elif aqi_val <= 150:
+                aq_str = "Unhealthy for Sensitive Groups"
+            elif aqi_val <= 200:
+                aq_str = "Unhealthy"
+            elif aqi_val <= 300:
+                aq_str = "Very Unhealthy"
+            else:
+                aq_str = "Hazardous"
         else:
-            pred_line = "Prediction (24hr): 🤔"
-    return f"{base_msg}\nMarket Summary: {ai_summary_clean}\n\n{pred_line}"
+            aq_str = "N/A"
+            aqi_val = "N/A"
+        try:
+            uv_val_num = float(uv_val)
+            if uv_val_num < 3:
+                uv_str = "Low"
+            elif uv_val_num < 6:
+                uv_str = "Moderate"
+            elif uv_val_num < 8:
+                uv_str = "High"
+            elif uv_val_num < 11:
+                uv_str = "Very High"
+            else:
+                uv_str = "Extreme"
+        except Exception:
+            uv_str = str(uv_val)
+        rain_emoji = "🌧️ "
+        aq_emoji = "🫧 "
+        uv_emoji = "🔆 "
+        lines = [
+            f"🌦️ Dhaka: {temp_min:.1f}°C ~ {temp_max:.1f}°C",
+            f"{rain_emoji}Rain: {rain_chance}%",
+            f"{aq_emoji}AQI: {aq_str} ({aqi_val})",
+            f"{uv_emoji}UV: {uv_str} ({uv_val})"
+        ]
+        return "\n".join(lines)
+    except Exception:
+        return "🌦️ Dhaka: Weather N/A"
 
-# ===================== HELPER AND PLACEHOLDER DEFINITIONS =====================
+# ===================== COINLIST LOADING =====================
+COINLIST_PATH = os.path.join(os.path.dirname(__file__), "coinlist.json")
+_coinlist_cache = None
+_coinlist_lock = threading.Lock()
 def load_coinlist():
     global _coinlist_cache
-    if '_coinlist_cache' in globals() and _coinlist_cache is not None:
+    with _coinlist_lock:
+        if _coinlist_cache is not None:
+            return _coinlist_cache
+        try:
+            with open(COINLIST_PATH, "r") as f:
+                _coinlist_cache = json.load(f)
+        except Exception as e:
+            print(f"Failed to load coinlist.json: {e}")
+            _coinlist_cache = []
         return _coinlist_cache
-    try:
-        with open("coinlist.json", "r") as f:
-            _coinlist_cache = json.load(f)
-    except Exception:
-        _coinlist_cache = []
-    return _coinlist_cache
 
-def fetch_twelvedata_stats(symbol, asset_type="crypto"):
-    if not TWELVE_DATA_API_KEY:
-        return f"Twelve Data API key not set."
-    base_url = "https://api.twelvedata.com"
-    params = {"symbol": symbol.upper(), "apikey": TWELVE_DATA_API_KEY}
-    if asset_type == "crypto":
-        params["exchange"] = "BINANCE"
-        params["interval"] = "1day"
-    try:
-        price_url = f"{base_url}/price"
-        price_resp = requests.get(price_url, params=params, timeout=10)
-        price_data = price_resp.json()
-        price = float(price_data.get("price"))
-    except Exception:
-        price = None
-    try:
-        quote_url = f"{base_url}/quote"
-        quote_resp = requests.get(quote_url, params=params, timeout=10)
-        quote_data = quote_resp.json()
-        change = float(quote_data.get("percent_change", 0))
-        high_24h = float(quote_data.get("high", 0))
-        low_24h = float(quote_data.get("low", 0))
-    except Exception:
-        change = 0
-        high_24h = low_24h = 0
-    arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-    price_str = f"${price:,.2f}" if price and price >= 1 else (f"${price:.6f}" if price else "N/A")
-    change_str = f"({change:+.2f}%)"
-    try:
-        rsi_url = f"{base_url}/rsi"
-        rsi_params = params.copy()
-        rsi_params["interval"] = "1day"
-        rsi_params["time_period"] = 14
-        rsi_resp = requests.get(rsi_url, params=rsi_params, timeout=10)
-        rsi_data = rsi_resp.json()
-        rsi_val = list(rsi_data.get("values", [{}]))[0].get("rsi", "N/A")
-    except Exception:
-        rsi_val = "N/A"
-    try:
-        ma_url = f"{base_url}/ma"
-        ma_params = params.copy()
-        ma_params["interval"] = "1day"
-        ma_params["time_period"] = 30
-        ma_params["series_type"] = "close"
-        ma_resp = requests.get(ma_url, params=ma_params, timeout=10)
-        ma_data = ma_resp.json()
-        ma30_val = list(ma_data.get("values", [{}]))[0].get("ma", "N/A")
-        if ma30_val != "N/A":
-            ma30_val = float(ma30_val)
-            ma30_val = f"${ma30_val:,.2f}" if ma30_val >= 1 else f"${ma30_val:.6f}"
-    except Exception:
-        ma30_val = "N/A"
-    try:
-        hist_url = f"{base_url}/time_series"
-        hist_params = params.copy()
-        hist_params["interval"] = "1day"
-        hist_params["outputsize"] = 365
-        hist_resp = requests.get(hist_url, params=hist_params, timeout=10)
-        hist_data = hist_resp.json()
-        closes = [float(x["close"]) for x in hist_data.get("values", []) if "close" in x]
-        if closes:
-            min_52w = min(closes)
-            max_52w = max(closes)
-            range_52w = f"${min_52w:,.2f} ~ ${max_52w:,.2f}" if max_52w >= 1 else f"${min_52w:.6f} ~ ${max_52w:.6f}"
-        else:
-            range_52w = "N/A"
-    except Exception:
-        range_52w = "N/A"
-    support = f"${low_24h:,.2f}" if low_24h else "N/A"
-    resistance = f"${high_24h:,.2f}" if high_24h else "N/A"
-    msg = (
-        f"Price: {symbol.upper()} {price_str} {change_str}{arrow}\n"
-        f"Technicals:\n- Support: {support}\n- Resistance: {resistance}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n- Price Range (52w): {range_52w}\n"
-    )
-    return msg
+# Helper: symbol to id lookup (case-insensitive)
+def get_coin_id_from_symbol(symbol):
+    coinlist = load_coinlist()
+    symbol = symbol.lower()
+    for c in coinlist:
+        if c.get("symbol", "").lower() == symbol:
+            logging.debug(f"Found symbol: {symbol} -> {c['id']}")
+            return c["id"], c["name"]
+    logging.debug(f"Symbol not found: {symbol}")
+    return None, None
 
-def get_help_text():
-    logging.debug("get_help_text called")
-    return (
-        """*ChoyNewsBot Help:*
-/start - Welcome message
-/help - Show this help message
-/support - Contact developer
-/news - Daily news digest
-/cryptostats - Crypto market summary
-/weather - Dhaka weather
-/[symbol] - Asset stats (e.g. /btc, /aapl, /eurusd)
-/[symbol]stats - Asset stats + AI summary (e.g. /btcstats, /aaplstats)
-"""
-    )
+# ===================== MAIN ENTRY =====================
+def build_news_digest(return_msg=False, chat_id=None):
+    """Main entry point: builds and prints or sends the news digest."""
+    init_db()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+    msg += get_local_news()
+    msg += get_global_news()
+    msg += get_tech_news()
+    msg += get_sports_news()
+    msg += get_crypto_news()
+    msg += fetch_crypto_market()
+    msg += fetch_big_cap_prices()
+    msg += fetch_top_movers()
 
-def get_support_text():
-    logging.debug("get_support_text called")
-    return (
-        """*Support:*
-[Contact Developer](https://t.me/shanchoy)
-Email: shanchoyzone@gmail.com
-"""
-    )
+    if return_msg:
+        return msg
+    # Default: send to Telegram (for legacy usage)
+    if chat_id is not None:
+        send_telegram(msg, chat_id)
+    else:
+        print("No chat_id provided for sending news digest.")
+
+def main(return_msg=False, chat_id=None):
+    """Main entry point: builds and prints or sends the news digest."""
+    init_db()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+    msg += get_local_news()
+    msg += get_global_news()
+    msg += get_tech_news()
+    msg += get_sports_news()
+    msg += get_crypto_news()
+    msg += fetch_crypto_market()
+    msg += fetch_big_cap_prices()
+    msg += fetch_top_movers()
+
+    if return_msg:
+        return msg
+    # Default: send to Telegram (for legacy usage)
+    if chat_id is not None:
+        send_telegram(msg, chat_id)
+    else:
+        print("No chat_id provided for sending news digest.")
 
 def get_crypto_ai_summary():
-    logging.debug("get_crypto_ai_summary called")
-    return "Crypto AI summary is temporarily unavailable."
-
-def get_dhaka_weather():
-    logging.debug("get_dhaka_weather called")
-    return "Weather for Dhaka: 30°C, Partly Cloudy. (Demo)"
-
-def get_coin_stats_ai(symbol):
-    logging.debug(f"get_coin_stats_ai called for {symbol}")
-    return f"Stats+AI for {symbol.upper()} are temporarily unavailable."
+    """Return only the AI crypto market summary (for /cryptostats)."""
+    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, _, _, _, _, _ = fetch_crypto_market_data()
+    big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+    top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+    DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+    if not DEEPSEEK_API:
+        return "AI summary not available."
+    if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+        return "AI summary not available."
+    ai_summary = get_crypto_summary_with_deepseek(
+        market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
+    )
+    ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+    if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+        ai_summary_clean = ai_summary_clean.rstrip() + '.'
+    return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
 
 def get_coin_stats(symbol):
-    logging.debug(f"get_coin_stats called for {symbol}")
-    return f"Stats for {symbol.upper()} are temporarily unavailable."
+    """Return price and 24h % change for a given coin symbol (e.g. BTC, ETH)."""
+    try:
+        coin_id, coin_name = get_coin_id_from_symbol(symbol)
+        if not coin_id:
+            return f"Coin '{symbol.upper()}' not found in local list."
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {"vs_currency": "usd", "ids": coin_id}
+        data = requests.get(url, params=params).json()
+        if not data:
+            return f"Coin '{symbol.upper()}' not found."
+        c = data[0]
+        price = c['current_price']
+        change = c.get('price_change_percentage_24h', 0)
+        arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
+        # Format price: 2 decimals if >=1, 6 decimals if <1
+        if price >= 1:
+            price_str = f"${price:,.2f}"
+        else:
+            price_str = f"${price:.6f}"
+        symbol_upper = c['symbol'].upper()
+        change_str = f"({change:+.2f}%)"
+        return f"{symbol_upper}: {price_str} {change_str}{arrow}"
+    except Exception:
+        return f"Error fetching data for '{symbol.upper()}'."
 
-# ===================== HANDLER REFACTOR =====================
+def get_coin_stats_ai(symbol):
+    """Return price, 24h % change, RSI, MA30, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
+    try:
+        coin_id, coin_name = get_coin_id_from_symbol(symbol)
+        if not coin_id:
+            return f"Coin '{symbol.upper()}' not found in local list."
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {"vs_currency": "usd", "ids": coin_id}
+        data = requests.get(url, params=params).json()
+        if not data:
+            return f"Coin '{symbol.upper()}' not found."
+        c = data[0]
+        price = c['current_price']
+        change = c.get('price_change_percentage_24h', 0)
+        arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
+        # Format price: 2 decimals if >=1, 6 decimals if <1
+        if price >= 1:
+            price_str = f"${price:,.2f}"
+        else:
+            price_str = f"${price:.6f}"
+        symbol_upper = c['symbol'].upper()
+        change_str = f"({change:+.2f}%)"
+        # --- Fetch RSI and MA30 ---
+        rsi_val = 'N/A'
+        ma30_val = 'N/A'
+        try:
+            chart_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+            chart_params = {"vs_currency": "usd", "days": 31, "interval": "daily"}
+            chart_data = requests.get(chart_url, params=chart_params).json()
+            prices = [p[1] for p in chart_data.get('prices', [])]
+            if len(prices) >= 15:
+                # RSI calculation (14 period)
+                deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+                gains = [d for d in deltas if d > 0]
+                losses = [-d for d in deltas if d < 0]
+                avg_gain = sum(gains[-14:]) / 14 if len(gains) >= 14 else (sum(gains) / len(gains) if gains else 0.0)
+                avg_loss = sum(losses[-14:]) / 14 if len(losses) >= 14 else (sum(losses) / len(losses) if losses else 0.0)
+                if avg_loss == 0:
+                    rsi = 100.0
+                else:
+                    rs = avg_gain / avg_loss if avg_loss != 0 else 0
+                    rsi = 100 - (100 / (1 + rs))
+                rsi_val = f"{rsi:.2f}"
+            if len(prices) >= 30:
+                ma30 = sum(prices[-30:]) / 30
+                ma30_val = f"${ma30:,.2f}" if ma30 >= 1 else f"${ma30:.6f}"
+        except Exception:
+            pass
+        # Compose prompt for DeepSeek AI
+        market_cap = c.get('market_cap', 0)
+        volume = c.get('total_volume', 0)
+        high_24h = c.get('high_24h', 0)
+        low_24h = c.get('low_24h', 0)
+        prompt = (
+            f"Coin: {symbol_upper}\n"
+            f"Current Price: {price_str} {change_str}{arrow}\n"
+            f"Market Cap: {human_readable_number(market_cap)}\n"
+            f"24h Volume: {human_readable_number(volume)}\n"
+            f"24h High/Low: ${high_24h} / ${low_24h}\n"
+            f"24h RSI: {rsi_val}\n"
+            f"30d MA: {ma30_val}\n"
+            "\n"
+            "Give a short summary of the current market, technicals, and sentiment for this coin. "
+            "Include a forecast for the next 24h (bullish/bearish/neutral), and mention key resistance/support levels if possible. "
+            "Be concise and insightful."
+        )
+        DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+        if not DEEPSEEK_API:
+            ai_summary = "AI summary not available."
+        else:
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API}"}
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 180,
+                "temperature": 0.7
+            }
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=15)
+                ai_summary = response.json()["choices"][0]["message"]["content"].strip()
+            except Exception:
+                ai_summary = "AI summary not available."
+        import re
+        ai_summary_clean = re.sub(r'^(#+\s*)?'+symbol_upper+r'.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+        if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+            ai_summary_clean = ai_summary_clean.rstrip() + '.'
+        # --- Prediction extraction ---
+        pred = 'N/A'
+        pred_emoji = '🤔'
+        pred_map = {
+            'buy': '🟢 Buy',
+            'hold': '🟠 Hold',
+            'sell': '🔴 Sell',
+        }
+        pred_line = ''
+        # Try to extract prediction from summary
+        pred_match = re.search(r'\b(buy|hold|sell)\b', ai_summary.lower())
+        if pred_match:
+            pred = pred_map.get(pred_match.group(1), '🤔')
+            pred_line = f"Prediction (24hr): {pred}"
+        else:
+            # fallback: look for bullish/bearish/neutral
+            if 'bullish' in ai_summary.lower():
+                pred_line = "Prediction (24hr): 🟢 Buy"
+            elif 'bearish' in ai_summary.lower():
+                pred_line = "Prediction (24hr): 🔴 Sell"
+            elif 'neutral' in ai_summary.lower():
+                pred_line = "Prediction (24hr): 🟠 Hold"
+            else:
+                pred_line = "Prediction (24hr): 🤔"
+        msg = (
+            f"Price: {symbol_upper} {price_str} {change_str}{arrow}\n"
+            f"Market Summary: {ai_summary_clean}\n\n"
+            f"Technicals:\n- Support: ${low_24h}\n- Resistance: ${high_24h}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n\n"
+            f"{pred_line}"
+        )
+        return msg
+    except Exception:
+        return f"Error fetching data for '{symbol.upper()}'."
+
+def clean_ai_summary(summary):
+    # Remove HTML tags
+    summary = re.sub(r'<[^>]+>', '', summary)
+    return summary
+
+def format_ai_prediction(summary):
+    # Find prediction line and probability
+    match = re.search(r'Prediction For Tomorrow: (.+?) \((\d{2,3})% (confidence|probability)\)', summary, re.IGNORECASE)
+    if match:
+        trend = match.group(1).strip().upper()
+        percent = int(match.group(2))
+        if percent > 60 and ("BULLISH" in trend or "BEARISH" in trend):
+            new_line = f"Prediction For Tomorrow: {trend} ({percent}% Probability)"
+        else:
+            new_line = "Prediction For Tomorrow: CONSOLIDATION"
+        summary = re.sub(r'Prediction For Tomorrow: .+?\(\d{2,3}% (confidence|probability)\)', new_line, summary, flags=re.IGNORECASE)
+    else:
+        # If not matching, just replace 'confidence' with 'Probability' if present
+        summary = re.sub(r'(\d{2,3})% confidence', r'\1% Probability', summary, flags=re.IGNORECASE)
+    return summary
+
+def get_help_text():
+    return (
+        "*ChoyNewsBot Commands:*\n"
+        "/news - Get the full daily news digest\n"
+        "/cryptostats - Get only the crypto AI market summary\n"
+        "/weather - Get Dhaka weather\n"
+        "/<coin> - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
+        "/<coin>stats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
+        "/help - Show this help message\n"
+    )
+
+# --- Telegram polling bot ---
+def get_updates(offset=None):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    params = {"timeout": 100, "offset": offset}
+    resp = requests.get(url, params=params)
+    return resp.json().get("result", [])
+
 def handle_updates(updates):
-    logging.debug(f"handle_updates called with {len(updates)} updates: {updates}")
     for update in updates:
         message = update.get("message")
         if not message:
-            logging.debug(f"Update without message: {update}")
             continue
         chat_id = message["chat"]["id"]
         user = message["from"]
@@ -819,7 +990,6 @@ def handle_updates(updates):
         username = user.get("username")
         first_name = user.get("first_name")
         last_name = user.get("last_name")
-        logging.debug(f"Processing message from user_id={user_id}, username={username}, chat_id={chat_id}")
         # Log user interaction
         log_user_interaction(
             user_id=user_id,
@@ -839,9 +1009,6 @@ def handle_updates(updates):
         if text == "/help":
             send_telegram(get_help_text(), chat_id)
             continue
-        if text == "/support":
-            send_telegram(get_support_text(), chat_id)
-            continue
         if text == "/cryptostats":
             send_telegram(get_crypto_ai_summary(), chat_id)
             continue
@@ -849,166 +1016,135 @@ def handle_updates(updates):
             send_telegram(get_dhaka_weather(), chat_id)
             continue
         if text in ["/news"]:
-            try:
-                send_telegram("Loading latest news...", chat_id)
-                # --- Bangladesh holiday info ---
-                now_dt = datetime.now()
-                now_str = now_dt.strftime("%Y-%m-%d %H:%M")
-                def get_bd_holiday():
-                    try:
-                        api_key = os.getenv("CALENDARIFIC_API_KEY")
-                        if not api_key:
-                            return ""
-                        url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=BD&year={now_dt.year}"
-                        resp = requests.get(url)
-                        data = resp.json()
-                        holidays = data.get("response", {}).get("holidays", [])
-                        today_str = now_dt.strftime("%Y-%m-%d")
-                        upcoming = None
-                        for h in holidays:
-                            h_date = h.get("date", {}).get("iso", "")
-                            if h_date == today_str:
-                                return f"🎉 *Today's Holiday:* {h['name']}"
-                            elif h_date > today_str:
-                                if not upcoming or h_date < upcoming["date"]:
-                                    upcoming = {"date": h_date, "name": h["name"]}
-                        if upcoming:
-                            # Format date as 'Jul 4, 2025'
-                            up_date = datetime.strptime(upcoming["date"], "%Y-%m-%d").strftime("%b %d, %Y")
-                            return f"🎉 *Next Holiday:* {upcoming['name']} ({up_date})"
+            send_telegram("Loading latest news...", chat_id)
+            # --- Bangladesh holiday info ---
+            now_dt = datetime.now()
+            now_str = now_dt.strftime("%Y-%m-%d %H:%M")
+            def get_bd_holiday():
+                try:
+                    api_key = os.getenv("CALENDARIFIC_API_KEY")
+                    if not api_key:
                         return ""
-                    except Exception as e:
-                        return ""
-                holiday_line = get_bd_holiday()
-                # Build the full digest as before
-                digest = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
-                digest += get_dhaka_weather() + "\n"
-                if holiday_line:
-                    digest += f"{holiday_line}\n"
-                digest += "\n"
-                digest += get_local_news()
-                digest += get_global_news()
-                digest += get_tech_news()
-                digest += get_sports_news()
-                digest += get_crypto_news()
-                # --- Collect crypto data for DeepSeek summary ---
-                market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
-                def arrow_only(val):
-                    try:
-                        v = float(val.replace('%','').replace('+','').replace(',',''))
-                    except Exception:
-                        return ''
-                    if v > 0:
-                        return ' ▲'
-                    elif v < 0:
-                        return ' ▼'
-                    else:
-                        return ''
-                cap_arrow = arrow_only(market_cap_change_str)
-                vol_arrow = arrow_only(volume_change_str)
-                def fear_greed_emoji_suggestion(fear_val):
-                    try:
-                        fg = int(fear_val)
-                    except Exception:
-                        return '😨', '(N/A)'
-                    if fg <= 24:
-                        return '😱', '(🟢 Buy)'
-                    elif fg <= 49:
-                        return '😨', '(🟡 Buy Slowly)'
-                    elif fg <= 74:
-                        return '😏', '(🟠 Hold)'
-                    else:
-                        return '🤯', '(🔴 Sell)'
-                fg_emoji, fg_suggestion = fear_greed_emoji_suggestion(fear_greed)
-                def add_brackets(val):
-                    if val and not val.startswith('('):
-                        return f'({val})'
-                    return val
-                market_cap_change_str_b = add_brackets(market_cap_change_str)
-                volume_change_str_b = add_brackets(volume_change_str)
-                crypto_section = (
-                    f"*📊 CRYPTO MARKET:*\n"
-                    f"💰 Market Cap: {market_cap_str} {market_cap_change_str_b}{cap_arrow}\n"
-                    f"💵 Volume: {volume_str} {volume_change_str_b}{vol_arrow}\n"
-                    f"{fg_emoji} Fear/Greed: {fear_greed_str}/100 → {fg_suggestion}\n\n"
+                    url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=BD&year={now_dt.year}"
+                    resp = requests.get(url)
+                    data = resp.json()
+                    holidays = data.get("response", {}).get("holidays", [])
+                    today_str = now_dt.strftime("%Y-%m-%d")
+                    upcoming = None
+                    for h in holidays:
+                        h_date = h.get("date", {}).get("iso", "")
+                        if h_date == today_str:
+                            return f"🎉 *Today's Holiday:* {h['name']}"
+                        elif h_date > today_str:
+                            if not upcoming or h_date < upcoming["date"]:
+                                upcoming = {"date": h_date, "name": h["name"]}
+                    if upcoming:
+                        # Format date as 'Jul 4, 2025'
+                        up_date = datetime.strptime(upcoming["date"], "%Y-%m-%d").strftime("%b %d, %Y")
+                        return f"🎉 *Next Holiday:* {upcoming['name']} ({up_date})"
+                    return ""
+                except Exception as e:
+                    return ""
+            holiday_line = get_bd_holiday()
+            # Build the full digest as before
+            digest = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
+            digest += get_dhaka_weather() + "\n"
+            if holiday_line:
+                digest += f"{holiday_line}\n"
+            digest += "\n"
+            digest += get_local_news()
+            digest += get_global_news()
+            digest += get_tech_news()
+            digest += get_sports_news()
+            digest += get_crypto_news()
+            
+            # --- Collect crypto data for DeepSeek summary ---
+            market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
+            def arrow_only(val):
+                try:
+                    v = float(val.replace('%','').replace('+','').replace(',',''))
+                except Exception:
+                    return ''
+                if v > 0:
+                    return ' ▲'
+                elif v < 0:
+                    return ' ▼'
+                else:
+                    return ''
+            cap_arrow = arrow_only(market_cap_change_str)
+            vol_arrow = arrow_only(volume_change_str)
+            # --- FEAR/GREED EMOJI & SUGGESTION ---
+            def fear_greed_emoji_suggestion(fear_val):
+                try:
+                    fg = int(fear_val)
+                except Exception:
+                    return '😨', '(N/A)'
+                if fg <= 24:
+                    return '😱', '(🟢 Buy)'
+                elif fg <= 49:
+                    return '😨', '(🟡 Buy Slowly)'
+                elif fg <= 74:
+                    return '😏', '(🟠 Hold)'
+                else:
+                    return '🤯', '(🔴 Sell)'
+            fg_emoji, fg_suggestion = fear_greed_emoji_suggestion(fear_greed)
+            # Format with brackets for percentage
+            def add_brackets(val):
+                if val and not val.startswith('('):
+                    return f'({val})'
+                return val
+            market_cap_change_str_b = add_brackets(market_cap_change_str)
+            volume_change_str_b = add_brackets(volume_change_str)
+            crypto_section = (
+                f"*📊 CRYPTO MARKET:*\n"
+                f"💰 Market Cap: {market_cap_str} {market_cap_change_str_b}{cap_arrow}\n"
+                f"💵 Volume: {volume_str} {volume_change_str_b}{vol_arrow}\n"
+                f"{fg_emoji} Fear/Greed: {fear_greed_str}/100 → {fg_suggestion}\n\n"
+            )
+            big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+            crypto_section += big_caps_msg
+            top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+            crypto_section += top_movers_msg
+            DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+            ai_summary = None
+            prediction_line = ""
+            if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+                ai_summary = get_crypto_summary_with_deepseek(
+                    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
                 )
-                big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
-                crypto_section += big_caps_msg
-                top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-                crypto_section += top_movers_msg
-                DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-                ai_summary = None
-                prediction_line = ""
-                if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
-                    ai_summary = get_crypto_summary_with_deepseek(
-                        market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
-                    )
-                    import re
-                    ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
-                    if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
-                        ai_summary_clean = ai_summary_clean.rstrip() + '.'
-                    crypto_section += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
-                    summary_lower = ai_summary.lower()
-                    accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
-                    try:
-                        accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
-                    except Exception:
-                        accuracy = 80
-                    if accuracy <= 60:
-                        prediction_line = "\nPrediction For tomorrow: CONSOLIDATION 🤔"
-                    elif "bullish" in summary_lower and accuracy > 60:
-                        prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
-                    elif "bearish" in summary_lower and accuracy > 60:
-                        prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
-                    else:
-                        prediction_line = "\nPrediction For Tomorrow: CONSOLIDATION! 🤔"
-                    crypto_section += prediction_line
-                crypto_section += "\n\n\n- Built by Shanchoy"
-                marker = "*📊 CRYPTO MARKET:*\n"
-                idx = digest.find(marker)
-                if idx != -1:
-                    news_part = digest[:idx]
-                    crypto_part = digest[idx:] + crypto_section[len(marker):]
-                    send_telegram(news_part, chat_id)
-                    send_telegram(crypto_part, chat_id)
+                import re
+                ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+                if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+                    ai_summary_clean = ai_summary_clean.rstrip() + '.'
+                crypto_section += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
+                summary_lower = ai_summary.lower()
+                accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
+                try:
+                    accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
+                except Exception:
+                    accuracy = 80
+                if accuracy <= 60:
+                    prediction_line = "\nPrediction For tomorrow: CONSOLIDATION 🤔"
+                elif "bullish" in summary_lower and accuracy > 60:
+                    prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
+                elif "bearish" in summary_lower and accuracy > 60:
+                    prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
                 else:
-                    send_telegram(digest, chat_id)
-                    send_telegram(crypto_section, chat_id)
-            except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                logging.error(f"Exception in /news handler: {e}\n{tb}")
-                send_telegram("❌ Error occurred while fetching news. Please try again later.", chat_id)
-            continue
-        # --- Unified asset stats handlers ---
-        # /[symbol]stats (e.g. /btcstats, /aaplstats, /eurusdstats)
-        if text.startswith("/") and text.endswith("stats") and len(text) > 6:
-            symbol = text[1:-5]  # remove leading / and trailing stats
-            if symbol:
-                # Use coinlist for crypto detection
-                coin_id, _ = get_coin_id_from_symbol(symbol)
-                if coin_id:
-                    asset_type = "crypto"
-                elif len(symbol) == 6 and symbol.isalpha():
-                    asset_type = "forex"
-                else:
-                    asset_type = "stock"
-                reply = get_asset_stats(symbol, asset_type, ai_summary=True)
-                send_telegram(reply, chat_id)
-                continue
-        # /[symbol] (e.g. /btc, /aapl, /eurusd)
-        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
-            symbol = text[1:]
-            # Use coinlist for crypto detection
-            coin_id, _ = get_coin_id_from_symbol(symbol)
-            if coin_id:
-                asset_type = "crypto"
-            elif len(symbol) == 6 and symbol.isalpha():
-                asset_type = "forex"
+                    prediction_line = "\nPrediction For Tomorrow: CONSOLIDATION! 🤔"
+                crypto_section += prediction_line
+            crypto_section += "\n\n\n- Built by Shanchoy"
+            # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
+            marker = "*📊 CRYPTO MARKET:*\n"
+            idx = digest.find(marker)
+            if idx != -1:
+                news_part = digest[:idx]
+                crypto_part = digest[idx:] + crypto_section[len(marker):]  # Avoid duplicate marker
+                send_telegram(news_part, chat_id)
+                send_telegram(crypto_part, chat_id)
             else:
-                asset_type = "stock"
-            reply = get_asset_stats(symbol, asset_type, ai_summary=False)
-            send_telegram(reply, chat_id)
+                # fallback: send as two messages
+                send_telegram(digest, chat_id)
+                send_telegram(crypto_section, chat_id)
             continue
         # --- Coin stats handlers ---
         # /[coin]stats (e.g. /btcstats)
@@ -1024,35 +1160,12 @@ def handle_updates(updates):
             reply = get_coin_stats(symbol)
             send_telegram(reply, chat_id)
             continue
-def get_updates(offset=None, timeout=30):
-    """Poll Telegram for new updates/messages."""
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-    params = {"timeout": timeout}
-    if offset:
-        params["offset"] = offset
-    try:
-        logging.debug(f"Polling Telegram getUpdates with params: {params}")
-        resp = requests.get(url, params=params, timeout=timeout+5)
-        if resp.ok:
-            data = resp.json()
-            logging.debug(f"getUpdates response: {data}")
-            return data.get("result", [])
-        else:
-            print("Failed to fetch updates:", resp.text)
-            logging.error(f"Failed to fetch updates: {resp.text}")
-            return []
-    except Exception as e:
-        print("Error in get_updates:", e)
-        logging.error(f"Error in get_updates: {e}")
-        return []
 def main():
     init_db()
     print("Bot started. Listening for messages...")
-    logging.info("Bot started. Listening for messages...")
     last_update_id = None
     while True:
         updates = get_updates(last_update_id)
-        logging.debug(f"Main loop got {len(updates)} updates.")
         if updates:
             handle_updates(updates)
             last_update_id = updates[-1]["update_id"] + 1
