@@ -820,38 +820,43 @@ def get_coin_stats(symbol):
         return f"Error fetching data for '{symbol.upper()}'."
 
 def get_coin_stats_ai(symbol):
-    """Return price, 24h % change, RSI, MA30, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
+    """Return price, 24h % change, RSI, MA30, 52w range, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
     try:
         coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
             return f"Coin '{symbol.upper()}' not found in local list."
+        cg_api_key = os.getenv("COINGECKO_API_KEY") or "CG-9C6w3YASi2NMRk8mWtxUgn4h"
+        cg_headers = {"x-cg-pro-api-key": cg_api_key}
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": coin_id}
-        data = requests.get(url, params=params).json()
+        data = requests.get(url, params=params, headers=cg_headers).json()
         if not data:
             return f"Coin '{symbol.upper()}' not found."
         c = data[0]
         price = c['current_price']
         change = c.get('price_change_percentage_24h', 0)
         arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-        # Format price: 2 decimals if >=1, 6 decimals if <1
         if price >= 1:
             price_str = f"${price:,.2f}"
         else:
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
-        # --- Fetch RSI and MA30 ---
+        # --- Fetch RSI, MA30, 52w range ---
         rsi_val = 'N/A'
         ma30_val = 'N/A'
+        range_52w = 'N/A'
         try:
             chart_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
-            chart_params = {"vs_currency": "usd", "days": 31, "interval": "daily"}
-            chart_data = requests.get(chart_url, params=chart_params).json()
-            prices = [p[1] for p in chart_data.get('prices', [])]
-            if len(prices) >= 15:
-                # RSI calculation (14 period)
-                deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+            chart_params_31 = {"vs_currency": "usd", "days": 31, "interval": "daily"}
+            chart_params_365 = {"vs_currency": "usd", "days": 365, "interval": "daily"}
+            chart_data_31 = requests.get(chart_url, params=chart_params_31, headers=cg_headers).json()
+            chart_data_365 = requests.get(chart_url, params=chart_params_365, headers=cg_headers).json()
+            prices_31 = [p[1] for p in chart_data_31.get('prices', [])]
+            prices_365 = [p[1] for p in chart_data_365.get('prices', [])]
+            # RSI (14 period)
+            if len(prices_31) >= 15:
+                deltas = [prices_31[i] - prices_31[i-1] for i in range(1, len(prices_31))]
                 gains = [d for d in deltas if d > 0]
                 losses = [-d for d in deltas if d < 0]
                 avg_gain = sum(gains[-14:]) / 14 if len(gains) >= 14 else (sum(gains) / len(gains) if gains else 0.0)
@@ -862,9 +867,15 @@ def get_coin_stats_ai(symbol):
                     rs = avg_gain / avg_loss if avg_loss != 0 else 0
                     rsi = 100 - (100 / (1 + rs))
                 rsi_val = f"{rsi:.2f}"
-            if len(prices) >= 30:
-                ma30 = sum(prices[-30:]) / 30
+            # MA30
+            if len(prices_31) >= 30:
+                ma30 = sum(prices_31[-30:]) / 30
                 ma30_val = f"${ma30:,.2f}" if ma30 >= 1 else f"${ma30:.6f}"
+            # 52w range
+            if len(prices_365) > 0:
+                min_52w = min(prices_365)
+                max_52w = max(prices_365)
+                range_52w = f"${min_52w:,.2f} ~ ${max_52w:,.2f}" if max_52w >= 1 else f"${min_52w:.6f} ~ ${max_52w:.6f}"
         except Exception:
             pass
         # Compose prompt for DeepSeek AI
@@ -880,6 +891,7 @@ def get_coin_stats_ai(symbol):
             f"24h High/Low: ${high_24h} / ${low_24h}\n"
             f"24h RSI: {rsi_val}\n"
             f"30d MA: {ma30_val}\n"
+            f"52w Range: {range_52w}\n"
             "\n"
             "Give a short summary of the current market, technicals, and sentiment for this coin. "
             "Include a forecast for the next 24h (bullish/bearish/neutral), and mention key resistance/support levels if possible. "
@@ -915,13 +927,11 @@ def get_coin_stats_ai(symbol):
             'sell': '🔴 Sell',
         }
         pred_line = ''
-        # Try to extract prediction from summary
         pred_match = re.search(r'\b(buy|hold|sell)\b', ai_summary.lower())
         if pred_match:
             pred = pred_map.get(pred_match.group(1), '🤔')
             pred_line = f"Prediction (24hr): {pred}"
         else:
-            # fallback: look for bullish/bearish/neutral
             if 'bullish' in ai_summary.lower():
                 pred_line = "Prediction (24hr): 🟢 Buy"
             elif 'bearish' in ai_summary.lower():
@@ -933,7 +943,7 @@ def get_coin_stats_ai(symbol):
         msg = (
             f"Price: {symbol_upper} {price_str} {change_str}{arrow}\n"
             f"Market Summary: {ai_summary_clean}\n\n"
-            f"Technicals:\n- Support: ${low_24h}\n- Resistance: ${high_24h}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n\n"
+            f"Technicals:\n- Support: ${low_24h}\n- Resistance: ${high_24h}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n- Price Range (52w): {range_52w}\n\n"
             f"{pred_line}"
         )
         return msg
