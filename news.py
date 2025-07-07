@@ -11,7 +11,7 @@ from user_logging import init_db, log_user_interaction
 import threading
 import logging
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for troubleshooting
 
 # File to persist sent news links
 SENT_NEWS_FILE = "sent_news.json"
@@ -72,9 +72,13 @@ def send_telegram(msg, chat_id):
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
     }
+    logging.debug(f"Sending message to chat_id={chat_id}: {msg[:100]}...")
     r = requests.post(url, data=data)
     if not r.ok:
         print("Telegram send failed:", r.text)
+        logging.error(f"Telegram send failed: {r.text}")
+    else:
+        logging.debug(f"Telegram send succeeded: {r.text}")
     return r.ok
 
 def get_hours_ago(published):
@@ -773,9 +777,11 @@ def get_coin_id_from_symbol(symbol):
 
 # ===================== HANDLER REFACTOR =====================
 def handle_updates(updates):
+    logging.debug(f"handle_updates called with {len(updates)} updates: {updates}")
     for update in updates:
         message = update.get("message")
         if not message:
+            logging.debug(f"Update without message: {update}")
             continue
         chat_id = message["chat"]["id"]
         user = message["from"]
@@ -783,6 +789,7 @@ def handle_updates(updates):
         username = user.get("username")
         first_name = user.get("first_name")
         last_name = user.get("last_name")
+        logging.debug(f"Processing message from user_id={user_id}, username={username}, chat_id={chat_id}")
         # Log user interaction
         log_user_interaction(
             user_id=user_id,
@@ -993,22 +1000,28 @@ def get_updates(offset=None, timeout=30):
     if offset:
         params["offset"] = offset
     try:
+        logging.debug(f"Polling Telegram getUpdates with params: {params}")
         resp = requests.get(url, params=params, timeout=timeout+5)
         if resp.ok:
             data = resp.json()
+            logging.debug(f"getUpdates response: {data}")
             return data.get("result", [])
         else:
             print("Failed to fetch updates:", resp.text)
+            logging.error(f"Failed to fetch updates: {resp.text}")
             return []
     except Exception as e:
         print("Error in get_updates:", e)
+        logging.error(f"Error in get_updates: {e}")
         return []
 def main():
     init_db()
     print("Bot started. Listening for messages...")
+    logging.info("Bot started. Listening for messages...")
     last_update_id = None
     while True:
         updates = get_updates(last_update_id)
+        logging.debug(f"Main loop got {len(updates)} updates.")
         if updates:
             handle_updates(updates)
             last_update_id = updates[-1]["update_id"] + 1
@@ -1016,3 +1029,44 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ===================== PLACEHOLDER DEFINITIONS FOR UNDEFINED FUNCTIONS =====================
+def get_help_text():
+    logging.debug("get_help_text called")
+    return (
+        """*ChoyNewsBot Help:*
+/start - Welcome message
+/help - Show this help message
+/support - Contact developer
+/news - Daily news digest
+/cryptostats - Crypto market summary
+/weather - Dhaka weather
+/[symbol] - Asset stats (e.g. /btc, /aapl, /eurusd)
+/[symbol]stats - Asset stats + AI summary (e.g. /btcstats, /aaplstats)
+"""
+    )
+
+def get_support_text():
+    logging.debug("get_support_text called")
+    return (
+        """*Support:*
+[Contact Developer](https://t.me/shanchoy)
+Email: shanchoy@gmail.com
+"""
+    )
+
+def get_crypto_ai_summary():
+    logging.debug("get_crypto_ai_summary called")
+    return "Crypto AI summary is temporarily unavailable."
+
+def get_dhaka_weather():
+    logging.debug("get_dhaka_weather called")
+    return "Weather for Dhaka: 30°C, Partly Cloudy. (Demo)"
+
+def get_coin_stats_ai(symbol):
+    logging.debug(f"get_coin_stats_ai called for {symbol}")
+    return f"Stats+AI for {symbol.upper()} are temporarily unavailable."
+
+def get_coin_stats(symbol):
+    logging.debug(f"get_coin_stats called for {symbol}")
+    return f"Stats for {symbol.upper()} are temporarily unavailable."
