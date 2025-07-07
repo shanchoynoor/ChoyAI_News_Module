@@ -849,135 +849,136 @@ def handle_updates(updates):
             send_telegram(get_dhaka_weather(), chat_id)
             continue
         if text in ["/news"]:
-            send_telegram("Loading latest news...", chat_id)
-            # --- Bangladesh holiday info ---
-            now_dt = datetime.now()
-            now_str = now_dt.strftime("%Y-%m-%d %H:%M")
-            def get_bd_holiday():
-                try:
-                    api_key = os.getenv("CALENDARIFIC_API_KEY")
-                    if not api_key:
+            try:
+                send_telegram("Loading latest news...", chat_id)
+                # --- Bangladesh holiday info ---
+                now_dt = datetime.now()
+                now_str = now_dt.strftime("%Y-%m-%d %H:%M")
+                def get_bd_holiday():
+                    try:
+                        api_key = os.getenv("CALENDARIFIC_API_KEY")
+                        if not api_key:
+                            return ""
+                        url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=BD&year={now_dt.year}"
+                        resp = requests.get(url)
+                        data = resp.json()
+                        holidays = data.get("response", {}).get("holidays", [])
+                        today_str = now_dt.strftime("%Y-%m-%d")
+                        upcoming = None
+                        for h in holidays:
+                            h_date = h.get("date", {}).get("iso", "")
+                            if h_date == today_str:
+                                return f"🎉 *Today's Holiday:* {h['name']}"
+                            elif h_date > today_str:
+                                if not upcoming or h_date < upcoming["date"]:
+                                    upcoming = {"date": h_date, "name": h["name"]}
+                        if upcoming:
+                            # Format date as 'Jul 4, 2025'
+                            up_date = datetime.strptime(upcoming["date"], "%Y-%m-%d").strftime("%b %d, %Y")
+                            return f"🎉 *Next Holiday:* {upcoming['name']} ({up_date})"
                         return ""
-                    url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=BD&year={now_dt.year}"
-                    resp = requests.get(url)
-                    data = resp.json()
-                    holidays = data.get("response", {}).get("holidays", [])
-                    today_str = now_dt.strftime("%Y-%m-%d")
-                    upcoming = None
-                    for h in holidays:
-                        h_date = h.get("date", {}).get("iso", "")
-                        if h_date == today_str:
-                            return f"🎉 *Today's Holiday:* {h['name']}"
-                        elif h_date > today_str:
-                            if not upcoming or h_date < upcoming["date"]:
-                                upcoming = {"date": h_date, "name": h["name"]}
-                    if upcoming:
-                        # Format date as 'Jul 4, 2025'
-                        up_date = datetime.strptime(upcoming["date"], "%Y-%m-%d").strftime("%b %d, %Y")
-                        return f"🎉 *Next Holiday:* {upcoming['name']} ({up_date})"
-                    return ""
-                except Exception as e:
-                    return ""
-            holiday_line = get_bd_holiday()
-            # Build the full digest as before
-            digest = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
-            digest += get_dhaka_weather() + "\n"
-            if holiday_line:
-                digest += f"{holiday_line}\n"
-            digest += "\n"
-            digest += get_local_news()
-            digest += get_global_news()
-            digest += get_tech_news()
-            digest += get_sports_news()
-            digest += get_crypto_news()
-            
-            # --- Collect crypto data for DeepSeek summary ---
-            market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
-            def arrow_only(val):
-                try:
-                    v = float(val.replace('%','').replace('+','').replace(',',''))
-                except Exception:
-                    return ''
-                if v > 0:
-                    return ' ▲'
-                elif v < 0:
-                    return ' ▼'
-                else:
-                    return ''
-            cap_arrow = arrow_only(market_cap_change_str)
-            vol_arrow = arrow_only(volume_change_str)
-            # --- FEAR/GREED EMOJI & SUGGESTION ---
-            def fear_greed_emoji_suggestion(fear_val):
-                try:
-                    fg = int(fear_val)
-                except Exception:
-                    return '😨', '(N/A)'
-                if fg <= 24:
-                    return '😱', '(🟢 Buy)'
-                elif fg <= 49:
-                    return '😨', '(🟡 Buy Slowly)'
-                elif fg <= 74:
-                    return '😏', '(🟠 Hold)'
-                else:
-                    return '🤯', '(🔴 Sell)'
-            fg_emoji, fg_suggestion = fear_greed_emoji_suggestion(fear_greed)
-            # Format with brackets for percentage
-            def add_brackets(val):
-                if val and not val.startswith('('):
-                    return f'({val})'
-                return val
-            market_cap_change_str_b = add_brackets(market_cap_change_str)
-            volume_change_str_b = add_brackets(volume_change_str)
-            crypto_section = (
-                f"*📊 CRYPTO MARKET:*\n"
-                f"💰 Market Cap: {market_cap_str} {market_cap_change_str_b}{cap_arrow}\n"
-                f"💵 Volume: {volume_str} {volume_change_str_b}{vol_arrow}\n"
-                f"{fg_emoji} Fear/Greed: {fear_greed_str}/100 → {fg_suggestion}\n\n"
-            )
-            big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
-            crypto_section += big_caps_msg
-            top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-            crypto_section += top_movers_msg
-            DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-            ai_summary = None
-            prediction_line = ""
-            if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
-                ai_summary = get_crypto_summary_with_deepseek(
-                    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
+                    except Exception as e:
+                        return ""
+                holiday_line = get_bd_holiday()
+                # Build the full digest as before
+                digest = f"*📢 DAILY NEWS DIGEST*\n_{now_str}_\n\n"
+                digest += get_dhaka_weather() + "\n"
+                if holiday_line:
+                    digest += f"{holiday_line}\n"
+                digest += "\n"
+                digest += get_local_news()
+                digest += get_global_news()
+                digest += get_tech_news()
+                digest += get_sports_news()
+                digest += get_crypto_news()
+                # --- Collect crypto data for DeepSeek summary ---
+                market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_cap_change, volume, volume_change, fear_greed = fetch_crypto_market_data()
+                def arrow_only(val):
+                    try:
+                        v = float(val.replace('%','').replace('+','').replace(',',''))
+                    except Exception:
+                        return ''
+                    if v > 0:
+                        return ' ▲'
+                    elif v < 0:
+                        return ' ▼'
+                    else:
+                        return ''
+                cap_arrow = arrow_only(market_cap_change_str)
+                vol_arrow = arrow_only(volume_change_str)
+                def fear_greed_emoji_suggestion(fear_val):
+                    try:
+                        fg = int(fear_val)
+                    except Exception:
+                        return '😨', '(N/A)'
+                    if fg <= 24:
+                        return '😱', '(🟢 Buy)'
+                    elif fg <= 49:
+                        return '😨', '(🟡 Buy Slowly)'
+                    elif fg <= 74:
+                        return '😏', '(🟠 Hold)'
+                    else:
+                        return '🤯', '(🔴 Sell)'
+                fg_emoji, fg_suggestion = fear_greed_emoji_suggestion(fear_greed)
+                def add_brackets(val):
+                    if val and not val.startswith('('):
+                        return f'({val})'
+                    return val
+                market_cap_change_str_b = add_brackets(market_cap_change_str)
+                volume_change_str_b = add_brackets(volume_change_str)
+                crypto_section = (
+                    f"*📊 CRYPTO MARKET:*\n"
+                    f"💰 Market Cap: {market_cap_str} {market_cap_change_str_b}{cap_arrow}\n"
+                    f"💵 Volume: {volume_str} {volume_change_str_b}{vol_arrow}\n"
+                    f"{fg_emoji} Fear/Greed: {fear_greed_str}/100 → {fg_suggestion}\n\n"
                 )
-                import re
-                ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
-                if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
-                    ai_summary_clean = ai_summary_clean.rstrip() + '.'
-                crypto_section += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
-                summary_lower = ai_summary.lower()
-                accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
-                try:
-                    accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
-                except Exception:
-                    accuracy = 80
-                if accuracy <= 60:
-                    prediction_line = "\nPrediction For tomorrow: CONSOLIDATION 🤔"
-                elif "bullish" in summary_lower and accuracy > 60:
-                    prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
-                elif "bearish" in summary_lower and accuracy > 60:
-                    prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
+                big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+                crypto_section += big_caps_msg
+                top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+                crypto_section += top_movers_msg
+                DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+                ai_summary = None
+                prediction_line = ""
+                if DEEPSEEK_API and all(x != "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
+                    ai_summary = get_crypto_summary_with_deepseek(
+                        market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
+                    )
+                    import re
+                    ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+                    if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+                        ai_summary_clean = ai_summary_clean.rstrip() + '.'
+                    crypto_section += f"\n*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
+                    summary_lower = ai_summary.lower()
+                    accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
+                    try:
+                        accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
+                    except Exception:
+                        accuracy = 80
+                    if accuracy <= 60:
+                        prediction_line = "\nPrediction For tomorrow: CONSOLIDATION 🤔"
+                    elif "bullish" in summary_lower and accuracy > 60:
+                        prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
+                    elif "bearish" in summary_lower and accuracy > 60:
+                        prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
+                    else:
+                        prediction_line = "\nPrediction For Tomorrow: CONSOLIDATION! 🤔"
+                    crypto_section += prediction_line
+                crypto_section += "\n\n\n- Built by Shanchoy"
+                marker = "*📊 CRYPTO MARKET:*\n"
+                idx = digest.find(marker)
+                if idx != -1:
+                    news_part = digest[:idx]
+                    crypto_part = digest[idx:] + crypto_section[len(marker):]
+                    send_telegram(news_part, chat_id)
+                    send_telegram(crypto_part, chat_id)
                 else:
-                    prediction_line = "\nPrediction For Tomorrow: CONSOLIDATION! 🤔"
-                crypto_section += prediction_line
-            crypto_section += "\n\n\n- Built by Shanchoy"
-            # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
-            marker = "*📊 CRYPTO MARKET:*\n"
-            idx = digest.find(marker)
-            if idx != -1:
-                news_part = digest[:idx]
-                crypto_part = digest[idx:] + crypto_section[len(marker):]  # Avoid duplicate marker
-                send_telegram(news_part, chat_id)
-                send_telegram(crypto_part, chat_id)
-            else:
-                # fallback: send as two messages
-                send_telegram(digest, chat_id)
-                send_telegram(crypto_section, chat_id)
+                    send_telegram(digest, chat_id)
+                    send_telegram(crypto_section, chat_id)
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                logging.error(f"Exception in /news handler: {e}\n{tb}")
+                send_telegram("❌ Error occurred while fetching news. Please try again later.", chat_id)
             continue
         # --- Unified asset stats handlers ---
         # /[symbol]stats (e.g. /btcstats, /aaplstats, /eurusdstats)
