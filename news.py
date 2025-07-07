@@ -5,12 +5,12 @@ import time
 import requests
 import feedparser
 from datetime import datetime, timezone
+from pytz import timezone as pytz_timezone
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from user_logging import init_db, log_user_interaction
 import threading
 import logging
-from pytz import timezone
 from timezonefinder import TimezoneFinder
 
 logging.basicConfig(level=logging.WARNING)
@@ -743,13 +743,13 @@ def get_local_time_str(user_location=None):
                 tf = TimezoneFinder()
                 tz_str = tf.timezone_at(lng=lon, lat=lat)
                 if tz_str:
-                    local_tz = timezone(tz_str)
+                    local_tz = pytz_timezone(tz_str)
                 else:
-                    local_tz = timezone('Asia/Dhaka')
+                    local_tz = pytz_timezone('Asia/Dhaka')
             else:
-                local_tz = timezone('Asia/Dhaka')
+                local_tz = pytz_timezone('Asia/Dhaka')
         else:
-            local_tz = timezone('Asia/Dhaka')
+            local_tz = pytz_timezone('Asia/Dhaka')
         now = datetime.now(local_tz)
         return now.strftime("%Y-%m-%d %H:%M (%Z)")
     except Exception:
