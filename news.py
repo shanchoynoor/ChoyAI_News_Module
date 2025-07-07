@@ -456,14 +456,20 @@ def fetch_big_cap_prices():
         return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers():
-    """Fetch and format top crypto gainers and losers."""
+    """Fetch and format top crypto gainers and losers from top 500 coins by market cap."""
     try:
+        # Fetch top 500 coins (2 pages, 250 per page)
         url = "https://api.coingecko.com/api/v3/coins/markets"
-        params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100}
-        resp = requests.get(url, params=params)
-        data = resp.json()
-        if not isinstance(data, list):
+        params1 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1}
+        params2 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 2}
+        resp1 = requests.get(url, params=params1)
+        resp2 = requests.get(url, params=params2)
+        data1 = resp1.json() if resp1.ok else []
+        data2 = resp2.json() if resp2.ok else []
+        data = data1 + data2
+        if not isinstance(data, list) or len(data) == 0:
             raise Exception("Invalid CoinGecko response")
+        # Sort for gainers and losers
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
@@ -564,13 +570,20 @@ def fetch_big_cap_prices_data():
         return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers_data():
+    """Fetch and format top crypto gainers and losers from top 500 coins by market cap."""
     try:
+        # Fetch top 500 coins (2 pages, 250 per page)
         url = "https://api.coingecko.com/api/v3/coins/markets"
-        params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100}
-        resp = requests.get(url, params=params)
-        data = resp.json()
-        if not isinstance(data, list):
+        params1 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1}
+        params2 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 2}
+        resp1 = requests.get(url, params=params1)
+        resp2 = requests.get(url, params=params2)
+        data1 = resp1.json() if resp1.ok else []
+        data2 = resp2.json() if resp2.ok else []
+        data = data1 + data2
+        if not isinstance(data, list) or len(data) == 0:
             raise Exception("Invalid CoinGecko response")
+        # Sort for gainers and losers
         gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
         losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
         msg = "*🔺 Crypto Top Gainers:*\n"
