@@ -12,6 +12,7 @@ from user_logging import init_db, log_user_interaction
 import threading
 import logging
 from timezonefinder import TimezoneFinder
+import sqlite3
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -732,11 +733,73 @@ def get_coin_id_from_symbol(symbol):
     logging.debug(f"Symbol not found: {symbol}")
     return None, None
 
+# ===================== USER TIMEZONE STORAGE =====================
+USER_TZ_DB = "user_timezones.db"
+def set_user_timezone(user_id, tz_str):
+    try:
+        conn = sqlite3.connect(USER_TZ_DB)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS user_timezones (user_id INTEGER PRIMARY KEY, tz TEXT)")
+        c.execute("INSERT OR REPLACE INTO user_timezones (user_id, tz) VALUES (?, ?)", (user_id, tz_str))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Failed to set user timezone:", e)
+
+def get_user_timezone(user_id):
+    try:
+        conn = sqlite3.connect(USER_TZ_DB)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS user_timezones (user_id INTEGER PRIMARY KEY, tz TEXT)")
+        c.execute("SELECT tz FROM user_timezones WHERE user_id = ?", (user_id,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return row[0]
+        return None
+    except Exception as e:
+        print("Failed to get user timezone:", e)
+        return None
+
 # ===================== TIME =====================
-def get_local_time_str(user_location=None):
+def parse_timezone_input(tz_input):
+    tz_input = tz_input.strip().lower()
+    # Try UTC offset: +6, -5.5, etc.
+    if tz_input.startswith("+utc"):
+        tz_input = tz_input[4:].strip()
+    if tz_input.startswith("+") or tz_input.startswith("-"):
+        try:
+            offset = float(tz_input)
+            hours = int(offset)
+            minutes = int((abs(offset) * 60) % 60)
+            sign = "+" if offset >= 0 else "-"
+            tz_name = f"Etc/GMT{sign}{abs(hours):d}"
+            # Note: Etc/GMT+6 is actually UTC-6, so reverse sign
+            tz_name = f"Etc/GMT{'-' if sign == '+' else '+'}{abs(hours):d}"
+            return tz_name
+        except Exception:
+            pass
+    # Try city or TZ database name
+    from pytz import all_timezones
+    # Try exact match
+    for tz in all_timezones:
+        if tz_input == tz.lower():
+            return tz
+    # Try partial match (city)
+    for tz in all_timezones:
+        if tz_input in tz.lower():
+            return tz
+    return None
+
+def get_local_time_str(user_location=None, user_id=None):
     """Return current time string in user's local timezone (default Asia/Dhaka)."""
     try:
-        if user_location and isinstance(user_location, dict):
+        tz_str = None
+        if user_id:
+            tz_str = get_user_timezone(user_id)
+        if tz_str:
+            local_tz = pytz_timezone(tz_str)
+        elif user_location and isinstance(user_location, dict):
             lat = user_location.get('latitude')
             lon = user_location.get('longitude')
             if lat is not None and lon is not None:
@@ -994,6 +1057,7 @@ def get_help_text():
         "/weather - Get Dhaka weather\n"
         "/<coin> - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
         "/<coin>stats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
+        "/timezone <zone> - Set your timezone (e.g. /timezone +6, /timezone dhaka, /timezone Europe/Berlin)\n"
         "/help - Show this help message\n"
     )
 
@@ -1041,12 +1105,25 @@ def handle_updates(updates):
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
             continue
+        # --- /timezone command ---
+        if text.startswith("/timezone"):
+            args = message.get("text", "").split(maxsplit=1)
+            if len(args) < 2:
+                send_telegram("Please provide a timezone. Example: /timezone +6 or /timezone dhaka or /timezone Europe/Berlin", chat_id)
+                continue
+            tz_input = args[1].strip()
+            tz_str = parse_timezone_input(tz_input)
+            if not tz_str:
+                send_telegram("Invalid timezone. Please use a valid UTC offset, city, or timezone name. Example: /timezone +6 or /timezone dhaka or /timezone Europe/Berlin", chat_id)
+                continue
+            set_user_timezone(user_id, tz_str)
+            send_telegram(f"Timezone set to {tz_str}. All news digests will now show your local time.", chat_id)
+            continue
         if text in ["/news"]:
             send_telegram("Loading latest news...", chat_id)
-            now_str = get_local_time_str(user_location)
+            now_str = get_local_time_str(user_location, user_id)
             # --- Bangladesh holiday info ---
             now_dt = datetime.now()
-            now_str = now_dt.strftime("%Y-%m-%d %H:%M")
             def get_bd_holiday():
                 try:
                     api_key = os.getenv("CALENDARIFIC_API_KEY")
