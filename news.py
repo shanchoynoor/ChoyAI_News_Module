@@ -820,7 +820,7 @@ def get_coin_stats(symbol):
         return f"Error fetching data for '{symbol.upper()}'."
 
 def get_coin_stats_ai(symbol):
-    """Return price, 24h % change, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
+    """Return price, 24h % change, RSI, MA30, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
     try:
         coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
@@ -841,6 +841,32 @@ def get_coin_stats_ai(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
+        # --- Fetch RSI and MA30 ---
+        rsi_val = 'N/A'
+        ma30_val = 'N/A'
+        try:
+            chart_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+            chart_params = {"vs_currency": "usd", "days": 31, "interval": "daily"}
+            chart_data = requests.get(chart_url, params=chart_params).json()
+            prices = [p[1] for p in chart_data.get('prices', [])]
+            if len(prices) >= 15:
+                # RSI calculation (14 period)
+                deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+                gains = [d for d in deltas if d > 0]
+                losses = [-d for d in deltas if d < 0]
+                avg_gain = sum(gains[-14:]) / 14 if len(gains) >= 14 else (sum(gains) / len(gains) if gains else 0.0)
+                avg_loss = sum(losses[-14:]) / 14 if len(losses) >= 14 else (sum(losses) / len(losses) if losses else 0.0)
+                if avg_loss == 0:
+                    rsi = 100.0
+                else:
+                    rs = avg_gain / avg_loss if avg_loss != 0 else 0
+                    rsi = 100 - (100 / (1 + rs))
+                rsi_val = f"{rsi:.2f}"
+            if len(prices) >= 30:
+                ma30 = sum(prices[-30:]) / 30
+                ma30_val = f"${ma30:,.2f}" if ma30 >= 1 else f"${ma30:.6f}"
+        except Exception:
+            pass
         # Compose prompt for DeepSeek AI
         market_cap = c.get('market_cap', 0)
         volume = c.get('total_volume', 0)
@@ -852,6 +878,8 @@ def get_coin_stats_ai(symbol):
             f"Market Cap: {human_readable_number(market_cap)}\n"
             f"24h Volume: {human_readable_number(volume)}\n"
             f"24h High/Low: ${high_24h} / ${low_24h}\n"
+            f"24h RSI: {rsi_val}\n"
+            f"30d MA: {ma30_val}\n"
             "\n"
             "Give a short summary of the current market, technicals, and sentiment for this coin. "
             "Include a forecast for the next 24h (bullish/bearish/neutral), and mention key resistance/support levels if possible. "
@@ -866,7 +894,7 @@ def get_coin_stats_ai(symbol):
             payload = {
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 120,
+                "max_tokens": 180,
                 "temperature": 0.7
             }
             try:
@@ -875,12 +903,38 @@ def get_coin_stats_ai(symbol):
             except Exception:
                 ai_summary = "AI summary not available."
         import re
-        ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+        ai_summary_clean = re.sub(r'^(#+\s*)?'+symbol_upper+r'.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
         if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
             ai_summary_clean = ai_summary_clean.rstrip() + '.'
+        # --- Prediction extraction ---
+        pred = 'N/A'
+        pred_emoji = '🤔'
+        pred_map = {
+            'buy': '🟢 Buy',
+            'hold': '🟠 Hold',
+            'sell': '🔴 Sell',
+        }
+        pred_line = ''
+        # Try to extract prediction from summary
+        pred_match = re.search(r'\b(buy|hold|sell)\b', ai_summary.lower())
+        if pred_match:
+            pred = pred_map.get(pred_match.group(1), '🤔')
+            pred_line = f"Prediction (24hr): {pred}"
+        else:
+            # fallback: look for bullish/bearish/neutral
+            if 'bullish' in ai_summary.lower():
+                pred_line = "Prediction (24hr): 🟢 Buy"
+            elif 'bearish' in ai_summary.lower():
+                pred_line = "Prediction (24hr): 🔴 Sell"
+            elif 'neutral' in ai_summary.lower():
+                pred_line = "Prediction (24hr): 🟠 Hold"
+            else:
+                pred_line = "Prediction (24hr): 🤔"
         msg = (
-            f"{symbol_upper}: {price_str} {change_str}{arrow}\n"
-            f"{ai_summary_clean}"
+            f"Price: {symbol_upper} {price_str} {change_str}{arrow}\n"
+            f"Market Summary: {ai_summary_clean}\n\n"
+            f"Technicals:\n- Support: ${low_24h}\n- Resistance: ${high_24h}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n\n"
+            f"{pred_line}"
         )
         return msg
     except Exception:
@@ -1070,13 +1124,13 @@ def handle_updates(updates):
                 except Exception:
                     accuracy = 80
                 if accuracy <= 60:
-                    prediction_line = "\nPrediction For tomorrow: 🤔 (No clear prediction)"
+                    prediction_line = "\nPrediction For tomorrow: CONSOLIDATION 🤔"
                 elif "bullish" in summary_lower and accuracy > 60:
                     prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
                 elif "bearish" in summary_lower and accuracy > 60:
                     prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
                 else:
-                    prediction_line = "\nPrediction For Tomorrow: 🤔 (No clear prediction)"
+                    prediction_line = "\nPrediction For Tomorrow: CONSOLIDATION! 🤔"
                 crypto_section += prediction_line
             crypto_section += "\n\n\n- Built by Shanchoy"
             # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
