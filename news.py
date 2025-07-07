@@ -749,6 +749,28 @@ def get_asset_stats(symbol, asset_type="crypto", ai_summary=True):
             pred_line = "Prediction (24hr): 🤔"
     return f"{base_msg}\nMarket Summary: {ai_summary_clean}\n\n{pred_line}"
 
+# ===================== COINLIST LOADING =====================
+_coinlist_cache = None
+
+def load_coinlist():
+    global _coinlist_cache
+    if _coinlist_cache is not None:
+        return _coinlist_cache
+    try:
+        with open("coinlist.json", "r") as f:
+            _coinlist_cache = json.load(f)
+    except Exception:
+        _coinlist_cache = []
+    return _coinlist_cache
+
+def get_coin_id_from_symbol(symbol):
+    """Return CoinGecko coin id for a given symbol (case-insensitive), or None if not found."""
+    symbol = symbol.lower()
+    for entry in load_coinlist():
+        if entry.get("symbol", "").lower() == symbol:
+            return entry.get("id"), entry.get("name")
+    return None, None
+
 # ===================== HANDLER REFACTOR =====================
 def handle_updates(updates):
     for update in updates:
@@ -779,6 +801,9 @@ def handle_updates(updates):
             continue
         if text == "/help":
             send_telegram(get_help_text(), chat_id)
+            continue
+        if text == "/support":
+            send_telegram(get_support_text(), chat_id)
             continue
         if text == "/cryptostats":
             send_telegram(get_crypto_ai_summary(), chat_id)
@@ -922,8 +947,9 @@ def handle_updates(updates):
         if text.startswith("/") and text.endswith("stats") and len(text) > 6:
             symbol = text[1:-5]  # remove leading / and trailing stats
             if symbol:
-                # Determine asset type
-                if symbol.isalpha() and len(symbol) <= 5:
+                # Use coinlist for crypto detection
+                coin_id, _ = get_coin_id_from_symbol(symbol)
+                if coin_id:
                     asset_type = "crypto"
                 elif len(symbol) == 6 and symbol.isalpha():
                     asset_type = "forex"
@@ -935,8 +961,9 @@ def handle_updates(updates):
         # /[symbol] (e.g. /btc, /aapl, /eurusd)
         if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
             symbol = text[1:]
-            # Determine asset type
-            if symbol.isalpha() and len(symbol) <= 5:
+            # Use coinlist for crypto detection
+            coin_id, _ = get_coin_id_from_symbol(symbol)
+            if coin_id:
                 asset_type = "crypto"
             elif len(symbol) == 6 and symbol.isalpha():
                 asset_type = "forex"
@@ -959,43 +986,23 @@ def handle_updates(updates):
             reply = get_coin_stats(symbol)
             send_telegram(reply, chat_id)
             continue
-        # --- Hybrid asset stats handler for /coin, /coinstats, /stock, /forex ---
-        if text.startswith("/"):
-            cmd = text[1:]
-            # Asset type detection
-            asset_type = None
-            asset_symbol = None
-            if cmd.endswith("stats"):
-                asset_symbol = cmd[:-5]
-            else:
-                asset_symbol = cmd
-            asset_symbol = asset_symbol.upper()
-            # Detect asset type (crypto, stock, forex)
-            # Try crypto first
-            coin_id, _ = get_coin_id_from_symbol(asset_symbol)
-            if coin_id:
-                asset_type = "crypto"
-            elif len(asset_symbol) <= 5 and asset_symbol.isalpha():
-                asset_type = "stock"  # fallback, could be improved
-            elif len(asset_symbol) == 6 and asset_symbol[:3].isalpha() and asset_symbol[3:].isalpha():
-                asset_type = "forex"
-            else:
-                asset_type = None
-            # Fetch stats using hybrid approach
-            if asset_type == "crypto":
-                if cmd.endswith("stats"):
-                    reply = get_coin_stats_ai(asset_symbol)
-                else:
-                    reply = get_coin_stats(asset_symbol)
-                send_telegram(reply, chat_id)
-                continue
-            elif asset_type in ("stock", "forex"):
-                # Use Twelve Data for stocks/forex
-                reply = fetch_twelvedata_stats(asset_symbol, asset_type)
-                send_telegram(reply, chat_id)
-                continue
-            # If not recognized, ignore
-            continue
+def get_updates(offset=None, timeout=30):
+    """Poll Telegram for new updates/messages."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    params = {"timeout": timeout}
+    if offset:
+        params["offset"] = offset
+    try:
+        resp = requests.get(url, params=params, timeout=timeout+5)
+        if resp.ok:
+            data = resp.json()
+            return data.get("result", [])
+        else:
+            print("Failed to fetch updates:", resp.text)
+            return []
+    except Exception as e:
+        print("Error in get_updates:", e)
+        return []
 def main():
     init_db()
     print("Bot started. Listening for messages...")
