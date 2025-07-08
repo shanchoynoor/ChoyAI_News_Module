@@ -1260,12 +1260,12 @@ def get_bd_now():
     return datetime.now(timezone.utc) + timedelta(hours=6)
 
 def get_bd_time_str(dt=None):
-    """Return BD time as 'Jul 8, 2025 1:24AM (+6 Dhaka)'."""
+    """Return BD time as 'Jul 8, 2025 1:24AM BDT (UTC +6)'."""
     if dt is None:
         dt = get_bd_now()
     date_str = dt.strftime("%b %-d, %Y %-I:%M%p")
     offset_hr = 6  # For Bangladesh
-    return f"{date_str} (+{offset_hr} Dhaka)"
+    return f"{date_str} BDT (UTC +{offset_hr})"
 
 # ===================== MAIN ENTRY =====================
 def build_news_digest(return_msg=False, chat_id=None):
@@ -1286,8 +1286,8 @@ def build_news_digest(return_msg=False, chat_id=None):
     # Initialize user logging database
     init_db()
     
-    # Use Bangladesh time for timestamp
-    now = get_bd_time_str()
+    # Use local time for timestamp (defaulting to Bangladesh if no user_id is provided)
+    now = get_local_time_str()
     
     # Create digest header
     msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
