@@ -11,6 +11,8 @@ mkdir -p logs
 
 # Install required Python packages
 echo "Installing Python packages..."
+pip install python-dotenv feedparser pytz requests python-telegram-bot numpy timezonefinder sgmllib3k
+echo "Installing additional packages directly in case of requirements.txt issues..."
 pip install -r requirements.txt
 
 # Make sure the permissions are correct
@@ -80,6 +82,17 @@ else
   echo ".env file already exists."
 fi
 
+# Check and fix common auto_news.py issues
+echo "Checking auto_news.py for common issues..."
+
+# Check for FileHandler with maxBytes issue
+if grep -q "logging.FileHandler.*maxBytes" auto_news.py; then
+  echo "Fixing FileHandler issue in auto_news.py..."
+  sed -i '5i from logging.handlers import RotatingFileHandler' auto_news.py
+  sed -i 's/logging.FileHandler/RotatingFileHandler/g' auto_news.py
+  echo "Fixed logging configuration in auto_news.py"
+fi
+
 # Stop existing PM2 processes
 echo "Stopping existing PM2 processes..."
 pm2 stop news-digest-bot news-digest-auto choynews_auto choynewsbot 2>/dev/null || true
@@ -88,6 +101,26 @@ pm2 delete news-digest-bot news-digest-auto choynews_auto choynewsbot 2>/dev/nul
 # Start services with the new configuration
 echo "Starting services with PM2..."
 pm2 start server_config.json
+
+# Check for immediate errors
+echo "Checking for immediate errors..."
+sleep 5  # Wait for services to initialize
+
+if pm2 status | grep -q "errored"; then
+  echo "ERROR: One or more services failed to start. Checking logs..."
+  mkdir -p error_logs
+  
+  # Capture error logs
+  echo "=== NEWS-DIGEST-BOT ERRORS ===" > error_logs/startup_errors.log
+  pm2 logs news-digest-bot --lines 20 --nostream >> error_logs/startup_errors.log 2>&1
+  
+  echo "=== NEWS-DIGEST-AUTO ERRORS ===" >> error_logs/startup_errors.log
+  pm2 logs news-digest-auto --lines 20 --nostream >> error_logs/startup_errors.log 2>&1
+  
+  echo "Error logs saved to error_logs/startup_errors.log"
+  echo "Displaying last 10 lines of error logs:"
+  tail -n 10 error_logs/startup_errors.log
+fi
 
 # Save PM2 configuration
 echo "Saving PM2 configuration..."

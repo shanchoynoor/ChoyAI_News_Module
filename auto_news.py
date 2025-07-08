@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import traceback
@@ -12,7 +13,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("auto_news.log", mode='a', maxBytes=10485760, backupCount=3)
+        RotatingFileHandler("auto_news.log", mode='a', maxBytes=10485760, backupCount=3)
     ]
 )
 logger = logging.getLogger("auto_news")
