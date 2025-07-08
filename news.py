@@ -28,6 +28,7 @@ from timezonefinder import TimezoneFinder
 
 # Local imports
 from user_logging import init_db, log_user_interaction
+from user_subscriptions import subscribe_user, unsubscribe_user, is_subscribed
 
 # Configure logging
 logging.basicConfig(level=logging.WARNING)
@@ -1729,6 +1730,9 @@ def get_help_text():
         "/coin - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
         "/coinstats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
         "/timezone <zone> - Set your timezone for news digest times (e.g. /timezone +6, /timezone dhaka, /timezone Europe/Berlin). Shows time in format: Jul 8, 2025 9:52AM BST (UTC +6)\n"
+        "/subscribe - Get news digests automatically at 8am, 1pm, 7pm, and 11pm in your local timezone\n"
+        "/unsubscribe - Stop receiving automatic news digests\n"
+        "/status - Check your subscription status and timezone\n"
         "/support - Contact the developer for support\n"
         "/help - Show this help message\n"
     )
@@ -1794,6 +1798,95 @@ def handle_updates(updates):
             )
             send_telegram(support_msg, chat_id)
             continue
+            
+        # --- /subscribe command ---
+        if text == "/subscribe":
+            try:
+                success, result = subscribe_user(
+                    user_id=user_id,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name
+                )
+                
+                if success:
+                    if result == "created":
+                        msg = (
+                            "✅ *Successfully subscribed!*\n\n"
+                            "You will now receive news digests automatically at:\n"
+                            "• 8:00 AM\n"
+                            "• 1:00 PM\n"
+                            "• 7:00 PM\n"
+                            "• 11:00 PM\n\n"
+                            "These times will be based on your local timezone. "
+                            "Use /timezone to set or change your timezone."
+                        )
+                    else:  # updated
+                        msg = (
+                            "✅ *Subscription renewed!*\n\n"
+                            "You're already subscribed and will continue to receive news digests automatically at:\n"
+                            "• 8:00 AM\n"
+                            "• 1:00 PM\n"
+                            "• 7:00 PM\n"
+                            "• 11:00 PM\n\n"
+                            "These times are based on your local timezone. "
+                            "Use /timezone to check or change your timezone."
+                        )
+                else:
+                    msg = "❌ There was an error processing your subscription. Please try again later."
+                
+                send_telegram(msg, chat_id)
+            except Exception as e:
+                logging.error(f"Error in /subscribe handler: {e}")
+                send_telegram("❌ An error occurred while processing your subscription. Please try again later.", chat_id)
+            continue
+            
+        # --- /unsubscribe command ---
+        if text == "/unsubscribe":
+            try:
+                if unsubscribe_user(user_id):
+                    msg = "✅ You have been unsubscribed from automatic news digests. You can still use /news to get updates manually."
+                else:
+                    msg = "❓ You don't have an active subscription. Use /subscribe to receive automatic news digests."
+                
+                send_telegram(msg, chat_id)
+            except Exception as e:
+                logging.error(f"Error in /unsubscribe handler: {e}")
+                send_telegram("❌ An error occurred while processing your unsubscription. Please try again later.", chat_id)
+            continue
+            
+        # --- /status command ---
+        if text == "/status":
+            try:
+                subscription_status = is_subscribed(user_id)
+                tz_str = get_user_timezone(user_id) or "Not set (default: Asia/Dhaka)"
+                
+                if subscription_status:
+                    status_msg = (
+                        "📊 *Your Subscription Status*\n\n"
+                        "✅ *Subscribed:* Active\n"
+                        f"🌐 *Timezone:* {tz_str}\n\n"
+                        "You will receive news digests at:\n"
+                        "• 8:00 AM\n"
+                        "• 1:00 PM\n"
+                        "• 7:00 PM\n"
+                        "• 11:00 PM\n\n"
+                        "All times are based on your local timezone."
+                    )
+                else:
+                    status_msg = (
+                        "📊 *Your Subscription Status*\n\n"
+                        "❌ *Subscribed:* Not Active\n"
+                        f"🌐 *Timezone:* {tz_str}\n\n"
+                        "Use /subscribe to receive automatic news digests."
+                    )
+                
+                send_telegram(status_msg, chat_id)
+            except Exception as e:
+                logging.error(f"Error in /status handler: {e}")
+                send_telegram("❌ An error occurred while checking your status. Please try again later.", chat_id)
+            continue
+            
         # --- /timezone command ---
         if text.startswith("/timezone"):
             args = message.get("text", "").split(maxsplit=1)

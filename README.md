@@ -1,9 +1,10 @@
 # News Digest Telegram Bot
 
-A Telegram bot that delivers curated, 6-hourly news digests at 8 AM, 1 PM, 7 PM, and 12 AM (local time). It fetches the latest news across categories—Local (Bangladesh), Global, Tech, Sports, and Crypto—along with crypto market data, ensuring fresh updates without repetition.
+A Telegram bot that delivers curated, 6-hourly news digests at 8 AM, 1 PM, 7 PM, and 11 PM (local time). It fetches the latest news across categories—Local (Bangladesh), Global, Tech, Sports, and Crypto—along with crypto market data, ensuring fresh updates without repetition.
 
 ## Features
 - **Scheduled Updates**: Sends news digests at 8 AM, 1 PM, 7 PM, and 11 PM.
+- **User Subscriptions**: Users can subscribe to receive news at scheduled times in their local timezone.
 - **Category-Based News**: Covers Local (Bangladesh), Global, Tech, Sports, and Crypto news from reliable RSS feeds.
 - **Crypto Market Insights**: Includes market cap, volume, Fear/Greed Index, big-cap prices, and top movers.
 - **Smart Caching**: Caches crypto market data to reduce API calls and provide fallback data during API outages.
@@ -49,8 +50,52 @@ FINNHUB_API_KEY=your_finnhub_api_key
 python news.py
 ```
 
+## Deployment with PM2
+
+This bot can be deployed using PM2, a process manager for Node.js applications that can also manage Python processes.
+
+1. Install PM2 if you haven't already:
+```bash
+npm install -g pm2
+```
+
+2. Start the bot using the provided ecosystem file:
+```bash
+pm2 start ecosystem.config.json
+```
+
+3. Check status:
+```bash
+pm2 status
+```
+
+4. View logs:
+```bash
+pm2 logs news-digest-bot  # For the main bot
+pm2 logs news-digest-auto  # For the automatic scheduler
+```
+
+5. Set PM2 to start on system boot:
+```bash
+pm2 startup
+pm2 save
+```
+
 ## Usage
-The bot runs on a schedule (e.g., via a cron job) to send news digests at 8 AM, 1 PM, 7 PM, and 12 AM.
+The bot processes these commands:
+
+- `/start` - Initialize the bot and get a welcome message
+- `/news` - Get the full daily news digest
+- `/weather` - Get Dhaka weather
+- `/cryptostats` - Get AI summary of crypto market
+- `/coin` - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)
+- `/coinstats` - Get price, 24h change, and AI summary (e.g. /btcstats)
+- `/timezone <zone>` - Set your timezone for news digest times
+- `/subscribe` - Get news digests automatically at 8am, 1pm, 7pm, and 11pm in your local timezone
+- `/unsubscribe` - Stop receiving automatic news digests
+- `/status` - Check your subscription status and timezone
+- `/support` - Contact the developer for support
+- `/help` - Show this help message
 
 ### Testing
 To test the crypto data fetching functionality:

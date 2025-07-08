@@ -1,0 +1,30 @@
+{
+  "apps": [
+    {
+      "name": "news-digest-bot",
+      "script": "news.py",
+      "interpreter": "python3",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "200M",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "log_date_format": "YYYY-MM-DD HH:mm:ss"
+    },
+    {
+      "name": "news-digest-auto",
+      "script": "auto_news.py",
+      "interpreter": "python3",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "150M",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "log_date_format": "YYYY-MM-DD HH:mm:ss"
+    }
+  ]
+}
