@@ -1238,10 +1238,13 @@ def get_local_time_str(user_location=None, user_id=None):
         # Get the timezone abbreviation
         tz_abbr = common_tz_abbr.get(tz_str, local_now.strftime('%Z'))
         
-        # If the abbreviation is not helpful (sometimes it's just 'GMT+x')
-        if not tz_abbr or tz_abbr.startswith('GMT') or len(tz_abbr) > 4:
+        # If the abbreviation is not helpful (sometimes it's just 'GMT+x' or '+xx')
+        if not tz_abbr or tz_abbr.startswith('GMT') or len(tz_abbr) > 4 or tz_abbr.startswith('+'):
+            # Special case for Bangladesh (+06)
+            if offset_hr == 6 or tz_str == 'Asia/Dhaka' or tz_str == 'Etc/GMT-6':
+                tz_abbr = 'BDT'
             # Extract city from timezone string as fallback
-            if tz_str and '/' in tz_str:
+            elif tz_str and '/' in tz_str:
                 city = tz_str.split('/')[-1].replace('_', ' ')
                 tz_abbr = city[:3].upper()  # Use first 3 letters of city name
         
@@ -1959,11 +1962,22 @@ def handle_updates(updates):
                 send_telegram(reply, chat_id)
                 continue
         # /[coin] (e.g. /btc)
-        if text.startswith("/") and len(text) > 1 and text[1:].isalpha():
+        # Only consider as a coin command if it's a short command (typical coin symbols are 3-5 chars)
+        if text.startswith("/") and len(text) > 1 and len(text) <= 6 and text[1:].isalpha():
             symbol = text[1:]
             reply = get_coin_stats(symbol)
             send_telegram(reply, chat_id)
             continue
+            
+        # Default handler for non-command messages
+        if not text.startswith("/"):
+            # Send a friendly message directing the user to use commands
+            send_telegram("Hey! Please command only from this..\n\n" + get_help_text(), chat_id)
+            continue
+            
+        # Default handler for unrecognized commands
+        # This will catch any command starting with "/" that wasn't caught by the previous handlers
+        send_telegram("Unrecognized command. Please use one of these commands:\n\n" + get_help_text(), chat_id)
 def main():
     """
     Main entry point for the Telegram bot polling loop.

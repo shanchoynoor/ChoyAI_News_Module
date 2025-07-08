@@ -10,6 +10,7 @@ A Telegram bot that delivers curated, 6-hourly news digests at 8 AM, 1 PM, 7 PM,
 - **No Duplicates**: Tracks last fetch time to ensure only new news is sent.
 - **Efficient Fetching**: Uses asynchronous HTTP requests (`aiohttp`) for fast RSS feed processing.
 - **Telegram-Friendly**: Splits long messages to comply with Telegram's 4096-character limit.
+- **User-Friendly Responses**: Responds to non-command messages with a helpful guide to available commands.
 
 ## Requirements
 - Python 3.8+
