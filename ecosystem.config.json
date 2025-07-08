@@ -9,9 +9,13 @@
       "watch": false,
       "max_memory_restart": "200M",
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "PYTHONUNBUFFERED": "1"
       },
-      "log_date_format": "YYYY-MM-DD HH:mm:ss"
+      "log_date_format": "YYYY-MM-DD HH:mm:ss",
+      "error_file": "logs/news-bot-error.log",
+      "out_file": "logs/news-bot-out.log",
+      "merge_logs": true
     },
     {
       "name": "news-digest-auto",
@@ -22,9 +26,13 @@
       "watch": false,
       "max_memory_restart": "150M",
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "PYTHONUNBUFFERED": "1"
       },
-      "log_date_format": "YYYY-MM-DD HH:mm:ss"
+      "log_date_format": "YYYY-MM-DD HH:mm:ss",
+      "error_file": "logs/news-auto-error.log",
+      "out_file": "logs/news-auto-out.log",
+      "merge_logs": true
     }
   ]
 }

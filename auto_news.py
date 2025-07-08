@@ -3,17 +3,16 @@ import sys
 import time
 import logging
 from datetime import datetime, timedelta, timezone
-from news import build_news_digest, send_telegram, get_local_time_str
 from dotenv import load_dotenv
-from user_subscriptions import get_users_for_scheduled_times, update_last_sent, get_all_subscribed_users
+import traceback
 
-# Configure logging
+# Configure logging with rotation to avoid large log files
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("auto_news.log")
+        logging.FileHandler("auto_news.log", mode='a', maxBytes=10485760, backupCount=3)
     ]
 )
 logger = logging.getLogger("auto_news")
@@ -21,6 +20,22 @@ logger = logging.getLogger("auto_news")
 # Load environment variables
 load_dotenv()
 TELEGRAM_CHAT_ID = os.getenv("AUTO_NEWS_CHAT_ID")  # Legacy global chat ID (optional)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+# Check for required environment variables at startup
+if not TELEGRAM_TOKEN:
+    logger.critical("TELEGRAM_TOKEN environment variable is not set. Cannot continue.")
+    sys.exit(1)
+
+# Verify imports at startup to avoid runtime errors
+try:
+    from news import build_news_digest, send_telegram, get_local_time_str
+    from user_subscriptions import get_users_for_scheduled_times, update_last_sent, get_all_subscribed_users, init_db
+    logger.info("Successfully imported all required modules")
+except ImportError as e:
+    logger.critical(f"Failed to import required modules: {e}")
+    logger.critical(traceback.format_exc())
+    sys.exit(1)
 
 # Bangladesh is UTC+6
 def get_bd_now():
@@ -30,6 +45,8 @@ def should_send_news(now=None):
     """
     Check if the current time (BDT) matches one of the scheduled send times:
     8:00am, 1:00pm, 7:00pm, or 11:00pm.
+    
+    Returns True only during the first minute of each scheduled hour.
     """
     if now is None:
         now = get_bd_now()
@@ -38,7 +55,13 @@ def should_send_news(now=None):
     send_times = [(8, 0), (13, 0), (19, 0), (23, 0)]
     
     # Only trigger on the exact minute
-    return (now.hour, now.minute) in send_times
+    current_time = (now.hour, now.minute)
+    should_send = current_time in send_times
+    
+    if should_send:
+        logger.info(f"Scheduled time matched: {now.hour}:{now.minute}")
+    
+    return should_send
 
 def main():
     """
@@ -46,6 +69,15 @@ def main():
     to send news digests to subscribed users.
     """
     logger.info("Auto News service started")
+    logger.info(f"Current working directory: {os.getcwd()}")
+    
+    # Initialize user database
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        logger.error(traceback.format_exc())
     
     # Legacy global chat ID support
     if TELEGRAM_CHAT_ID:
@@ -78,33 +110,40 @@ def main():
                         logger.info("Successfully sent to legacy global chat ID")
                     except Exception as e:
                         logger.error(f"Error sending to legacy global chat ID: {e}")
+                        logger.error(traceback.format_exc())
                 
                 # Get users who should receive news at this hour in their local timezone
-                target_users = get_users_for_scheduled_times()
-                logger.info(f"Found {len(target_users)} subscribed users for current time")
-                
-                # Send to each user and update their last sent timestamp
-                for user_id in target_users:
-                    try:
-                        logger.info(f"Sending to user: {user_id}")
-                        
-                        # Get user's local time for the header
-                        user_time_str = get_local_time_str(user_id=user_id)
-                        
-                        # Build and send the digest
-                        build_news_digest(return_msg=False, chat_id=user_id)
-                        
-                        # Update the last sent timestamp
-                        update_last_sent(user_id)
-                        
-                        logger.info(f"Successfully sent to user {user_id}")
-                        
-                        # Small delay between sends to avoid rate limits
-                        time.sleep(1)
-                    except Exception as e:
-                        logger.error(f"Error sending to user {user_id}: {e}")
+                try:
+                    target_users = get_users_for_scheduled_times()
+                    logger.info(f"Found {len(target_users)} subscribed users for current time")
+                    
+                    # Send to each user and update their last sent timestamp
+                    for user_id in target_users:
+                        try:
+                            logger.info(f"Sending to user: {user_id}")
+                            
+                            # Get user's local time for the header
+                            user_time_str = get_local_time_str(user_id=user_id)
+                            
+                            # Build and send the digest
+                            build_news_digest(return_msg=False, chat_id=user_id)
+                            
+                            # Update the last sent timestamp
+                            update_last_sent(user_id)
+                            
+                            logger.info(f"Successfully sent to user {user_id}")
+                            
+                            # Small delay between sends to avoid rate limits
+                            time.sleep(1)
+                        except Exception as e:
+                            logger.error(f"Error sending to user {user_id}: {e}")
+                            logger.error(traceback.format_exc())
+                except Exception as e:
+                    logger.error(f"Error getting users for scheduled times: {e}")
+                    logger.error(traceback.format_exc())
                 
                 # Wait 60 seconds after sending to avoid duplicate sends
+                logger.info("Waiting 60 seconds to avoid duplicate sends")
                 time.sleep(60)
             
             # Sleep briefly before checking again
@@ -112,7 +151,13 @@ def main():
             
         except Exception as e:
             logger.error(f"Error in main loop: {e}")
+            logger.error(traceback.format_exc())
             time.sleep(30)  # Wait longer after an error
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.critical(f"Fatal error in auto_news.py: {e}")
+        logger.critical(traceback.format_exc())
+        sys.exit(1)
