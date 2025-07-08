@@ -3,9 +3,10 @@
 A Telegram bot that delivers curated, 6-hourly news digests at 8 AM, 1 PM, 7 PM, and 12 AM (local time). It fetches the latest news across categories—Local (Bangladesh), Global, Tech, Sports, and Crypto—along with crypto market data, ensuring fresh updates without repetition.
 
 ## Features
-- **Scheduled Updates**: Sends news digests at 8 AM, 1 PM, 7 PM, and 12 AM.
+- **Scheduled Updates**: Sends news digests at 8 AM, 1 PM, 7 PM, and 11 PM.
 - **Category-Based News**: Covers Local (Bangladesh), Global, Tech, Sports, and Crypto news from reliable RSS feeds.
 - **Crypto Market Insights**: Includes market cap, volume, Fear/Greed Index, big-cap prices, and top movers.
+- **Smart Caching**: Caches crypto market data to reduce API calls and provide fallback data during API outages.
 - **No Duplicates**: Tracks last fetch time to ensure only new news is sent.
 - **Efficient Fetching**: Uses asynchronous HTTP requests (`aiohttp`) for fast RSS feed processing.
 - **Telegram-Friendly**: Splits long messages to comply with Telegram's 4096-character limit.
@@ -50,6 +51,14 @@ python news.py
 ## Usage
 The bot runs on a schedule (e.g., via a cron job) to send news digests at 8 AM, 1 PM, 7 PM, and 12 AM.
 
+### Testing
+To test the crypto data fetching functionality:
+
+```bash
+python test_crypto_data.py
+```
+
+This script will test all crypto data fetching functions and verify that the caching mechanism is working properly.
 
 ### Each digest includes:
 - Local News: Top stories from Bangladesh (e.g., Prothom Alo, The Daily Star).

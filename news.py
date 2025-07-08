@@ -590,6 +590,7 @@ def fetch_top_movers():
 def fetch_crypto_market_data():
     """
     Fetch global cryptocurrency market data from CoinGecko and Fear & Greed Index.
+    Uses caching to reduce API calls and provide fallback data if API is unavailable.
     
     Returns:
         tuple: Contains the following elements:
@@ -604,12 +605,50 @@ def fetch_crypto_market_data():
             - volume_change (float): Raw volume change percentage
             - fear_greed (int): Raw Fear and Greed index value
     """
+    # Import crypto cache module
     try:
-        # Fetch global market data from CoinGecko
+        import crypto_cache
+        # Check if we have cached data
+        cached_data = crypto_cache.get_market_cache()
+        if cached_data:
+            logging.info("Using cached market data")
+            return cached_data
+    except ImportError:
+        logging.warning("crypto_cache module not found, proceeding without caching")
+    except Exception as e:
+        logging.error(f"Error accessing market cache: {e}")
+    
+    # Initialize with default values in case of failure
+    result = ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
+    
+    try:
+        # Fetch global market data from CoinGecko with retries
         url = "https://api.coingecko.com/api/v3/global"
-        resp = requests.get(url, timeout=10)
+        headers = {"Accept": "application/json", "User-Agent": "News Digest Bot/1.0"}
+        
+        # Try up to 3 times with increasing delays
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                resp = requests.get(url, headers=headers, timeout=15)
+                if resp.ok:
+                    break
+                elif resp.status_code == 429:  # Rate limit exceeded
+                    wait_time = min(2 ** retry, 8)  # Exponential backoff: 1, 2, 4, 8 seconds
+                    logging.warning(f"Rate limit hit, waiting {wait_time}s before retry {retry+1}/{max_retries}")
+                    time.sleep(wait_time)
+                else:
+                    logging.error(f"CoinGecko API error: {resp.status_code} - {resp.text[:100]}")
+                    if retry < max_retries - 1:
+                        time.sleep(1)
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Request error on attempt {retry+1}: {e}")
+                if retry < max_retries - 1:
+                    time.sleep(1)
+        
+        # If we couldn't get a successful response after all retries
         if not resp.ok:
-            logging.error(f"CoinGecko API error: {resp.status_code} - {resp.text}")
+            logging.error(f"Failed to fetch market data after {max_retries} attempts")
             raise Exception(f"CoinGecko API error: {resp.status_code}")
             
         # Extract relevant data points
@@ -627,17 +666,27 @@ def fetch_crypto_market_data():
         volume_yesterday = volume / (1 + market_change / 100)
         volume_change = ((volume - volume_yesterday) / volume_yesterday) * 100
         
-        # Fetch Fear & Greed Index
-        try:
-            fg_resp = requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)
-            fg_data = fg_resp.json().get("data", [{}])
-            fear_index = fg_data[0].get("value")
-            if not fear_index or not str(fear_index).isdigit():
-                logging.warning("Invalid Fear & Greed index value")
-                fear_index = "N/A"
-        except Exception as e:
-            logging.error(f"Error fetching Fear & Greed index: {e}")
-            fear_index = "N/A"
+        # Fetch Fear & Greed Index with retries
+        fear_index = "N/A"
+        for retry in range(max_retries):
+            try:
+                fg_resp = requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)
+                if fg_resp.ok:
+                    fg_data = fg_resp.json().get("data", [{}])
+                    fear_index = fg_data[0].get("value")
+                    if fear_index and str(fear_index).isdigit():
+                        break
+                    else:
+                        logging.warning("Invalid Fear & Greed index value")
+                        fear_index = "N/A"
+                else:
+                    logging.error(f"Fear & Greed API error: {fg_resp.status_code}")
+                    if retry < max_retries - 1:
+                        time.sleep(1)
+            except Exception as e:
+                logging.error(f"Error fetching Fear & Greed index (attempt {retry+1}): {e}")
+                if retry < max_retries - 1:
+                    time.sleep(1)
         
         # Format values for display
         market_cap_str = human_readable_number(market_cap) if market_cap else "N/A"
@@ -646,23 +695,88 @@ def fetch_crypto_market_data():
         volume_change_str = f"{volume_change:+.2f}%" if volume_change is not None else "N/A"
         fear_greed_str = str(fear_index)
         
-        return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, 
+        # Create the result tuple
+        result = (market_cap_str, market_cap_change_str, volume_str, volume_change_str, 
                 fear_greed_str, market_cap, market_change, volume, volume_change, 
                 int(fear_index) if fear_index != "N/A" else 0)
+        
+        # Cache the successful result
+        try:
+            import crypto_cache
+            crypto_cache.save_market_cache(result)
+            logging.info("Successfully cached market data")
+        except Exception as e:
+            logging.error(f"Error caching market data: {e}")
+        
+        return result
                 
     except Exception as e:
         logging.error(f"Failed to fetch crypto market data: {e}")
-        return ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
+        return result
 
 def fetch_big_cap_prices_data():
+    """
+    Fetch and format big cap crypto prices.
+    Uses caching to reduce API calls and provide fallback data if API is unavailable.
+    
+    Returns:
+        tuple: (formatted_message, comma_separated_string)
+    """
+    # Check for cached data first
+    try:
+        import crypto_cache
+        cached_data = crypto_cache.get_bigcap_cache()
+        if cached_data:
+            logging.info("Using cached big cap prices data")
+            return cached_data
+    except ImportError:
+        logging.warning("crypto_cache module not found, proceeding without caching")
+    except Exception as e:
+        logging.error(f"Error accessing big cap cache: {e}")
+    
+    # Default fallback result
+    default_result = ("*💎 Crypto Big Cap:*\nN/A\n\n", "N/A")
+    
     ids = "bitcoin,ethereum,ripple,binancecoin,solana,tron,dogecoin,cardano"
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {"vs_currency": "usd", "ids": ids}
-        resp = requests.get(url, params=params)
+        headers = {"Accept": "application/json", "User-Agent": "News Digest Bot/1.0"}
+        
+        # Try up to 3 times with increasing delays
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                resp = requests.get(url, params=params, headers=headers, timeout=15)
+                if resp.ok:
+                    break
+                elif resp.status_code == 429:  # Rate limit exceeded
+                    wait_time = min(2 ** retry, 8)  # Exponential backoff
+                    logging.warning(f"Rate limit hit, waiting {wait_time}s before retry {retry+1}/{max_retries}")
+                    time.sleep(wait_time)
+                else:
+                    logging.error(f"CoinGecko API error: {resp.status_code} - {resp.text[:100]}")
+                    if retry < max_retries - 1:
+                        time.sleep(1)
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Request error on attempt {retry+1}: {e}")
+                if retry < max_retries - 1:
+                    time.sleep(1)
+        
+        # If we couldn't get a successful response after all retries
+        if not resp.ok:
+            logging.error(f"Failed to fetch big cap prices after {max_retries} attempts")
+            return default_result
+            
         data = resp.json()
         if not isinstance(data, list):
-            raise Exception("Invalid CoinGecko response")
+            logging.error(f"Invalid CoinGecko response format: {type(data)}")
+            return default_result
+            
+        if len(data) == 0:
+            logging.error("Empty response from CoinGecko API")
+            return default_result
+            
         msg = "*💎 Crypto Big Cap:*\n"
         big_caps_list = []
         for c in data:
@@ -678,12 +792,25 @@ def fetch_big_cap_prices_data():
                 price_str = f"${price:.6f}"
             msg += f"{symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
             big_caps_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
-        return msg + "\n", ", ".join(big_caps_list)
-    except Exception:
-        return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
+        
+        result = (msg + "\n", ", ".join(big_caps_list))
+        
+        # Cache the successful result
+        try:
+            import crypto_cache
+            crypto_cache.save_bigcap_cache(result)
+            logging.info("Successfully cached big cap prices data")
+        except Exception as e:
+            logging.error(f"Error caching big cap prices data: {e}")
+            
+        return result
+    except Exception as e:
+        logging.error(f"Failed to fetch big cap prices: {e}")
+        return default_result
 
 def fetch_top_movers_data():
     """Fetch and format top crypto gainers and losers from top 500 coins by market cap.
+    Uses caching to reduce API calls and provide fallback data if API is unavailable.
     
     Returns:
         tuple: (formatted_message, gainers_string, losers_string)
@@ -691,63 +818,109 @@ def fetch_top_movers_data():
             - gainers_string: Comma-separated string of top gainers
             - losers_string: Comma-separated string of top losers
     """
+    # Default fallback values
+    default_result = ("*🔺 Crypto Top Movers:*\nData temporarily unavailable\n\n", "N/A", "N/A")
+    
+    # Check for cached data first
+    try:
+        import crypto_cache
+        cached_data = crypto_cache.get_movers_cache()
+        if cached_data:
+            logging.info("Using cached top movers data")
+            return cached_data
+    except ImportError:
+        logging.warning("crypto_cache module not found, proceeding without caching")
+    except Exception as e:
+        logging.error(f"Error accessing top movers cache: {e}")
+    
     try:
         # Fetch top 500 coins (2 pages, 250 per page)
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params1 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1}
         params2 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 2}
+        headers = {"Accept": "application/json", "User-Agent": "News Digest Bot/1.0"}
         
         # Add timeout to avoid hanging requests
-        timeout_seconds = 10
+        timeout_seconds = 15
         
-        # Get first page with error handling
-        try:
-            resp1 = requests.get(url, params=params1, timeout=timeout_seconds)
-            if not resp1.ok:
-                logging.error(f"CoinGecko API error (page 1): Status {resp1.status_code}, Response: {resp1.text[:100]}")
-                data1 = []
-            else:
-                data1 = resp1.json()
-                if not isinstance(data1, list):
-                    logging.error(f"CoinGecko API returned non-list for page 1: {type(data1)}")
-                    data1 = []
-        except Exception as e:
-            logging.error(f"Error fetching CoinGecko page 1: {e}")
-            data1 = []
+        # Get first page with improved error handling and retries
+        max_retries = 3
+        data1 = []
+        
+        for retry in range(max_retries):
+            try:
+                resp1 = requests.get(url, params=params1, headers=headers, timeout=timeout_seconds)
+                if resp1.ok:
+                    data1 = resp1.json()
+                    if not isinstance(data1, list):
+                        logging.error(f"CoinGecko API returned non-list for page 1: {type(data1)}")
+                        data1 = []
+                    else:
+                        break
+                elif resp1.status_code == 429:  # Rate limit exceeded
+                    wait_time = min(2 ** retry, 8)  # Exponential backoff
+                    logging.warning(f"Rate limit hit, waiting {wait_time}s before retry {retry+1}/{max_retries}")
+                    time.sleep(wait_time)
+                else:
+                    logging.error(f"CoinGecko API error (page 1): Status {resp1.status_code}, Response: {resp1.text[:100]}")
+                    if retry < max_retries - 1:
+                        time.sleep(1)
+            except Exception as e:
+                logging.error(f"Error fetching CoinGecko page 1 (attempt {retry+1}): {e}")
+                if retry < max_retries - 1:
+                    time.sleep(1)
+        
+        # If we couldn't get data from page 1, try to use cache or return default
+        if len(data1) == 0:
+            logging.error("Failed to fetch data for page 1 after multiple attempts")
+            return default_result
             
         # Short delay to avoid rate limiting
-        time.sleep(0.5)
+        time.sleep(1)
         
-        # Get second page with error handling
-        try:
-            resp2 = requests.get(url, params=params2, timeout=timeout_seconds)
-            if not resp2.ok:
-                logging.error(f"CoinGecko API error (page 2): Status {resp2.status_code}, Response: {resp2.text[:100]}")
-                data2 = []
-            else:
-                data2 = resp2.json()
-                if not isinstance(data2, list):
-                    logging.error(f"CoinGecko API returned non-list for page 2: {type(data2)}")
-                    data2 = []
-        except Exception as e:
-            logging.error(f"Error fetching CoinGecko page 2: {e}")
-            data2 = []
-            
+        # Get second page with improved error handling and retries
+        data2 = []
+        for retry in range(max_retries):
+            try:
+                resp2 = requests.get(url, params=params2, headers=headers, timeout=timeout_seconds)
+                if resp2.ok:
+                    data2 = resp2.json()
+                    if not isinstance(data2, list):
+                        logging.error(f"CoinGecko API returned non-list for page 2: {type(data2)}")
+                        data2 = []
+                    else:
+                        break
+                elif resp2.status_code == 429:  # Rate limit exceeded
+                    wait_time = min(2 ** retry, 8)  # Exponential backoff
+                    logging.warning(f"Rate limit hit, waiting {wait_time}s before retry {retry+1}/{max_retries}")
+                    time.sleep(wait_time)
+                else:
+                    logging.error(f"CoinGecko API error (page 2): Status {resp2.status_code}, Response: {resp2.text[:100]}")
+                    if retry < max_retries - 1:
+                        time.sleep(1)
+            except Exception as e:
+                logging.error(f"Error fetching CoinGecko page 2 (attempt {retry+1}): {e}")
+                if retry < max_retries - 1:
+                    time.sleep(1)
+        
         # Combine data from both pages
         data = data1 + data2
         
         # Check if we have enough data to show meaningful results
-        if not isinstance(data, list) or len(data) == 0:
+        # Even if page 2 failed, we can still proceed with page 1 data only
+        if len(data) == 0:
             logging.error("No valid data received from CoinGecko API for top movers")
-            return "*Top Movers:* Data unavailable\n\n", "N/A", "N/A"
+            return default_result
             
         logging.info(f"Successfully fetched {len(data)} coins for top movers analysis")
         
         # Filter out entries with missing price change data
         valid_data = [coin for coin in data if coin.get("price_change_percentage_24h") is not None]
-        if len(valid_data) < 10:  # Need at least 10 coins to show 5 gainers and 5 losers
+        
+        # Need at least 10 coins to show 5 gainers and 5 losers
+        if len(valid_data) < 10:
             logging.error(f"Not enough coins with valid price change data: {len(valid_data)}")
-            return "*Top Movers:* Insufficient data\n\n", "N/A", "N/A"
+            return default_result
             
         # Sort for gainers and losers
         gainers = sorted(valid_data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
@@ -786,11 +959,21 @@ def fetch_top_movers_data():
                 price_str = f"${price:.6f}"
             msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
             losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
+        
+        result = (msg + "\n", ", ".join(gainers_list), ", ".join(losers_list))
+        
+        # Cache the successful result
+        try:
+            import crypto_cache
+            crypto_cache.save_movers_cache(result)
+            logging.info("Successfully cached top movers data")
+        except Exception as e:
+            logging.error(f"Error caching top movers data: {e}")
             
-        return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
+        return result
     except Exception as e:
         logging.error(f"Unexpected error in fetch_top_movers_data: {e}")
-        return "*Top Movers:* Error fetching data\n\n", "N/A", "N/A"
+        return default_result
 
 # ===================== WEATHER =====================
 def get_dhaka_weather():
@@ -1703,9 +1886,9 @@ def handle_updates(updates):
             # Fetch top movers with better error handling
             try:
                 top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-                # Verify the top movers data is meaningful before adding it
-                if top_movers_msg.startswith("*Top Movers Error:*") or top_movers_msg.startswith("*Top Movers:* Data unavailable"):
-                    logging.warning("Top movers data unavailable, adding placeholder message")
+                # If top movers data is unavailable, use a more user-friendly message
+                if "Data temporarily unavailable" in top_movers_msg or "Error fetching data" in top_movers_msg:
+                    logging.warning("Top movers data unavailable, using improved placeholder message")
                     top_movers_msg = "*🔺 Crypto Top Movers:*\nData temporarily unavailable\n\n"
                     gainers_str = "Data unavailable"
                     losers_str = "Data unavailable"
