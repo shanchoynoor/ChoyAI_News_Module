@@ -1187,63 +1187,74 @@ def parse_timezone_input(tz_input):
     return None
 
 def get_local_time_str(user_location=None, user_id=None):
-    """Return current time string in user's local timezone (e.g. Jul 7, 2025 8:38PM (+6 Dhaka))."""
+    """Return current time string in user's local timezone (e.g. Jul 7, 2025 8:38PM BST (UTC +1)).
+    
+    Args:
+        user_location (dict, optional): Dictionary containing latitude and longitude.
+        user_id (int, optional): User ID to look up timezone preference.
+        
+    Returns:
+        str: Formatted time string with timezone abbreviation and UTC offset.
+    """
     try:
         tz_str = None
         if user_id:
             tz_str = get_user_timezone(user_id)
-        city_label = None
-        if tz_str:
-            local_tz = pytz_timezone(tz_str)
-        elif user_location and isinstance(user_location, dict):
-            lat = user_location.get('latitude')
-            lon = user_location.get('longitude')
-            if lat is not None and lon is not None:
-                tf = TimezoneFinder()
-                tz_str = tf.timezone_at(lng=lon, lat=lat)
-                if tz_str:
-                    local_tz = pytz_timezone(tz_str)
-                else:
-                    local_tz = pytz_timezone('Asia/Dhaka')
-            else:
-                local_tz = pytz_timezone('Asia/Dhaka')
-        else:
-            local_tz = pytz_timezone('Asia/Dhaka')
-        now = datetime.now(local_tz)
+        
+        # Default to Dhaka if no timezone specified
+        if not tz_str:
+            tz_str = 'Asia/Dhaka'
+            
+        # Get the timezone object
+        local_tz = pytz_timezone(tz_str)
+        
+        # Get current time in UTC and convert to the local timezone
+        utc_now = datetime.utcnow()
+        utc_now = pytz_timezone('UTC').localize(utc_now)
+        local_now = utc_now.astimezone(local_tz)
+        
         # Format: Jul 7, 2025 8:38PM
-        date_str = now.strftime("%b %-d, %Y %-I:%M%p")
+        date_str = local_now.strftime("%b %-d, %Y %-I:%M%p")
+        
         # Get UTC offset in hours
-        offset_sec = local_tz.utcoffset(now).total_seconds()
-        offset_hr = int(offset_sec // 3600)
-        # Try to get a friendly city label
-        tz_to_city = {
-            'Asia/Dhaka': 'Dhaka',
-            'Asia/Kolkata': 'Kolkata',
-            'Europe/Berlin': 'Berlin',
-            'America/New_York': 'New York',
-            'America/Los_Angeles': 'Los Angeles',
-            'Europe/London': 'London',
-            'Europe/Paris': 'Paris',
-            'Asia/Tokyo': 'Tokyo',
-            'Asia/Singapore': 'Singapore',
-            'Australia/Sydney': 'Sydney',
+        offset_hr = int(local_now.utcoffset().total_seconds() // 3600)
+        
+        # Common timezone abbreviations
+        common_tz_abbr = {
+            'Asia/Dhaka': 'BDT',
+            'Europe/London': 'BST', 
+            'Europe/Paris': 'CEST',
+            'America/New_York': 'EDT',
+            'America/Chicago': 'CDT',
+            'America/Denver': 'MDT',
+            'America/Los_Angeles': 'PDT',
+            'Asia/Kolkata': 'IST',
+            'Asia/Tokyo': 'JST',
+            'Asia/Singapore': 'SGT',
+            'Australia/Sydney': 'AEST',
             'UTC': 'UTC',
         }
-        city_label = tz_to_city.get(tz_str, None)
-        # If not found, try to extract city from tz_str
-        if not city_label and tz_str:
-            parts = tz_str.split('/')
-            if len(parts) > 1:
-                city_label = parts[-1].replace('_', ' ')
-        # Format offset with sign
-        offset_str = f"{offset_hr:+d}"
-        # Compose final string
-        if city_label:
-            return f"{date_str} ({offset_str} {city_label})"
+        
+        # Get the timezone abbreviation
+        tz_abbr = common_tz_abbr.get(tz_str, local_now.strftime('%Z'))
+        
+        # If the abbreviation is not helpful (sometimes it's just 'GMT+x')
+        if not tz_abbr or tz_abbr.startswith('GMT') or len(tz_abbr) > 4:
+            # Extract city from timezone string as fallback
+            if tz_str and '/' in tz_str:
+                city = tz_str.split('/')[-1].replace('_', ' ')
+                tz_abbr = city[:3].upper()  # Use first 3 letters of city name
+        
+        # Format the final timestamp
+        if tz_abbr:
+            return f"{date_str} {tz_abbr} (UTC {offset_hr:+d})"
         else:
-            return f"{date_str} ({offset_str})"
-    except Exception:
-        return datetime.now().strftime("%b %-d, %Y %-I:%M%p (%Z)")
+            return f"{date_str} (UTC {offset_hr:+d})"
+            
+    except Exception as e:
+        logging.error(f"Error formatting local time: {e}")
+        # Fallback to a simple format
+        return datetime.now().strftime("%b %-d, %Y %-I:%M%p")
 
 def get_bd_now():
     return datetime.now(timezone.utc) + timedelta(hours=6)
@@ -1714,7 +1725,7 @@ def get_help_text():
         "/cryptostats - Get AI summary of crypto market\n"
         "/coin - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
         "/coinstats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
-        "/timezone <zone> - Set your timezone (e.g. /timezone +6, /timezone dhaka, /timezone Europe/Berlin)\n"
+        "/timezone <zone> - Set your timezone for news digest times (e.g. /timezone +6, /timezone dhaka, /timezone Europe/Berlin). Shows time in format: Jul 8, 2025 9:52AM BST (UTC +6)\n"
         "/support - Contact the developer for support\n"
         "/help - Show this help message\n"
     )
@@ -1784,12 +1795,12 @@ def handle_updates(updates):
         if text.startswith("/timezone"):
             args = message.get("text", "").split(maxsplit=1)
             if len(args) < 2:
-                send_telegram("Please provide a timezone. Example: /timezone +6 or /timezone dhaka or /timezone Europe/Berlin", chat_id)
+                send_telegram("Please provide a timezone. Example: /timezone +6 or /timezone dhaka or /timezone Europe/Berlin. Times will be shown in format: Jul 8, 2025 9:52AM BST (UTC +6)", chat_id)
                 continue
             tz_input = args[1].strip()
             tz_str = parse_timezone_input(tz_input)
             if not tz_str:
-                send_telegram("Invalid timezone. Please use a valid UTC offset, city, or timezone name. Example: /timezone +6 or /timezone dhaka or /timezone Europe/Berlin", chat_id)
+                send_telegram("Invalid timezone. Please use a valid UTC offset, city, or timezone name. Example: /timezone +6 or /timezone dhaka or /timezone Europe/Berlin. Times will be shown in format: Jul 8, 2025 9:52AM BST (UTC +6)", chat_id)
                 continue
             set_user_timezone(user_id, tz_str)
             send_telegram(f"Timezone set to {tz_str}. All news digests will now show your local time.", chat_id)
