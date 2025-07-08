@@ -1,59 +1,111 @@
+"""
+News Digest Bot - A Telegram bot that provides daily news, cryptocurrency market data, and weather information.
+
+This module provides functionality to fetch, format, and send daily news digests to Telegram users.
+It includes features for tracking cryptocurrency prices, providing AI-based market analysis, and 
+serving personalized news based on user preferences and timezone.
+
+Author: Shanchoy
+"""
+
+# Standard library imports
 import os
 import re
 import json
 import time
+import threading
+import logging
+import sqlite3
+from datetime import datetime, timezone, timedelta
+
+# Third-party imports
 import requests
 import feedparser
-from datetime import datetime, timezone
 from pytz import timezone as pytz_timezone
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from user_logging import init_db, log_user_interaction
-import threading
-import logging
 from timezonefinder import TimezoneFinder
-import sqlite3
 
+# Local imports
+from user_logging import init_db, log_user_interaction
+
+# Configure logging
 logging.basicConfig(level=logging.WARNING)
 
-# File to persist sent news links
+# Constants
 SENT_NEWS_FILE = "sent_news.json"
 
 # ===================== SENT NEWS PERSISTENCE =====================
 def load_sent_news():
-    """Load sent news links from file."""
+    """
+    Load previously sent news links from file to avoid duplicates.
+    
+    Returns:
+        set: A set of URLs that have already been sent to users
+    """
     if not os.path.exists(SENT_NEWS_FILE):
         return set()
     try:
         with open(SENT_NEWS_FILE, "r") as f:
             return set(json.load(f))
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Failed to load sent news: {e}")
         return set()
 
 def save_sent_news(sent_links):
-    """Save sent news links to file."""
+    """
+    Save the set of sent news links to file for persistence.
+    
+    Args:
+        sent_links (set): Set of URLs that have been sent to users
+    """
     try:
         with open(SENT_NEWS_FILE, "w") as f:
             json.dump(list(sent_links), f)
     except Exception as e:
-        print("Failed to save sent news:", e)
+        logging.error(f"Failed to save sent news: {e}")
 
 # ===================== MARKDOWN ESCAPE =====================
 def escape_markdown_v2(text):
-    """Escapes special characters for Telegram MarkdownV2."""
+    """
+    Escapes special characters for Telegram MarkdownV2 format.
+    
+    Args:
+        text (str): The text to escape
+        
+    Returns:
+        str: Escaped text safe for Telegram MarkdownV2 formatting
+    """
     if not text:
         return ""
     escape_chars = r'_\*\[\]()~`>#+=|{}.!-'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 # ===================== ENVIRONMENT VARIABLES =====================
+# Load environment variables from .env file
 load_dotenv()
+
+# API Keys
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 FINNHUB_API = os.getenv("FINNHUB_API_KEY")
 
 # ===================== UTILITIES =====================
 def human_readable_number(num):
-    """Format large numbers with suffixes (K, M, B, T)."""
+    """
+    Format large numbers with currency suffixes for better readability.
+    
+    Args:
+        num (float): The number to format
+        
+    Returns:
+        str: Formatted string with appropriate suffix (K, M, B, T)
+    
+    Examples:
+        >>> human_readable_number(1500)
+        '$1.50K'
+        >>> human_readable_number(1500000)
+        '$1.50M'
+    """
     abs_num = abs(num)
     if abs_num >= 1_000_000_000_000:
         return f"${num / 1_000_000_000_000:.2f}T"
@@ -67,7 +119,16 @@ def human_readable_number(num):
         return f"${num:.2f}"
 
 def send_telegram(msg, chat_id):
-    """Send a message to a Telegram chat."""
+    """
+    Send a message to a Telegram chat using the Telegram Bot API.
+    
+    Args:
+        msg (str): The message text to send (supports Markdown formatting)
+        chat_id (int): The Telegram chat ID to send the message to
+        
+    Returns:
+        bool: True if message was sent successfully, False otherwise
+    """
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {
         "chat_id": chat_id,
@@ -77,28 +138,47 @@ def send_telegram(msg, chat_id):
     }
     r = requests.post(url, data=data)
     if not r.ok:
-        print("Telegram send failed:", r.text)
+        logging.error(f"Telegram send failed: {r.text}")
     return r.ok
 
 def get_hours_ago(published):
-    """Returns a string like 'Xhr ago' or 'Yd ago' for any valid date in the past."""
+    """
+    Convert a publication timestamp to a human-readable time difference string.
+    
+    Args:
+        published (time.struct_time or tuple): Publication timestamp 
+        
+    Returns:
+        str: A string like '2hr ago' or '3d ago', or None if invalid
+        
+    Examples:
+        >>> get_hours_ago(time.struct_time([2025, 7, 7, 10, 0, 0, 0, 0, 0]))
+        '24hr ago'  # if current time is July 8, 2025 10:00
+    """
     try:
         if not published:
             return None
-        # Accept time.struct_time or tuple
+            
+        # Convert input to datetime object
         if isinstance(published, time.struct_time):
             dt = datetime(*published[:6], tzinfo=timezone.utc)
         elif isinstance(published, tuple):
             dt = datetime(*published[:6], tzinfo=timezone.utc)
         else:
             return None
+            
+        # Calculate time difference
         now = datetime.now(timezone.utc)
         delta = now - dt
-        # If published in the future or less than 1 minute ago, skip
+        
+        # Skip invalid or very recent timestamps
         if delta.total_seconds() < 60 or delta.total_seconds() < 0:
             return None
+            
+        # Format the time difference
         hours = int(delta.total_seconds() // 3600)
         days = int(hours // 24)
+        
         if days > 0:
             return f"{days}d ago"
         elif hours > 0:
@@ -106,7 +186,8 @@ def get_hours_ago(published):
         else:
             minutes = int((delta.total_seconds() % 3600) // 60)
             return f"{minutes}min ago"
-    except Exception:
+    except Exception as e:
+        logging.debug(f"Error calculating time difference: {e}")
         return None
 
 # ===================== RSS FETCHING =====================
@@ -230,7 +311,24 @@ def format_news(title, entries, bangla=False):
 
 # ===================== DEEPSEEK AI SUMMARY =====================
 def get_crypto_summary_with_deepseek(market_cap, market_cap_change, volume, volume_change, fear_greed, big_caps, gainers, losers, api_key):
-    """Get crypto summary from DeepSeek AI."""
+    """
+    Generate a market summary and prediction using the DeepSeek AI API.
+    
+    Args:
+        market_cap (str): Total market capitalization
+        market_cap_change (str): Market cap 24h change percentage
+        volume (str): 24h trading volume
+        volume_change (str): Volume 24h change percentage
+        fear_greed (str): Fear and Greed index value
+        big_caps (str): Summary of big cap cryptocurrencies
+        gainers (str): Top gaining cryptocurrencies
+        losers (str): Top losing cryptocurrencies
+        api_key (str): DeepSeek API key
+        
+    Returns:
+        str: AI-generated market summary with prediction
+    """
+    # Construct prompt with market data
     prompt = (
         "Here is the latest crypto market data:\n"
         f"- Market Cap: {market_cap} ({market_cap_change})\n"
@@ -239,8 +337,11 @@ def get_crypto_summary_with_deepseek(market_cap, market_cap_change, volume, volu
         f"- Big Cap Crypto: {big_caps}\n"
         f"- Top Gainers: {gainers}\n"
         f"- Top Losers: {losers}\n\n"
-        "Write a short summary paragraph about the current crypto market status and predict if the market will be bullish or bearish tomorrow. Also, provide your confidence as a percentage (e.g., 75%) in your prediction. Be concise and insightful."
+        "Write a short summary paragraph about the current crypto market status and predict if the market will be bullish or bearish tomorrow. "
+        "Also, provide your confidence as a percentage (e.g., 75%) in your prediction. Be concise and insightful."
     )
+    
+    # API request setup
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {
@@ -249,8 +350,25 @@ def get_crypto_summary_with_deepseek(market_cap, market_cap_change, volume, volu
         "max_tokens": 120,
         "temperature": 0.7
     }
-    response = requests.post(url, headers=headers, json=payload)
-    return response.json()["choices"][0]["message"]["content"].strip()
+    
+    # Make API request with error handling
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
+        response.raise_for_status()  # Raise an error for bad status codes
+        return response.json()["choices"][0]["message"]["content"].strip()
+    except requests.exceptions.Timeout:
+        logging.error("DeepSeek API request timed out")
+        return "AI summary not available due to API timeout."
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"DeepSeek API HTTP error: {e}")
+        return f"AI summary not available due to API error: {e}"
+    except Exception as e:
+        logging.error(f"Error in DeepSeek API call: {str(e)}")
+        try:
+            logging.error(f"Response content: {response.text}")
+        except:
+            pass
+        return "AI summary not available due to API error."
 
 # ===================== NEWS CATEGORIES =====================
 def get_local_news():
@@ -508,37 +626,69 @@ def fetch_top_movers():
 
 def fetch_crypto_market_data():
     """
-    Returns a tuple: (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_greed)
+    Fetch global cryptocurrency market data from CoinGecko and Fear & Greed Index.
+    
+    Returns:
+        tuple: Contains the following elements:
+            - market_cap_str (str): Formatted market cap with currency symbol
+            - market_cap_change_str (str): 24h market cap change percentage
+            - volume_str (str): Formatted 24h trading volume with currency symbol
+            - volume_change_str (str): 24h volume change percentage
+            - fear_greed_str (str): Fear and Greed index value (0-100)
+            - market_cap (float): Raw market cap value
+            - market_change (float): Raw market cap change percentage
+            - volume (float): Raw trading volume value
+            - volume_change (float): Raw volume change percentage
+            - fear_greed (int): Raw Fear and Greed index value
     """
     try:
+        # Fetch global market data from CoinGecko
         url = "https://api.coingecko.com/api/v3/global"
-        resp = requests.get(url)
+        resp = requests.get(url, timeout=10)
         if not resp.ok:
-            raise Exception("CoinGecko API error")
+            logging.error(f"CoinGecko API error: {resp.status_code} - {resp.text}")
+            raise Exception(f"CoinGecko API error: {resp.status_code}")
+            
+        # Extract relevant data points
         data = resp.json().get("data", {})
         market_cap = data.get("total_market_cap", {}).get("usd")
         volume = data.get("total_volume", {}).get("usd")
         market_change = data.get("market_cap_change_percentage_24h_usd")
+        
         if None in (market_cap, volume, market_change):
+            logging.error("Missing market data from CoinGecko response")
             raise Exception("Missing market data")
+            
+        # Calculate volume change using market cap change as reference
+        # (volume yesterday = today's volume / (1 + market_change/100))
         volume_yesterday = volume / (1 + market_change / 100)
         volume_change = ((volume - volume_yesterday) / volume_yesterday) * 100
-        # Fear/Greed index
+        
+        # Fetch Fear & Greed Index
         try:
-            fg_resp = requests.get("https://api.alternative.me/fng/?limit=1")
+            fg_resp = requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)
             fg_data = fg_resp.json().get("data", [{}])
             fear_index = fg_data[0].get("value")
             if not fear_index or not str(fear_index).isdigit():
+                logging.warning("Invalid Fear & Greed index value")
                 fear_index = "N/A"
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error fetching Fear & Greed index: {e}")
             fear_index = "N/A"
+        
+        # Format values for display
         market_cap_str = human_readable_number(market_cap) if market_cap else "N/A"
         market_cap_change_str = f"{market_change:+.2f}%" if market_change is not None else "N/A"
         volume_str = human_readable_number(volume) if volume else "N/A"
         volume_change_str = f"{volume_change:+.2f}%" if volume_change is not None else "N/A"
         fear_greed_str = str(fear_index)
-        return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, market_cap, market_change, volume, volume_change, fear_index)
-    except Exception:
+        
+        return (market_cap_str, market_cap_change_str, volume_str, volume_change_str, 
+                fear_greed_str, market_cap, market_change, volume, volume_change, 
+                int(fear_index) if fear_index != "N/A" else 0)
+                
+    except Exception as e:
+        logging.error(f"Failed to fetch crypto market data: {e}")
         return ("N/A", "N/A", "N/A", "N/A", "N/A", 0, 0, 0, 0, 0)
 
 def fetch_big_cap_prices_data():
@@ -748,30 +898,57 @@ def get_coin_id_from_symbol(symbol):
 
 # ===================== USER TIMEZONE STORAGE =====================
 USER_TZ_DB = "user_timezones.db"
+
 def set_user_timezone(user_id, tz_str):
+    """
+    Store a user's preferred timezone in the database.
+    
+    Args:
+        user_id (int): Telegram user ID
+        tz_str (str): Timezone string (e.g., 'Asia/Dhaka', 'Europe/London')
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
     try:
         conn = sqlite3.connect(USER_TZ_DB)
         c = conn.cursor()
+        # Create table if it doesn't exist
         c.execute("CREATE TABLE IF NOT EXISTS user_timezones (user_id INTEGER PRIMARY KEY, tz TEXT)")
+        # Insert or update user's timezone
         c.execute("INSERT OR REPLACE INTO user_timezones (user_id, tz) VALUES (?, ?)", (user_id, tz_str))
         conn.commit()
         conn.close()
+        return True
     except Exception as e:
-        print("Failed to set user timezone:", e)
+        logging.error(f"Failed to set user timezone: {e}")
+        return False
 
 def get_user_timezone(user_id):
+    """
+    Retrieve a user's preferred timezone from the database.
+    
+    Args:
+        user_id (int): Telegram user ID
+        
+    Returns:
+        str: Timezone string if found, None otherwise
+    """
     try:
         conn = sqlite3.connect(USER_TZ_DB)
         c = conn.cursor()
+        # Create table if it doesn't exist
         c.execute("CREATE TABLE IF NOT EXISTS user_timezones (user_id INTEGER PRIMARY KEY, tz TEXT)")
+        # Query user's timezone
         c.execute("SELECT tz FROM user_timezones WHERE user_id = ?", (user_id,))
         row = c.fetchone()
         conn.close()
+        
         if row:
             return row[0]
         return None
     except Exception as e:
-        print("Failed to get user timezone:", e)
+        logging.error(f"Failed to get user timezone: {e}")
         return None
 
 # ===================== TIME =====================
@@ -863,68 +1040,180 @@ def get_local_time_str(user_location=None, user_id=None):
     except Exception:
         return datetime.now().strftime("%b %-d, %Y %-I:%M%p (%Z)")
 
+def get_bd_now():
+    return datetime.now(timezone.utc) + timedelta(hours=6)
+
+def get_bd_time_str(dt=None):
+    """Return BD time as 'Jul 8, 2025 1:24AM (+6 Dhaka)'."""
+    if dt is None:
+        dt = get_bd_now()
+    date_str = dt.strftime("%b %-d, %Y %-I:%M%p")
+    offset_hr = 6  # For Bangladesh
+    return f"{date_str} (+{offset_hr} Dhaka)"
+
 # ===================== MAIN ENTRY =====================
 def build_news_digest(return_msg=False, chat_id=None):
-    """Main entry point: builds and prints or sends the news digest."""
+    """
+    Main entry point: builds and sends the comprehensive news digest.
+    
+    This function fetches and formats news from various sources and categories,
+    adds cryptocurrency market data, and either returns the formatted message
+    or sends it via Telegram.
+    
+    Args:
+        return_msg (bool): If True, return the message as string instead of sending
+        chat_id (int, optional): Telegram chat ID to send the digest to
+        
+    Returns:
+        str: The formatted digest message if return_msg is True
+    """
+    # Initialize user logging database
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Use Bangladesh time for timestamp
+    now = get_bd_time_str()
+    
+    # Create digest header
     msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+    
+    # Add news from different categories
     msg += get_local_news()
     msg += get_global_news()
     msg += get_tech_news()
     msg += get_sports_news()
     msg += get_crypto_news()
+    
+    # Add cryptocurrency market data
     msg += fetch_crypto_market()
     msg += fetch_big_cap_prices()
     msg += fetch_top_movers()
 
+    # Return or send the digest
     if return_msg:
         return msg
-    # Default: send to Telegram (for legacy usage)
+        
     if chat_id is not None:
         send_telegram(msg, chat_id)
     else:
+        logging.warning("No chat_id provided for sending news digest.")
         print("No chat_id provided for sending news digest.")
 
 def main(return_msg=False, chat_id=None):
-    """Main entry point: builds and prints or sends the news digest."""
+    """
+    Legacy main entry point: builds and prints or sends the news digest.
+    
+    This function is maintained for backward compatibility.
+    For new code, use build_news_digest() instead.
+    
+    Args:
+        return_msg (bool): If True, return the message as string instead of sending
+        chat_id (int, optional): Telegram chat ID to send the digest to
+        
+    Returns:
+        str: The formatted digest message if return_msg is True
+    """
     init_db()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     msg = f"*DAILY NEWS DIGEST*\n_{now}_\n\n"
+    
+    # Fetch all news categories
     msg += get_local_news()
     msg += get_global_news()
     msg += get_tech_news()
     msg += get_sports_news()
     msg += get_crypto_news()
+    
+    # Add crypto market data
     msg += fetch_crypto_market()
     msg += fetch_big_cap_prices()
     msg += fetch_top_movers()
 
     if return_msg:
         return msg
-    # Default: send to Telegram (for legacy usage)
+        
+    # Send via Telegram if chat_id is provided
     if chat_id is not None:
         send_telegram(msg, chat_id)
     else:
-        print("No chat_id provided for sending news digest.")
+        logging.warning("No chat_id provided for sending news digest.")
+        print(msg)  # Fallback to console output
 
 def get_crypto_ai_summary():
-    """Return only the AI crypto market summary (for /cryptostats)."""
-    market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, _, _, _, _, _ = fetch_crypto_market_data()
-    big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
-    top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-    DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-    if not DEEPSEEK_API:
-        return "AI summary not available."
-    if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str]):
-        return "AI summary not available."
-    ai_summary = get_crypto_summary_with_deepseek(
-        market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
-    )
-    ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
-    if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
-        ai_summary_clean = ai_summary_clean.rstrip() + '.'
-    return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n"
+    """
+    Get AI-generated cryptocurrency market summary for the /cryptostats command.
+    
+    This function fetches market data, processes it with DeepSeek AI API,
+    and formats the response with prediction information.
+    
+    Returns:
+        str: Formatted AI market summary with prediction line, or error message
+    """
+    try:
+        # Fetch all necessary market data
+        market_cap_str, market_cap_change_str, volume_str, volume_change_str, fear_greed_str, _, _, _, _, _ = fetch_crypto_market_data()
+        big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
+        top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+        
+        # Check if API key is available
+        DEEPSEEK_API = os.getenv("DEEPSEEK_API")
+        if not DEEPSEEK_API:
+            return "AI summary not available: DeepSeek API key is missing."
+        
+        # Validate data completeness
+        if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, 
+                                   fear_greed_str, big_caps_str, gainers_str, losers_str]):
+            # Identify which data points are missing
+            missing_data = [k for k, v in {
+                "Market Cap": market_cap_str,
+                "Market Change": market_cap_change_str,
+                "Volume": volume_str,
+                "Volume Change": volume_change_str,
+                "Fear/Greed": fear_greed_str,
+                "Big Caps": big_caps_str,
+                "Gainers": gainers_str,
+                "Losers": losers_str
+            }.items() if v == "N/A"]
+            return f"AI summary not available: Missing data for {', '.join(missing_data)}."
+        
+        # Get AI summary from DeepSeek
+        ai_summary = get_crypto_summary_with_deepseek(
+            market_cap_str, market_cap_change_str, volume_str, volume_change_str, 
+            fear_greed_str, big_caps_str, gainers_str, losers_str, DEEPSEEK_API
+        )
+        
+        # Handle error responses from AI service
+        if ai_summary.startswith("AI summary not available"):
+            return ai_summary
+        
+        # Clean and format the summary text
+        ai_summary_clean = re.sub(r'^\s*prediction:.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
+        if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
+            ai_summary_clean = ai_summary_clean.rstrip() + '.'
+        
+        # Extract confidence percentage from AI response
+        summary_lower = ai_summary.lower()
+        accuracy_match = re.search(r'(\d{2,3})\s*%\s*(?:confidence|accuracy|probability)?', ai_summary)
+        try:
+            accuracy = int(accuracy_match.group(1)) if accuracy_match else 80
+        except Exception:
+            accuracy = 80
+        
+        # Generate appropriate prediction line based on analysis
+        if accuracy <= 60:
+            prediction_line = "\nPrediction (Next 24h): CONSOLIDATION 🤔"
+        elif "bullish" in summary_lower and accuracy > 60:
+            prediction_line = f"\nPrediction (Next 24h): BULLISH 🟢 ({accuracy}% probability)"
+        elif "bearish" in summary_lower and accuracy > 60:
+            prediction_line = f"\nPrediction (Next 24h): BEARISH 🔴 ({accuracy}% probability)"
+        else:
+            prediction_line = "\nPrediction (Next 24h): CONSOLIDATION! 🤔"
+        
+        # Return formatted summary with prediction
+        return f"*🤖 AI Market Summary:*\n{ai_summary_clean}\n{prediction_line}"
+    
+    except Exception as e:
+        logging.error(f"Error in get_crypto_ai_summary: {str(e)}")
+        return f"AI summary not available: {str(e)}"
 
 def get_coin_stats(symbol):
     """Return price and 24h % change for a given coin symbol (e.g. BTC, ETH)."""
@@ -1074,35 +1363,88 @@ def get_coin_stats_ai(symbol):
         return f"Error fetching data for '{symbol.upper()}'."
 
 def clean_ai_summary(summary):
+    """
+    Clean and sanitize AI-generated summary text.
+    
+    Removes HTML tags and other unwanted formatting from AI summaries.
+    
+    Args:
+        summary (str): The raw AI-generated summary text
+        
+    Returns:
+        str: Cleaned summary text
+    """
     # Remove HTML tags
     summary = re.sub(r'<[^>]+>', '', summary)
+    
+    # Normalize whitespace
+    summary = re.sub(r'\s+', ' ', summary).strip()
+    
     return summary
 
 def format_ai_prediction(summary):
-    # Find prediction line and probability
-    match = re.search(r'Prediction For Tomorrow: (.+?) \((\d{2,3})% (confidence|probability)\)', summary, re.IGNORECASE)
+    """
+    Standardize prediction format in AI-generated summaries.
+    
+    This function finds prediction lines in the AI summary and standardizes them
+    to the format "Prediction (Next 24h): TREND (XX% Probability)".
+    It handles both the new format and legacy format for backward compatibility.
+    
+    Args:
+        summary (str): The AI-generated summary text
+        
+    Returns:
+        str: Summary with standardized prediction formatting
+    """
+    # Check for current format: "Prediction (Next 24h): TREND (XX% confidence/probability)"
+    match = re.search(r'Prediction \(Next 24h\): (.+?) \((\d{2,3})% (confidence|probability)\)', summary, re.IGNORECASE)
     if match:
         trend = match.group(1).strip().upper()
         percent = int(match.group(2))
+        
+        # Determine if we should show the trend or default to CONSOLIDATION
         if percent > 60 and ("BULLISH" in trend or "BEARISH" in trend):
-            new_line = f"Prediction For Tomorrow: {trend} ({percent}% Probability)"
+            new_line = f"Prediction (Next 24h): {trend} ({percent}% Probability)"
         else:
-            new_line = "Prediction For Tomorrow: CONSOLIDATION"
-        summary = re.sub(r'Prediction For Tomorrow: .+?\(\d{2,3}% (confidence|probability)\)', new_line, summary, flags=re.IGNORECASE)
+            new_line = "Prediction (Next 24h): CONSOLIDATION"
+            
+        # Replace the prediction line with standardized format
+        summary = re.sub(r'Prediction \(Next 24h\): .+?\(\d{2,3}% (confidence|probability)\)', 
+                         new_line, summary, flags=re.IGNORECASE)
     else:
-        # If not matching, just replace 'confidence' with 'Probability' if present
-        summary = re.sub(r'(\d{2,3})% confidence', r'\1% Probability', summary, flags=re.IGNORECASE)
+        # Legacy format support: "Prediction For Tomorrow: TREND (XX% confidence/probability)"
+        match = re.search(r'Prediction For Tomorrow: (.+?) \((\d{2,3})% (confidence|probability)\)', 
+                          summary, re.IGNORECASE)
+        if match:
+            trend = match.group(1).strip().upper()
+            percent = int(match.group(2))
+            
+            # Determine if we should show the trend or default to CONSOLIDATION
+            if percent > 60 and ("BULLISH" in trend or "BEARISH" in trend):
+                new_line = f"Prediction (Next 24h): {trend} ({percent}% Probability)"
+            else:
+                new_line = "Prediction (Next 24h): CONSOLIDATION"
+                
+            # Replace the legacy format with the new standardized format
+            summary = re.sub(r'Prediction For Tomorrow: .+?\(\d{2,3}% (confidence|probability)\)', 
+                             new_line, summary, flags=re.IGNORECASE)
+        else:
+            # If no structured prediction found, just standardize terminology
+            summary = re.sub(r'(\d{2,3})% confidence', r'\1% Probability', summary, flags=re.IGNORECASE)
+            
     return summary
 
 def get_help_text():
     return (
         "*ChoyNewsBot Commands:*\n"
+        "/start - Initialize the bot and get a welcome message\n"
         "/news - Get the full daily news digest\n"
-        "/cryptostats - Get only the crypto AI market summary\n"
         "/weather - Get Dhaka weather\n"
-        "/<coin> - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
-        "/<coin>stats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
+        "/cryptostats - Get AI summary of crypto market\n"
+        "/coin - Get price and 24h change for a coin (e.g. /btc, /eth, /doge)\n"
+        "/coinstats - Get price, 24h change, and AI summary (e.g. /btcstats)\n"
         "/timezone <zone> - Set your timezone (e.g. /timezone +6, /timezone dhaka, /timezone Europe/Berlin)\n"
+        "/support - Contact the developer for support\n"
         "/help - Show this help message\n"
     )
 
@@ -1149,6 +1491,15 @@ def handle_updates(updates):
             continue
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
+            continue
+        # --- /support command ---
+        if text == "/support":
+            support_msg = (
+                "*Developer Support:*\n"
+                "Developer ID: [@shanchoynoor](https://t.me/shanchoynoor)\n"
+                "Developer Email: shanchoyzone@gmail.com"
+            )
+            send_telegram(support_msg, chat_id)
             continue
         # --- /timezone command ---
         if text.startswith("/timezone"):
@@ -1273,13 +1624,13 @@ def handle_updates(updates):
                 except Exception:
                     accuracy = 80
                 if accuracy <= 60:
-                    prediction_line = "\nPrediction For tomorrow: CONSOLIDATION 🤔"
+                    prediction_line = "\nPrediction (Next 24h): CONSOLIDATION 🤔"
                 elif "bullish" in summary_lower and accuracy > 60:
-                    prediction_line = f"\nPrediction For Tomorrow: BULLISH 🟢 ({accuracy}% probability)"
+                    prediction_line = f"\nPrediction (Next 24h): BULLISH 🟢 ({accuracy}% probability)"
                 elif "bearish" in summary_lower and accuracy > 60:
-                    prediction_line = f"\nPrediction For Tomorrow: BEARISH 🔴 ({accuracy}% probability)"
+                    prediction_line = f"\nPrediction (Next 24h): BEARISH 🔴 ({accuracy}% probability)"
                 else:
-                    prediction_line = "\nPrediction For Tomorrow: CONSOLIDATION! 🤔"
+                    prediction_line = "\nPrediction (Next 24h): CONSOLIDATION! 🤔"
                 crypto_section += prediction_line
             crypto_section += "\n\n\n- Built by Shanchoy"
             # --- SPLIT DIGEST: send news and crypto in separate messages at CRYPTO MARKET marker ---
@@ -1310,14 +1661,38 @@ def handle_updates(updates):
             send_telegram(reply, chat_id)
             continue
 def main():
+    """
+    Main entry point for the Telegram bot polling loop.
+    
+    This function initializes the bot and continuously polls for new messages,
+    handling user commands and requests.
+    """
+    # Initialize user database
     init_db()
+    
+    logging.info("Bot started. Listening for messages...")
     print("Bot started. Listening for messages...")
+    
     last_update_id = None
+    
+    # Main polling loop
     while True:
-        updates = get_updates(last_update_id)
-        if updates:
-            handle_updates(updates)
-            last_update_id = updates[-1]["update_id"] + 1
+        try:
+            # Get updates from Telegram API
+            updates = get_updates(last_update_id)
+            
+            if updates:
+                # Process new messages
+                handle_updates(updates)
+                
+                # Update the offset to acknowledge processed updates
+                last_update_id = updates[-1]["update_id"] + 1
+                
+        except Exception as e:
+            logging.error(f"Error in main polling loop: {e}")
+            # Continue polling despite errors
+            
+        # Avoid excessive API calls
         time.sleep(2)
 
 if __name__ == "__main__":
