@@ -21,7 +21,8 @@ logger = logging.getLogger("auto_news")
 # Load environment variables
 load_dotenv()
 TELEGRAM_CHAT_ID = os.getenv("AUTO_NEWS_CHAT_ID")  # Legacy global chat ID (optional)
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Try both token variable names for compatibility
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Check for required environment variables at startup
 if not TELEGRAM_TOKEN:
