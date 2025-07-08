@@ -574,55 +574,18 @@ def fetch_big_cap_prices():
         return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers():
-    """Fetch and format top crypto gainers and losers from top 500 coins by market cap."""
+    """
+    Fetch and format top crypto gainers and losers for display in the news digest.
+    
+    Returns:
+        str: Formatted markdown string with top gainers and losers information
+    """
     try:
-        # Fetch top 500 coins (2 pages, 250 per page)
-        url = "https://api.coingecko.com/api/v3/coins/markets"
-        params1 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1}
-        params2 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 2}
-        resp1 = requests.get(url, params=params1)
-        resp2 = requests.get(url, params=params2)
-        data1 = resp1.json() if resp1.ok else []
-        data2 = resp2.json() if resp2.ok else []
-        data = data1 + data2
-        if not isinstance(data, list) or len(data) == 0:
-            raise Exception("Invalid CoinGecko response")
-        # Sort for gainers and losers
-        gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
-        losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
-        msg = "*🔺 Crypto Top Gainers:*\n"
-        gainers_list = []
-        for i, c in enumerate(gainers, 1):
-            symbol = c.get('symbol', '').upper()
-            price = c.get('current_price')
-            change = c.get('price_change_percentage_24h', 0)
-            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-            if price is None:
-                price_str = "N/A"
-            elif price >= 1:
-                price_str = f"${price:,.2f}"
-            else:
-                price_str = f"${price:.6f}"
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
-            gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
-        msg += "\n*🔻 Crypto Top Losers:*\n"
-        losers_list = []
-        for i, c in enumerate(losers, 1):
-            symbol = c.get('symbol', '').upper()
-            price = c.get('current_price')
-            change = c.get('price_change_percentage_24h', 0)
-            arrow = ' ▲' if change > 0 else (' ▼' if change < 0 else '')
-            if price is None:
-                price_str = "N/A"
-            elif price >= 1:
-                price_str = f"${price:,.2f}"
-            else:
-                price_str = f"${price:.6f}"
-            msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
-            losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
-        return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
-    except Exception:
-        return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
+        msg, _, _ = fetch_top_movers_data()
+        return msg
+    except Exception as e:
+        logging.error(f"Error in fetch_top_movers: {e}")
+        return "*Top Movers:* Data unavailable\n\n"
 
 def fetch_crypto_market_data():
     """
@@ -720,22 +683,77 @@ def fetch_big_cap_prices_data():
         return "*Crypto Big Cap:*\nN/A\n\n", "N/A"
 
 def fetch_top_movers_data():
-    """Fetch and format top crypto gainers and losers from top 500 coins by market cap."""
+    """Fetch and format top crypto gainers and losers from top 500 coins by market cap.
+    
+    Returns:
+        tuple: (formatted_message, gainers_string, losers_string)
+            - formatted_message: Markdown-formatted string with top gainers and losers
+            - gainers_string: Comma-separated string of top gainers
+            - losers_string: Comma-separated string of top losers
+    """
     try:
         # Fetch top 500 coins (2 pages, 250 per page)
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params1 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1}
         params2 = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 2}
-        resp1 = requests.get(url, params=params1)
-        resp2 = requests.get(url, params=params2)
-        data1 = resp1.json() if resp1.ok else []
-        data2 = resp2.json() if resp2.ok else []
+        
+        # Add timeout to avoid hanging requests
+        timeout_seconds = 10
+        
+        # Get first page with error handling
+        try:
+            resp1 = requests.get(url, params=params1, timeout=timeout_seconds)
+            if not resp1.ok:
+                logging.error(f"CoinGecko API error (page 1): Status {resp1.status_code}, Response: {resp1.text[:100]}")
+                data1 = []
+            else:
+                data1 = resp1.json()
+                if not isinstance(data1, list):
+                    logging.error(f"CoinGecko API returned non-list for page 1: {type(data1)}")
+                    data1 = []
+        except Exception as e:
+            logging.error(f"Error fetching CoinGecko page 1: {e}")
+            data1 = []
+            
+        # Short delay to avoid rate limiting
+        time.sleep(0.5)
+        
+        # Get second page with error handling
+        try:
+            resp2 = requests.get(url, params=params2, timeout=timeout_seconds)
+            if not resp2.ok:
+                logging.error(f"CoinGecko API error (page 2): Status {resp2.status_code}, Response: {resp2.text[:100]}")
+                data2 = []
+            else:
+                data2 = resp2.json()
+                if not isinstance(data2, list):
+                    logging.error(f"CoinGecko API returned non-list for page 2: {type(data2)}")
+                    data2 = []
+        except Exception as e:
+            logging.error(f"Error fetching CoinGecko page 2: {e}")
+            data2 = []
+            
+        # Combine data from both pages
         data = data1 + data2
+        
+        # Check if we have enough data to show meaningful results
         if not isinstance(data, list) or len(data) == 0:
-            raise Exception("Invalid CoinGecko response")
+            logging.error("No valid data received from CoinGecko API for top movers")
+            return "*Top Movers:* Data unavailable\n\n", "N/A", "N/A"
+            
+        logging.info(f"Successfully fetched {len(data)} coins for top movers analysis")
+        
+        # Filter out entries with missing price change data
+        valid_data = [coin for coin in data if coin.get("price_change_percentage_24h") is not None]
+        if len(valid_data) < 10:  # Need at least 10 coins to show 5 gainers and 5 losers
+            logging.error(f"Not enough coins with valid price change data: {len(valid_data)}")
+            return "*Top Movers:* Insufficient data\n\n", "N/A", "N/A"
+            
         # Sort for gainers and losers
-        gainers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
-        losers = sorted(data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
+        gainers = sorted(valid_data, key=lambda x: x.get("price_change_percentage_24h", 0), reverse=True)[:5]
+        losers = sorted(valid_data, key=lambda x: x.get("price_change_percentage_24h", 0))[:5]
+        
+        # Format gainers
         msg = "*🔺 Crypto Top Gainers:*\n"
         gainers_list = []
         for i, c in enumerate(gainers, 1):
@@ -751,6 +769,8 @@ def fetch_top_movers_data():
                 price_str = f"${price:.6f}"
             msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
             gainers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
+        
+        # Format losers
         msg += "\n*🔻 Crypto Top Losers:*\n"
         losers_list = []
         for i, c in enumerate(losers, 1):
@@ -766,9 +786,11 @@ def fetch_top_movers_data():
                 price_str = f"${price:.6f}"
             msg += f"{i}. {symbol}: {price_str} ({change:+.2f}%)" + arrow + "\n"
             losers_list.append(f"{symbol}: {price_str} ({change:+.2f}%)" + arrow)
+            
         return msg + "\n", ", ".join(gainers_list), ", ".join(losers_list)
-    except Exception:
-        return "*Top Movers Error:* N/A\n\n", "N/A", "N/A"
+    except Exception as e:
+        logging.error(f"Unexpected error in fetch_top_movers_data: {e}")
+        return "*Top Movers:* Error fetching data\n\n", "N/A", "N/A"
 
 # ===================== WEATHER =====================
 def get_dhaka_weather():
@@ -1160,20 +1182,34 @@ def get_crypto_ai_summary():
             return "AI summary not available: DeepSeek API key is missing."
         
         # Validate data completeness
-        if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str, 
-                                   fear_greed_str, big_caps_str, gainers_str, losers_str]):
-            # Identify which data points are missing
-            missing_data = [k for k, v in {
-                "Market Cap": market_cap_str,
-                "Market Change": market_cap_change_str,
-                "Volume": volume_str,
-                "Volume Change": volume_change_str,
-                "Fear/Greed": fear_greed_str,
-                "Big Caps": big_caps_str,
-                "Gainers": gainers_str,
-                "Losers": losers_str
-            }.items() if v == "N/A"]
-            return f"AI summary not available: Missing data for {', '.join(missing_data)}."
+        missing_data = [k for k, v in {
+            "Market Cap": market_cap_str,
+            "Market Change": market_cap_change_str,
+            "Volume": volume_str,
+            "Volume Change": volume_change_str,
+            "Fear/Greed": fear_greed_str,
+            "Big Caps": big_caps_str,
+            "Gainers": gainers_str,
+            "Losers": losers_str
+        }.items() if v == "N/A"]
+        
+        # If critical data is missing, return an error message
+        if any(x == "N/A" for x in [market_cap_str, market_cap_change_str, volume_str, volume_change_str]):
+            logging.warning(f"Critical market data missing for AI summary: {', '.join(missing_data)}")
+            return f"AI summary limited: Missing critical market data for {', '.join(missing_data)}. Try again later."
+        
+        # If only non-critical data is missing, continue with available data
+        if missing_data:
+            logging.info(f"Some non-critical market data missing for AI summary: {', '.join(missing_data)}")
+            # Replace N/A values with placeholders for non-critical data
+            if gainers_str == "N/A":
+                gainers_str = "Data unavailable"
+            if losers_str == "N/A":
+                losers_str = "Data unavailable"
+            if big_caps_str == "N/A":
+                big_caps_str = "Data unavailable"
+            if fear_greed_str == "N/A":
+                fear_greed_str = "Unknown"
         
         # Get AI summary from DeepSeek
         ai_summary = get_crypto_summary_with_deepseek(
@@ -1242,7 +1278,7 @@ def get_coin_stats(symbol):
         return f"Error fetching data for '{symbol.upper()}'."
 
 def get_coin_stats_ai(symbol):
-    """Return price, 24h % change, RSI, MA30, and DeepSeek AI summary for a given coin symbol (e.g. BTC, ETH)."""
+    """Return detailed analysis for a given coin symbol (e.g. BTC, ETH) with price, market summary, and forecast."""
     try:
         coin_id, coin_name = get_coin_id_from_symbol(symbol)
         if not coin_id:
@@ -1263,6 +1299,13 @@ def get_coin_stats_ai(symbol):
             price_str = f"${price:.6f}"
         symbol_upper = c['symbol'].upper()
         change_str = f"({change:+.2f}%)"
+        
+        # Get market cap and volume
+        market_cap = c.get('market_cap', 0)
+        volume = c.get('total_volume', 0)
+        market_cap_str = human_readable_number(market_cap)
+        volume_str = human_readable_number(volume)
+        
         # --- Fetch RSI and MA30 ---
         rsi_val = 'N/A'
         ma30_val = 'N/A'
@@ -1287,80 +1330,125 @@ def get_coin_stats_ai(symbol):
             if len(prices) >= 30:
                 ma30 = sum(prices[-30:]) / 30
                 ma30_val = f"${ma30:,.2f}" if ma30 >= 1 else f"${ma30:.6f}"
-        except Exception:
-            pass
-        # Compose prompt for DeepSeek AI
-        market_cap = c.get('market_cap', 0)
-        volume = c.get('total_volume', 0)
-        high_24h = c.get('high_24h', 0)
-        low_24h = c.get('low_24h', 0)
-        prompt = (
-            f"Coin: {symbol_upper}\n"
-            f"Current Price: {price_str} {change_str}{arrow}\n"
-            f"Market Cap: {human_readable_number(market_cap)}\n"
-            f"24h Volume: {human_readable_number(volume)}\n"
-            f"24h High/Low: ${high_24h} / ${low_24h}\n"
-            f"24h RSI: {rsi_val}\n"
-            f"30d MA: {ma30_val}\n"
-            "\n"
-            "Give a short summary of the current market, technicals, and sentiment for this coin. "
-            "Include a forecast for the next 24h (bullish/bearish/neutral), and mention key resistance/support levels if possible. "
-            "Be concise and insightful."
-        )
-        DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-        if not DEEPSEEK_API:
-            ai_summary = "AI summary not available."
-        else:
-            url = "https://api.deepseek.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {DEEPSEEK_API}"}
-            payload = {
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 180,
-                "temperature": 0.7
-            }
-            try:
-                response = requests.post(url, headers=headers, json=payload, timeout=15)
-                ai_summary = response.json()["choices"][0]["message"]["content"].strip()
-            except Exception:
-                ai_summary = "AI summary not available."
-        import re
-        ai_summary_clean = re.sub(r'^(#+\s*)?'+symbol_upper+r'.*$', '', ai_summary, flags=re.IGNORECASE | re.MULTILINE).strip()
-        if ai_summary_clean and not ai_summary_clean.rstrip().endswith('.'):
-            ai_summary_clean = ai_summary_clean.rstrip() + '.'
-        # --- Prediction extraction ---
-        pred = 'N/A'
-        pred_emoji = '🤔'
-        pred_map = {
-            'buy': '🟢 Buy',
-            'hold': '🟠 Hold',
-            'sell': '🔴 Sell',
-        }
-        pred_line = ''
-        # Try to extract prediction from summary
-        pred_match = re.search(r'\b(buy|hold|sell)\b', ai_summary.lower())
-        if pred_match:
-            pred = pred_map.get(pred_match.group(1), '🤔')
-            pred_line = f"Prediction (24hr): {pred}"
-        else:
-            # fallback: look for bullish/bearish/neutral
-            if 'bullish' in ai_summary.lower():
-                pred_line = "Prediction (24hr): 🟢 Buy"
-            elif 'bearish' in ai_summary.lower():
-                pred_line = "Prediction (24hr): 🔴 Sell"
-            elif 'neutral' in ai_summary.lower():
-                pred_line = "Prediction (24hr): 🟠 Hold"
+                
+            # Calculate support and resistance levels (use 7-day high/low as approximation)
+            if len(prices) >= 7:
+                sorted_prices = sorted(prices[-7:])
+                support = sorted_prices[1]  # Second lowest price
+                resistance = sorted_prices[-2]  # Second highest price
+                support_str = f"${support:,.2f}" if support >= 1 else f"${support:.6e}"
+                resistance_str = f"${resistance:,.2f}" if resistance >= 1 else f"${resistance:.6e}"
             else:
-                pred_line = "Prediction (24hr): 🤔"
-        msg = (
+                support_str = f"${c['low_24h']:.6e}" if c['low_24h'] < 1 else f"${c['low_24h']:,.2f}"
+                resistance_str = f"${c['high_24h']:.6e}" if c['high_24h'] < 1 else f"${c['high_24h']:,.2f}"
+        except Exception as e:
+            logging.error(f"Error calculating technical indicators: {e}")
+            support_str = f"${c['low_24h']:.6e}" if c['low_24h'] < 1 else f"${c['low_24h']:,.2f}"
+            resistance_str = f"${c['high_24h']:.6e}" if c['high_24h'] < 1 else f"${c['high_24h']:,.2f}"
+            
+        # RSI interpretation
+        rsi_interpretation = "N/A"
+        if rsi_val != 'N/A':
+            rsi_float = float(rsi_val)
+            if rsi_float > 70:
+                rsi_interpretation = "Overbought, potential reversal or correction"
+            elif rsi_float < 30:
+                rsi_interpretation = "Oversold, potential buying opportunity"
+            else:
+                rsi_interpretation = "Neutral, no overbought/oversold signal"
+        
+        # MA interpretation
+        ma_interpretation = "N/A"
+        if ma30_val != 'N/A' and price is not None:
+            ma30_float = float(ma30_val.replace('$', '').replace(',', ''))
+            if price > ma30_float * 1.05:
+                ma_interpretation = f"Price well above MA, suggesting strong bullish momentum"
+            elif price > ma30_float:
+                ma_interpretation = f"Price above MA, suggesting bullish momentum"
+            elif price < ma30_float * 0.95:
+                ma_interpretation = f"Price well below MA, suggesting strong bearish momentum"
+            else:
+                ma_interpretation = f"Price below MA, suggesting bearish momentum"
+        
+        # Volume interpretation
+        volume_interpretation = "N/A"
+        if volume < 10000:
+            volume_interpretation = f"Very low ({volume_str}), indicating minimal liquidity and high risk"
+        elif volume < 100000:
+            volume_interpretation = f"Low ({volume_str}), suggesting limited liquidity"
+        elif volume < 1000000:
+            volume_interpretation = f"Moderate ({volume_str}), indicating average liquidity"
+        elif volume < 10000000:
+            volume_interpretation = f"High ({volume_str}), suggesting good liquidity"
+        else:
+            volume_interpretation = f"Very high ({volume_str}), indicating excellent liquidity"
+        
+        # Generate AI summary
+        ai_summary = ""
+        forecast_text = ""
+        
+        # Create a market analysis based on the available data
+        if change > 5:
+            ai_summary = f"{symbol_upper} is showing strong bullish momentum with significant price growth over the last 24 hours."
+            forecast_text = f"The bullish momentum is likely to continue, though some profit-taking might occur. Watch for increased volume to confirm the trend."
+            recommendation = "BUY"
+        elif change > 2:
+            ai_summary = f"{symbol_upper} is showing moderate bullish movement in the last 24 hours."
+            forecast_text = f"Current positive momentum may continue if market conditions remain favorable. Monitor volume for confirmation."
+            recommendation = "BUY"
+        elif change > 0:
+            ai_summary = f"{symbol_upper} is slightly up, indicating neutral to mildly positive sentiment."
+            forecast_text = f"Price may continue to consolidate with a slight upward bias. Look for breakout signals for stronger directional moves."
+            recommendation = "HOLD"
+        elif change > -2:
+            ai_summary = f"{symbol_upper} is slightly down but relatively stable in the last 24 hours."
+            forecast_text = f"Expect continued sideways movement with slight bearish bias. Support levels should be monitored closely."
+            recommendation = "HOLD"
+        elif change > -5:
+            ai_summary = f"{symbol_upper} is showing moderate bearish movement with notable price decline."
+            forecast_text = f"Downward pressure is likely to continue in the short term unless significant support is found."
+            recommendation = "SELL"
+        else:
+            ai_summary = f"{symbol_upper} is experiencing significant bearish pressure with substantial price drops."
+            forecast_text = f"Strong downtrend may continue. Wait for signs of stabilization before considering entry positions."
+            recommendation = "SELL"
+        
+        # RSI-based recommendations to override the basic ones if available
+        if rsi_val != 'N/A':
+            rsi_float = float(rsi_val)
+            if rsi_float > 75:
+                recommendation = "SELL"
+            elif rsi_float < 25:
+                recommendation = "BUY"
+                
+        # Determine emoji for prediction
+        if recommendation == "BUY":
+            pred_emoji = "🟢"
+        elif recommendation == "HOLD":
+            pred_emoji = "🟠"
+        else:  # SELL
+            pred_emoji = "🔴"
+            
+        # Format the complete response according to the template
+        response = (
             f"Price: {symbol_upper} {price_str} {change_str}{arrow}\n"
-            f"Market Summary: {ai_summary_clean}\n\n"
-            f"Technicals:\n- Support: ${low_24h}\n- Resistance: ${high_24h}\n- RSI: {rsi_val}\n- MA30 (moving average): {ma30_val}\n\n"
-            f"{pred_line}"
+            f"Market Summary: {symbol_upper} is currently trading at {price_str} with a 24h change of {change_str}{arrow}. "
+            f"24h Market Cap: {market_cap_str}. 24h Volume: {volume_str}. {ai_summary}\n\n"
+            f"Technicals:\n"
+            f"- Support: {support_str}\n"
+            f"- Resistance: {resistance_str}\n"
+            f"- RSI ({rsi_val}): {rsi_interpretation}\n"
+            f"- 30D MA ({ma30_val}): {ma_interpretation}\n"
+            f"- Volume: {volume_interpretation}\n"
+            f"- Sentiment: {ai_summary}\n\n"
+            f"Forecast (Next 24h): {forecast_text}\n\n"
+            f"Prediction (Next 24hr): {pred_emoji} {recommendation}"
         )
-        return msg
-    except Exception:
-        return f"Error fetching data for '{symbol.upper()}'."
+        
+        return response
+    except Exception as e:
+        logging.error(f"Error in get_coin_stats_ai: {e}")
+        return f"Error fetching detailed data for '{symbol.upper()}'. {str(e)}"
 
 def clean_ai_summary(summary):
     """
@@ -1487,7 +1575,15 @@ def handle_updates(updates):
             send_telegram(get_help_text(), chat_id)
             continue
         if text == "/cryptostats":
-            send_telegram(get_crypto_ai_summary(), chat_id)
+            try:
+                logging.info(f"User {username} requested crypto stats")
+                summary = get_crypto_ai_summary()
+                send_telegram(summary, chat_id)
+                logging.info("Successfully sent crypto stats")
+            except Exception as e:
+                error_msg = f"Error generating crypto stats: {e}"
+                logging.error(error_msg)
+                send_telegram("Sorry, there was an error generating the crypto market summary. Please try again later.", chat_id)
             continue
         if text == "/weather":
             send_telegram(get_dhaka_weather(), chat_id)
@@ -1603,8 +1699,22 @@ def handle_updates(updates):
             )
             big_caps_msg, big_caps_str = fetch_big_cap_prices_data()
             crypto_section += big_caps_msg
-            top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
-            crypto_section += top_movers_msg
+            
+            # Fetch top movers with better error handling
+            try:
+                top_movers_msg, gainers_str, losers_str = fetch_top_movers_data()
+                # Verify the top movers data is meaningful before adding it
+                if top_movers_msg.startswith("*Top Movers Error:*") or top_movers_msg.startswith("*Top Movers:* Data unavailable"):
+                    logging.warning("Top movers data unavailable, adding placeholder message")
+                    top_movers_msg = "*🔺 Crypto Top Movers:*\nData temporarily unavailable\n\n"
+                    gainers_str = "Data unavailable"
+                    losers_str = "Data unavailable"
+                crypto_section += top_movers_msg
+            except Exception as e:
+                logging.error(f"Error adding top movers to crypto section: {e}")
+                crypto_section += "*🔺 Crypto Top Movers:*\nData temporarily unavailable\n\n"
+                gainers_str = "Data unavailable"
+                losers_str = "Data unavailable"
             DEEPSEEK_API = os.getenv("DEEPSEEK_API")
             ai_summary = None
             prediction_line = ""
