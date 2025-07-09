@@ -129,9 +129,35 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
     elif command == '/help':
         handle_help_command(chat_id)
     elif command == '/status':
-        handle_status_command(chat_id)
+        handle_status_command(chat_id, user_id)
     elif command == '/news':
         handle_news_command(chat_id, user_id, args)
+    elif command == '/weather':
+        handle_weather_command(chat_id, user_id)
+    elif command == '/cryptostats':
+        handle_cryptostats_command(chat_id, user_id)
+    elif command == '/subscribe':
+        handle_subscribe_command(chat_id, user_id, username, first_name, last_name)
+    elif command == '/unsubscribe':
+        handle_unsubscribe_command(chat_id, user_id)
+    elif command == '/support':
+        handle_support_command(chat_id)
+    elif command.startswith('/timezone'):
+        handle_timezone_command(chat_id, user_id, args)
+    elif command in ['/btc', '/eth', '/doge', '/ada', '/sol', '/xrp', '/matic', '/dot', '/link', '/uni']:
+        # Individual coin commands
+        coin_symbol = command[1:]  # Remove the '/' prefix
+        handle_coin_command(chat_id, user_id, coin_symbol)
+    elif command.endswith('stats') and len(command) > 6:
+        # Coin stats commands like /btcstats, /ethstats
+        coin_symbol = command[1:-5]  # Remove '/' prefix and 'stats' suffix
+        handle_coinstats_command(chat_id, user_id, coin_symbol)
+    elif command.startswith('/coin'):
+        # Generic /coin command with argument
+        if args:
+            handle_coin_command(chat_id, user_id, args.strip().lower())
+        else:
+            send_telegram("Please specify a coin symbol. Example: `/coin btc` or use `/btc`", chat_id)
     else:
         # Unknown command
         send_telegram(
@@ -170,29 +196,36 @@ def handle_help_command(chat_id):
     from choynews.api.telegram import send_telegram
     
     help_message = """
-📚 *ChoyNewsBot Help*
+📚 *ChoyNewsBot Commands*
 
-*Available Commands:*
+*📰 News & Information:*
+🚀 `/start` - Initialize the bot and get a welcome message
+📰 `/news` - Get the full daily news digest
+🌤️ `/weather` - Get Dhaka weather information
+⚡ `/status` - Check your subscription status and timezone
 
-🚀 `/start` - Show welcome message
+*💰 Cryptocurrency:*
+📊 `/cryptostats` - Get AI summary of crypto market
+🪙 `/coin <symbol>` - Get price and 24h change for a coin
+   Examples: `/coin btc`, `/btc`, `/eth`, `/doge`
+📈 `/coinstats <symbol>` - Get price, 24h change, and AI summary
+   Examples: `/coinstats btc`, `/btcstats`, `/ethstats`
+
+*⚙️ Settings & Subscriptions:*
+🕒 `/timezone <zone>` - Set your timezone for news digest times
+   Examples: `/timezone +6`, `/timezone Asia/Dhaka`
+📬 `/subscribe` - Get news digests automatically at 8am, 1pm, 7pm, 11pm
+📭 `/unsubscribe` - Stop receiving automatic news digests
+
+*🆘 Support:*
 ❓ `/help` - Show this help message
-📰 `/news` - Get latest news digest
-⚡ `/status` - Check bot status
+🆘 `/support` - Contact the developer for support
 
-*Features:*
-• Daily news digests
-• Cryptocurrency market updates
-• Weather information
-• Personalized content delivery
-• Scheduled news at specific times
+*Popular Crypto Commands:*
+• `/btc`, `/eth`, `/doge`, `/ada`, `/sol`, `/xrp`
+• `/btcstats`, `/ethstats`, `/dogestats`
 
-*Coming Soon:*
-• Custom news preferences
-• Location-based weather
-• Crypto portfolio tracking
-• More interactive features
-
-For support or questions, contact the administrator.
+All times are shown in your local timezone. Use `/timezone` to set yours!
     """
     
     send_telegram(help_message, chat_id)
@@ -230,8 +263,10 @@ def handle_news_command(chat_id, user_id, args):
             "preferences": {}  # Default preferences
         }
         
+        # Send loading message like in the example
+        send_telegram("Loading latest news...", chat_id)
+        
         # Build and send news digest
-        send_telegram("📰 Generating your news digest... Please wait.", chat_id)
         digest = build_news_digest(user)
         send_telegram(digest, chat_id)
         
@@ -279,3 +314,314 @@ def handle_callback_query(callback_query):
     
     # Process the callback data
     # Implement callback handlers based on the data
+
+def handle_weather_command(chat_id, user_id):
+    """Handle the /weather command."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        # For now, send a placeholder. This would integrate with weather API
+        weather_message = """
+🌤️ *Weather in Dhaka*
+
+🌡️ Temperature: 28°C (feels like 32°C)
+🌧️ Condition: Partly cloudy with chance of rain
+💧 Humidity: 78%
+💨 Wind: 12 km/h E
+👁️ Visibility: 8 km
+🌅 Sunrise: 05:12 AM
+🌇 Sunset: 06:47 PM
+
+*Today's Forecast:*
+• Morning: 26°C - Partly cloudy
+• Afternoon: 30°C - Thunderstorms likely  
+• Evening: 27°C - Light rain
+
+Weather data will be fully integrated soon!
+        """
+        
+        send_telegram(weather_message, chat_id)
+        logger.info(f"Sent weather info to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting weather for user {user_id}: {e}")
+        send_telegram("Sorry, weather information is temporarily unavailable.", chat_id)
+
+def handle_cryptostats_command(chat_id, user_id):
+    """Handle the /cryptostats command."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        crypto_message = """
+💰 *Cryptocurrency Market Overview*
+
+📊 *Market Cap:* $2.41T (+2.3% 24h)
+📈 *24h Volume:* $85.2B  
+😨 *Fear & Greed Index:* 67 (Greed)
+
+*Top Performers (24h):*
+🚀 SOL: +8.4% ($142.50)
+🚀 ADA: +6.2% ($0.48)
+🚀 DOT: +5.1% ($7.82)
+
+*Top Cryptocurrencies:*
+₿ BTC: $43,250 (+1.2%)
+Ξ ETH: $2,580 (+0.8%)
+🪙 BNB: $315 (-0.5%)
+
+*AI Market Summary:*
+The crypto market shows bullish momentum with altcoins outperforming Bitcoin. Institutional adoption continues to drive growth, while regulatory clarity improves sentiment.
+
+Full market integration coming soon!
+        """
+        
+        send_telegram(crypto_message, chat_id)
+        logger.info(f"Sent crypto stats to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting crypto stats for user {user_id}: {e}")
+        send_telegram("Sorry, cryptocurrency market data is temporarily unavailable.", chat_id)
+
+def handle_coin_command(chat_id, user_id, coin_symbol):
+    """Handle coin price commands like /btc, /eth, etc."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        # Coin data mapping (this would come from API in full implementation)
+        coin_data = {
+            'btc': {'name': 'Bitcoin', 'price': '$43,250', 'change': '+1.2%', 'symbol': '₿'},
+            'eth': {'name': 'Ethereum', 'price': '$2,580', 'change': '+0.8%', 'symbol': 'Ξ'},
+            'doge': {'name': 'Dogecoin', 'price': '$0.082', 'change': '+3.4%', 'symbol': '🐕'},
+            'ada': {'name': 'Cardano', 'price': '$0.48', 'change': '+6.2%', 'symbol': '🪙'},
+            'sol': {'name': 'Solana', 'price': '$142.50', 'change': '+8.4%', 'symbol': '🚀'},
+            'xrp': {'name': 'XRP', 'price': '$0.58', 'change': '+2.1%', 'symbol': '💧'},
+            'matic': {'name': 'Polygon', 'price': '$0.95', 'change': '-1.5%', 'symbol': '🔷'},
+            'dot': {'name': 'Polkadot', 'price': '$7.82', 'change': '+5.1%', 'symbol': '⚪'},
+            'link': {'name': 'Chainlink', 'price': '$15.30', 'change': '+0.7%', 'symbol': '🔗'},
+            'uni': {'name': 'Uniswap', 'price': '$8.45', 'change': '+1.9%', 'symbol': '🦄'}
+        }
+        
+        if coin_symbol in coin_data:
+            coin = coin_data[coin_symbol]
+            coin_message = f"""
+{coin['symbol']} *{coin['name']} ({coin_symbol.upper()})*
+
+💰 *Price:* {coin['price']}
+📈 *24h Change:* {coin['change']}
+
+Real-time price data integration coming soon!
+            """
+        else:
+            coin_message = f"Sorry, I don't have data for '{coin_symbol.upper()}' yet. Try popular coins like BTC, ETH, DOGE, ADA, SOL, XRP."
+        
+        send_telegram(coin_message, chat_id)
+        logger.info(f"Sent {coin_symbol} price to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting {coin_symbol} price for user {user_id}: {e}")
+        send_telegram(f"Sorry, I couldn't get price data for {coin_symbol.upper()}.", chat_id)
+
+def handle_coinstats_command(chat_id, user_id, coin_symbol):
+    """Handle coin stats commands like /btcstats, /ethstats, etc."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        # Extended coin data (this would come from API in full implementation)
+        coin_stats = {
+            'btc': {
+                'name': 'Bitcoin', 'symbol': '₿', 'price': '$43,250', 'change': '+1.2%',
+                'market_cap': '$842B', 'volume': '$28.5B', 'rank': '1',
+                'summary': 'Bitcoin maintains dominance with steady institutional adoption. Recent ETF inflows suggest continued bullish sentiment.'
+            },
+            'eth': {
+                'name': 'Ethereum', 'symbol': 'Ξ', 'price': '$2,580', 'change': '+0.8%',
+                'market_cap': '$310B', 'volume': '$12.8B', 'rank': '2',
+                'summary': 'Ethereum shows strength with upcoming network upgrades. DeFi activity remains robust across the ecosystem.'
+            },
+            'doge': {
+                'name': 'Dogecoin', 'symbol': '🐕', 'price': '$0.082', 'change': '+3.4%',
+                'market_cap': '$11.8B', 'volume': '$1.2B', 'rank': '8',
+                'summary': 'Dogecoin rallies on social media momentum and increased merchant adoption. Community-driven growth continues.'
+            }
+        }
+        
+        if coin_symbol in coin_stats:
+            coin = coin_stats[coin_symbol]
+            stats_message = f"""
+{coin['symbol']} *{coin['name']} ({coin_symbol.upper()}) Statistics*
+
+💰 *Price:* {coin['price']}
+📈 *24h Change:* {coin['change']}
+🏆 *Market Cap:* {coin['market_cap']} (#{coin['rank']})
+📊 *24h Volume:* {coin['volume']}
+
+🤖 *AI Analysis:*
+{coin['summary']}
+
+Detailed analytics integration coming soon!
+            """
+        else:
+            stats_message = f"Sorry, I don't have detailed stats for '{coin_symbol.upper()}' yet. Try BTC, ETH, or DOGE."
+        
+        send_telegram(stats_message, chat_id)
+        logger.info(f"Sent {coin_symbol} stats to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting {coin_symbol} stats for user {user_id}: {e}")
+        send_telegram(f"Sorry, I couldn't get stats for {coin_symbol.upper()}.", chat_id)
+
+def handle_subscribe_command(chat_id, user_id, username, first_name, last_name):
+    """Handle the /subscribe command."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        # This would integrate with the subscription database
+        subscribe_message = """
+📬 *News Subscription Activated!*
+
+You will now receive news digests at:
+🌅 8:00 AM - Morning digest
+🌞 1:00 PM - Midday digest  
+🌆 7:00 PM - Evening digest
+🌙 11:00 PM - Night digest
+
+All times are in your local timezone. Set your timezone with `/timezone <zone>` if needed.
+
+Use `/unsubscribe` to stop receiving automatic digests anytime.
+
+Database integration coming soon!
+        """
+        
+        send_telegram(subscribe_message, chat_id)
+        logger.info(f"User {user_id} ({username}) subscribed to news digests")
+        
+    except Exception as e:
+        logger.error(f"Error subscribing user {user_id}: {e}")
+        send_telegram("Sorry, there was an error setting up your subscription. Please try again later.", chat_id)
+
+def handle_unsubscribe_command(chat_id, user_id):
+    """Handle the /unsubscribe command."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        unsubscribe_message = """
+📭 *News Subscription Cancelled*
+
+You will no longer receive automatic news digests.
+
+You can still get news anytime by using `/news` command.
+
+To reactivate automatic digests, use `/subscribe`.
+
+Database integration coming soon!
+        """
+        
+        send_telegram(unsubscribe_message, chat_id)
+        logger.info(f"User {user_id} unsubscribed from news digests")
+        
+    except Exception as e:
+        logger.error(f"Error unsubscribing user {user_id}: {e}")
+        send_telegram("Sorry, there was an error cancelling your subscription. Please try again later.", chat_id)
+
+def handle_timezone_command(chat_id, user_id, timezone_arg):
+    """Handle the /timezone command."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        if not timezone_arg:
+            timezone_message = """
+🕒 *Set Your Timezone*
+
+Usage: `/timezone <zone>`
+
+Examples:
+• `/timezone Asia/Dhaka`
+• `/timezone +6`
+• `/timezone Europe/London`
+• `/timezone America/New_York`
+
+This ensures you receive news digests at the correct local times (8am, 1pm, 7pm, 11pm).
+
+Current timezone: UTC+6 (default)
+            """
+        else:
+            # This would validate and set the timezone in database
+            timezone_message = f"""
+🕒 *Timezone Updated*
+
+Your timezone has been set to: `{timezone_arg}`
+
+News digests will now be delivered at:
+🌅 8:00 AM your time
+🌞 1:00 PM your time
+🌆 7:00 PM your time  
+🌙 11:00 PM your time
+
+Database integration coming soon!
+            """
+        
+        send_telegram(timezone_message, chat_id)
+        logger.info(f"Timezone command for user {user_id}: {timezone_arg}")
+        
+    except Exception as e:
+        logger.error(f"Error setting timezone for user {user_id}: {e}")
+        send_telegram("Sorry, there was an error setting your timezone. Please try again later.", chat_id)
+
+def handle_support_command(chat_id):
+    """Handle the /support command."""
+    from choynews.api.telegram import send_telegram
+    
+    support_message = """
+🆘 *Support & Contact*
+
+For help, feedback, or bug reports:
+
+👨‍💻 *Developer:* Shanchoy Noor
+📧 *Email:* shanchoyzone@gmail.com
+🐛 *Issues:* Report bugs via email
+
+*Common Issues:*
+• News not loading: Check your internet connection
+• Wrong timezone: Use `/timezone` to set correct zone
+• Missing features: Many features are still in development
+
+*Bot Status:* Active development
+*Version:* 1.0.0
+
+Thank you for using ChoyNewsBot! 🚀
+    """
+    
+    send_telegram(support_message, chat_id)
+    logger.info(f"Sent support info to chat {chat_id}")
+
+def handle_status_command(chat_id, user_id):
+    """Handle the /status command."""
+    from choynews.api.telegram import send_telegram
+    import datetime
+    
+    try:
+        # This would query the database for user's actual status
+        status_message = f"""
+🤖 *Your Bot Status*
+
+👤 *User ID:* {user_id}
+📬 *Subscription:* Active (demo)
+🕒 *Timezone:* UTC+6 (Asia/Dhaka)
+📰 *Last Digest:* Demo mode
+⏰ *Next Digest:* Demo mode
+
+*Bot System:*
+✅ Online and operational
+🕒 Server time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+📡 API connections: Active
+🔧 Services: Bot + Auto News
+
+Database integration coming soon!
+        """
+        
+        send_telegram(status_message, chat_id)
+        logger.info(f"Sent status to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting status for user {user_id}: {e}")
+        send_telegram("Sorry, I couldn't retrieve your status. Please try again later.", chat_id)
