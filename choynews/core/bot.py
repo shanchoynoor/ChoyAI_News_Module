@@ -26,14 +26,19 @@ class ChoyNewsBot:
         """Run the bot polling loop."""
         self.running = True
         logger.info("Bot started, waiting for messages...")
+        logger.debug(f"Starting bot polling with token: {Config.TELEGRAM_TOKEN[:10]}...")
         
         try:
             while self.running:
+                logger.debug("Polling for updates...")
                 updates = get_updates(self.last_update_id)
                 
                 if updates:
+                    logger.info(f"Received {len(updates)} updates")
                     self.last_update_id = handle_updates(updates)
-                    logger.debug(f"Processed {len(updates)} updates")
+                    logger.debug(f"Processed {len(updates)} updates, last_update_id: {self.last_update_id}")
+                else:
+                    logger.debug("No updates received")
                 
                 time.sleep(1)  # Avoid excessive polling
         except KeyboardInterrupt:

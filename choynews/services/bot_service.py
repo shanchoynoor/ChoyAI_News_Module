@@ -76,7 +76,30 @@ def handle_message(message):
         handle_command(chat_id, user_id, username, first_name, last_name, text)
     else:
         # Handle regular messages
-        pass
+        handle_regular_message(chat_id, user_id, username, text)
+
+def handle_regular_message(chat_id, user_id, username, text):
+    """Handle regular (non-command) messages."""
+    from choynews.api.telegram import send_telegram
+    
+    # Simple responses to common greetings and questions
+    text_lower = text.lower().strip()
+    
+    if any(greeting in text_lower for greeting in ['hello', 'hi', 'hey', 'greetings']):
+        name = username or "there"
+        response = f"Hello {name}! 👋 Welcome to ChoyNewsBot. Type /help to see what I can do for you!"
+    elif any(word in text_lower for word in ['news', 'update', 'latest']):
+        response = "📰 You can get the latest news by typing /news"
+    elif any(word in text_lower for word in ['help', 'what', 'how']):
+        response = "❓ Type /help to see all available commands and features"
+    elif any(word in text_lower for word in ['thanks', 'thank you', 'thx']):
+        response = "You're welcome! 😊 Happy to help!"
+    else:
+        ellipsis = "..." if len(text) > 50 else ""
+        response = f"I received your message: '{text[:50]}{ellipsis}'\\n\\nType /help to see what commands I understand!"
+    
+    send_telegram(response, chat_id)
+    logger.info(f"Responded to regular message from user {user_id}")
 
 def handle_command(chat_id, user_id, username, first_name, last_name, text):
     """
@@ -97,13 +120,129 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
     
     logger.info(f"Processing command: {command} with args: {args[:50]}")
     
-    # Implement command handlers here
-    # For example:
-    # if command == '/start':
-    #     handle_start_command(chat_id, user_id, username, first_name, last_name)
-    # elif command == '/help':
-    #     handle_help_command(chat_id)
-    # etc.
+    # Import here to avoid circular imports
+    from choynews.api.telegram import send_telegram
+    
+    # Handle different commands
+    if command == '/start':
+        handle_start_command(chat_id, user_id, username, first_name, last_name)
+    elif command == '/help':
+        handle_help_command(chat_id)
+    elif command == '/status':
+        handle_status_command(chat_id)
+    elif command == '/news':
+        handle_news_command(chat_id, user_id, args)
+    else:
+        # Unknown command
+        send_telegram(
+            f"Sorry, I don't understand the command '{command}'. Type /help to see available commands.",
+            chat_id
+        )
+
+def handle_start_command(chat_id, user_id, username, first_name, last_name):
+    """Handle the /start command."""
+    from choynews.api.telegram import send_telegram
+    
+    name = first_name or username or "there"
+    welcome_message = f"""
+🗞️ *Welcome to ChoyNewsBot, {name}!*
+
+I'm your personal news assistant. I can provide you with:
+• 📰 Latest news updates
+• 💰 Cryptocurrency market data
+• 🌤️ Weather information
+• ⏰ Scheduled news delivery
+
+*Available Commands:*
+/start - Show this welcome message
+/help - Get help and see all commands
+/news - Get latest news digest
+/status - Check bot status
+
+Type /help for more detailed information about what I can do!
+    """
+    
+    send_telegram(welcome_message, chat_id)
+    logger.info(f"Sent welcome message to user {user_id} ({username})")
+
+def handle_help_command(chat_id):
+    """Handle the /help command."""
+    from choynews.api.telegram import send_telegram
+    
+    help_message = """
+📚 *ChoyNewsBot Help*
+
+*Available Commands:*
+
+🚀 `/start` - Show welcome message
+❓ `/help` - Show this help message
+📰 `/news` - Get latest news digest
+⚡ `/status` - Check bot status
+
+*Features:*
+• Daily news digests
+• Cryptocurrency market updates
+• Weather information
+• Personalized content delivery
+• Scheduled news at specific times
+
+*Coming Soon:*
+• Custom news preferences
+• Location-based weather
+• Crypto portfolio tracking
+• More interactive features
+
+For support or questions, contact the administrator.
+    """
+    
+    send_telegram(help_message, chat_id)
+    logger.info(f"Sent help message to chat {chat_id}")
+
+def handle_status_command(chat_id):
+    """Handle the /status command."""
+    from choynews.api.telegram import send_telegram
+    import datetime
+    
+    status_message = f"""
+🤖 *Bot Status*
+
+✅ Bot is online and running
+🕒 Current time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+📡 API connection: Active
+🔧 Services: Bot + Auto News
+
+All systems operational! 🚀
+    """
+    
+    send_telegram(status_message, chat_id)
+    logger.info(f"Sent status message to chat {chat_id}")
+
+def handle_news_command(chat_id, user_id, args):
+    """Handle the /news command."""
+    from choynews.api.telegram import send_telegram
+    from choynews.core.digest_builder import build_news_digest
+    
+    try:
+        # Create a basic user object for digest building
+        user = {
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "preferences": {}  # Default preferences
+        }
+        
+        # Build and send news digest
+        send_telegram("📰 Generating your news digest... Please wait.", chat_id)
+        digest = build_news_digest(user)
+        send_telegram(digest, chat_id)
+        
+        logger.info(f"Sent news digest to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error generating news digest for user {user_id}: {e}")
+        send_telegram(
+            "Sorry, I encountered an error while generating your news digest. Please try again later.",
+            chat_id
+        )
 
 def handle_callback_query(callback_query):
     """
