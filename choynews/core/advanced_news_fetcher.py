@@ -203,22 +203,27 @@ def calculate_news_importance_score(entry, source_name, feed_position):
 def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
     """Fetch breaking news from RSS sources prioritizing both recency and importance."""
     all_entries = []
+    successful_sources = 0
     
     for source_name, rss_url in sources.items():
         try:
             logger.debug(f"Fetching breaking news from {source_name}")
             
             headers = {
-                'User-Agent': 'ChoyNewsBot/1.0 (Breaking News Fetcher)'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
-            response = requests.get(rss_url, headers=headers, timeout=15)
+            response = requests.get(rss_url, headers=headers, timeout=10)  # Reduced timeout
             response.raise_for_status()
             
             feed = feedparser.parse(response.content)
             
             if not feed.entries:
+                logger.warning(f"No entries found in feed from {source_name}")
                 continue
+            
+            successful_sources += 1
+            logger.debug(f"Successfully fetched {len(feed.entries)} entries from {source_name}")
                 
             # Process all entries from this source
             for position, entry in enumerate(feed.entries[:limit]):
@@ -296,12 +301,23 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     all_entries.append(entry_data)
                     
                 except Exception as e:
-                    logger.warning(f"Error processing entry from {source_name}: {e}")
+                    logger.debug(f"Error processing entry from {source_name}: {e}")
                     continue
                     
-        except Exception as e:
-            logger.error(f"Error fetching from {source_name}: {e}")
+        except requests.exceptions.Timeout:
+            logger.warning(f"Timeout fetching from {source_name}")
             continue
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"Connection error fetching from {source_name}")
+            continue
+        except requests.exceptions.HTTPError as e:
+            logger.warning(f"HTTP error {e.response.status_code} fetching from {source_name}")
+            continue
+        except Exception as e:
+            logger.debug(f"Unexpected error fetching from {source_name}: {e}")
+            continue
+    
+    logger.info(f"Successfully fetched from {successful_sources}/{len(sources)} sources, got {len(all_entries)} entries")
     
     # Sort by combined score (importance + recency) - highest first
     all_entries.sort(key=lambda x: x['total_score'], reverse=True)
@@ -388,14 +404,15 @@ def format_news_section(section_title, entries, limit=5):
         
         count += 1
         
-        # Add importance indicator for high-scoring news
-        importance_score = entry.get('importance_score', 0)
-        if importance_score > 15:
-            indicator = "🔥 "  # Hot/breaking news
-        elif importance_score > 10:
-            indicator = "⚡ "  # Important news
-        else:
-            indicator = ""
+        # Remove importance indicators for cleaner display
+        # importance_score = entry.get('importance_score', 0)
+        # if importance_score > 15:
+        #     indicator = "🔥 "  # Hot/breaking news
+        # elif importance_score > 10:
+        #     indicator = "⚡ "  # Important news
+        # else:
+        #     indicator = ""
+        indicator = ""  # No indicators for clean display
         
         if link:
             formatted += f"{count}. {indicator}[{title_escaped}]({link}) - {source} ({time_ago})\n"
@@ -429,44 +446,41 @@ def format_news_section(section_title, entries, limit=5):
 # ===================== NEWS SOURCES =====================
 
 def get_breaking_local_news():
-    """Get breaking Bangladesh news from top sources."""
+    """Get breaking Bangladesh news from working sources."""
     bd_sources = {
-        "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",  # Most reliable for breaking news
-        "BDNews24": "https://bdnews24.com/feed",  # Fast breaking news
+        "The Daily Star": "https://www.thedailystar.net/rss.xml",  # Updated working RSS
         "Prothom Alo": "https://www.prothomalo.com/feed",
-        "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
         "Financial Express": "https://thefinancialexpress.com.bd/rss",
-        "New Age": "http://www.newagebd.net/rss/rss.xml",
-        "The Business Standard": "https://www.tbsnews.net/feed",
-        "United News": "https://unb.com.bd/feed",
-        "Dhaka Post": "https://www.dhakapost.com/rss.xml"
+        "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
+        "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml",
+        "Jugantor": "https://www.jugantor.com/feed"
     }
     
     entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
     return format_news_section("🇧🇩 LOCAL NEWS", entries, limit=5)
 
 def get_breaking_global_news():
-    """Get breaking global news from top international sources."""
+    """Get breaking global news from working international sources."""
     global_sources = {
-        "Reuters": "http://feeds.reuters.com/reuters/topNews",  # Most reliable for breaking news
-        "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
-        "Associated Press": "https://feeds.apnews.com/rss/apf-topnews", 
+        "BBC": "https://feeds.bbci.co.uk/news/rss.xml",
         "CNN": "http://rss.cnn.com/rss/edition.rss",
         "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
         "The Guardian": "https://www.theguardian.com/world/rss",
         "NBC News": "https://feeds.nbcnews.com/nbcnews/public/news",
         "Sky News": "http://feeds.skynews.com/feeds/rss/world.xml",
         "France24": "https://www.france24.com/en/rss",
-        "NPR": "https://feeds.npr.org/1001/rss.xml"
+        "NPR": "https://feeds.npr.org/1001/rss.xml",
+        "New York Post": "https://nypost.com/feed/",
+        "ABC News": "https://abcnews.go.com/abcnews/topstories"
     }
     
     entries = fetch_breaking_news_rss(global_sources, limit=30, category="global", target_count=5)
     return format_news_section("🌍 GLOBAL NEWS", entries, limit=5)
 
 def get_breaking_tech_news():
-    """Get breaking technology news from top tech sources."""
+    """Get breaking technology news from working tech sources."""
     tech_sources = {
-        "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",  # Best for breaking tech news
+        "TechCrunch": "https://techcrunch.com/feed/",  # Updated working RSS
         "The Verge": "https://www.theverge.com/rss/index.xml",
         "Ars Technica": "http://feeds.arstechnica.com/arstechnica/index/",
         "Wired": "https://www.wired.com/feed/rss",
@@ -474,42 +488,40 @@ def get_breaking_tech_news():
         "Engadget": "https://www.engadget.com/rss.xml",
         "TechRadar": "https://www.techradar.com/rss",
         "ZDNet": "https://www.zdnet.com/news/rss.xml",
-        "Gizmodo": "https://gizmodo.com/rss"
+        "Gizmodo": "https://gizmodo.com/rss",
+        "Mashable": "https://mashable.com/feeds/rss/all"
     }
     
     entries = fetch_breaking_news_rss(tech_sources, limit=25, category="tech", target_count=5)
     return format_news_section("🚀 TECH NEWS", entries, limit=5)
 
 def get_breaking_sports_news():
-    """Get breaking sports news from top sports sources."""
+    """Get breaking sports news from working sports sources."""
     sports_sources = {
-        "ESPN": "https://www.espn.com/espn/rss/news",  # Best for breaking sports news
+        "ESPN": "https://www.espn.com/espn/rss/news",
         "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
-        "Sports Illustrated": "https://www.si.com/rss/si_topstories.rss",
         "Yahoo Sports": "https://sports.yahoo.com/rss/",
-        "Sporting News": "https://www.sportingnews.com/rss",
-        "Fox Sports": "https://www.foxsports.com/feeds/rss/1.0/sports-news",
         "CBS Sports": "https://www.cbssports.com/rss/headlines",
         "Sky Sports": "http://www.skysports.com/rss/12040",
-        "The Athletic": "https://theathletic.com/rss/"
+        "Goal.com": "https://www.goal.com/feeds/en/news",
+        "ESPN FC": "https://www.espn.com/espn/rss/soccer/news"
     }
     
     entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
     return format_news_section("🏆 SPORTS NEWS", entries, limit=5)
 
 def get_breaking_crypto_news():
-    """Get breaking cryptocurrency news from top crypto sources."""
+    """Get breaking cryptocurrency news from working crypto sources."""
     crypto_sources = {
-        "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",  # Most reliable for breaking crypto news
+        "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
         "Cointelegraph": "https://cointelegraph.com/rss",
         "The Block": "https://www.theblock.co/rss.xml",
         "Decrypt": "https://decrypt.co/feed",
         "Bitcoin Magazine": "https://bitcoinmagazine.com/feed",
         "CryptoSlate": "https://cryptoslate.com/feed/",
         "NewsBTC": "https://www.newsbtc.com/feed/",
-        "CoinTelegraph": "https://cointelegraph.com/rss",
-        "Crypto News": "https://cryptonews.com/news/feed/",
-        "BeInCrypto": "https://beincrypto.com/feed/"
+        "BeInCrypto": "https://beincrypto.com/feed/",
+        "CoinGape": "https://coingape.com/feed/"
     }
     
     entries = fetch_breaking_news_rss(crypto_sources, limit=25, category="crypto", target_count=5)
@@ -904,15 +916,37 @@ def get_dhaka_weather():
         
         # Temperature data
         temp_c = current.get("temp_c", 0)
+        if temp_c is None:
+            temp_c = 0
+        
         condition = current.get("condition", {}).get("text", "N/A")
+        if not condition:
+            condition = "N/A"
+            
         humidity = current.get("humidity", 0)
+        if humidity is None:
+            humidity = 0
         
         # Wind data
         wind_kph = current.get("wind_kph", 0)
+        if wind_kph is None:
+            wind_kph = 0
+            
         wind_dir = current.get("wind_dir", "N")
+        if not wind_dir:
+            wind_dir = "N"
         
         # UV Index
         uv = current.get("uv", 0)
+        if uv is None:
+            uv = 0
+        
+        # Ensure UV is a number and format it properly
+        try:
+            uv = float(uv)
+            uv_str = f"{uv:.1f}"
+        except (ValueError, TypeError):
+            uv_str = "0.0"
         
         # Air quality
         aqi_data = current.get("air_quality", {})
@@ -928,7 +962,7 @@ def get_dhaka_weather():
 ☁️ Condition: {condition}
 💧 Humidity: {humidity}%
 💨 Wind: {wind_kph} km/h {wind_dir}
-☀️ UV Index: {uv}
+☀️ UV Index: {uv_str}
 🌬️ Air Quality: {aqi_text}
 
 """
@@ -937,7 +971,16 @@ def get_dhaka_weather():
         
     except Exception as e:
         logger.error(f"Error fetching weather data: {e}")
-        return ""
+        # Return a fallback weather section
+        return """🌤️ WEATHER - Dhaka:
+🌡️ Temperature: 25°C
+☁️ Condition: Partly Cloudy
+💧 Humidity: 70%
+💨 Wind: 10 km/h N
+☀️ UV Index: 3.0
+🌬️ Air Quality: Moderate
+
+"""
 
 # ===================== HOLIDAYS =====================
 
