@@ -53,3 +53,15 @@ def setup_logging(name, log_file=None):
         logger.addHandler(file_handler)
     
     return logger
+
+def get_logger(name):
+    """
+    Get a logger that's already been set up.
+    
+    Args:
+        name: The logger name (typically the module name)
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    return logging.getLogger(name)
