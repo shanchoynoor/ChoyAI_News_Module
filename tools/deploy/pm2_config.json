@@ -1,0 +1,38 @@
+{
+  "apps": [
+    {
+      "name": "choynews-bot",
+      "script": "bin/choynews",
+      "args": "--service bot",
+      "interpreter": "python3",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "200M",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      },
+      "log_date_format": "YYYY-MM-DD HH:mm:ss",
+      "error_file": "logs/errors/bot-error.log",
+      "out_file": "logs/bot/bot-out.log",
+      "merge_logs": true
+    },
+    {
+      "name": "choynews-auto",
+      "script": "bin/choynews",
+      "args": "--service auto",
+      "interpreter": "python3",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "150M",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      },
+      "log_date_format": "YYYY-MM-DD HH:mm:ss",
+      "error_file": "logs/errors/auto-error.log",
+      "out_file": "logs/auto_news/auto-out.log",
+      "merge_logs": true
+    }
+  ]
+}

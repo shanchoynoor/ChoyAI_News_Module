@@ -1,0 +1,35 @@
+# Include the license file
+include LICENSE
+
+# Include the README and any documentation
+include README.md
+recursive-include docs *.md
+
+# Include the requirements file
+include config/requirements.txt
+
+# Include example configuration files
+include config/.env.example
+
+# Include executable scripts
+recursive-include bin *
+
+# Include deployment files
+recursive-include tools/deploy *
+
+# Include data files
+recursive-include data/static *
+
+# Include configuration files
+include Makefile
+
+# Include data and log directories
+recursive-include data *.json
+recursive-include logs *.md
+
+# Exclude development and temporary files
+global-exclude *.py[cod] __pycache__
+global-exclude *.so *.dylib
+global-exclude .git
+global-exclude .DS_Store
+global-exclude .env
