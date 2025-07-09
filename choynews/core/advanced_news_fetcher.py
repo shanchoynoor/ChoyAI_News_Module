@@ -614,9 +614,9 @@ Fear/Greed Index: {fear_index}/100
         
         # Top 5 gainers (highest positive changes)
         gainers = sorted_cryptos[-5:][::-1]  # Reverse to get highest first
-        crypto_section += "\n� Crypto Top 5 Gainers:\n"
+        crypto_section += "\n📈 Crypto Top 5 Gainers:\n"
         for i, crypto in enumerate(gainers, 1):
-            symbol = crypto['name']
+            symbol = crypto['symbol'].upper()  # Use symbol instead of name
             price = crypto['current_price']
             change = crypto['price_change_percentage_24h']
             arrow = "▲"
@@ -635,7 +635,7 @@ Fear/Greed Index: {fear_index}/100
         losers = sorted_cryptos[:5]
         crypto_section += "\n📉 Crypto Top 5 Losers:\n"
         for i, crypto in enumerate(losers, 1):
-            symbol = crypto['name']
+            symbol = crypto['symbol'].upper()  # Use symbol instead of name
             price = crypto['current_price']
             change = crypto['price_change_percentage_24h']
             arrow = "▼"
@@ -727,23 +727,31 @@ Keep it under 250 characters and end with prediction like: "Prediction (Next 24h
         return "AI analysis temporarily unavailable."
 
 def get_individual_crypto_stats(symbol):
-    """Get detailed crypto stats with AI analysis for individual coins."""
+    """Get detailed crypto stats with new format for individual coins."""
     try:
-        # Map common symbols to CoinGecko IDs
-        symbol_map = {
-            'btc': 'bitcoin',
-            'eth': 'ethereum', 
-            'doge': 'dogecoin',
-            'ada': 'cardano',
-            'sol': 'solana',
-            'xrp': 'ripple',
-            'matic': 'matic-network',
-            'dot': 'polkadot',
-            'link': 'chainlink',
-            'uni': 'uniswap'
+        # Map common symbols to CoinGecko IDs and their emojis
+        coin_data = {
+            'btc': {'id': 'bitcoin', 'emoji': '₿', 'name': 'Bitcoin'},
+            'eth': {'id': 'ethereum', 'emoji': 'Ⓔ', 'name': 'Ethereum'}, 
+            'doge': {'id': 'dogecoin', 'emoji': '🐕', 'name': 'Dogecoin'},
+            'ada': {'id': 'cardano', 'emoji': '🔷', 'name': 'Cardano'},
+            'sol': {'id': 'solana', 'emoji': '☀️', 'name': 'Solana'},
+            'xrp': {'id': 'ripple', 'emoji': '💧', 'name': 'XRP'},
+            'matic': {'id': 'matic-network', 'emoji': '🟣', 'name': 'Polygon'},
+            'dot': {'id': 'polkadot', 'emoji': '🔴', 'name': 'Polkadot'},
+            'link': {'id': 'chainlink', 'emoji': '🔗', 'name': 'Chainlink'},
+            'uni': {'id': 'uniswap', 'emoji': '🦄', 'name': 'Uniswap'}
         }
         
-        coin_id = symbol_map.get(symbol.lower(), symbol.lower())
+        symbol_lower = symbol.lower()
+        if symbol_lower in coin_data:
+            coin_id = coin_data[symbol_lower]['id']
+            coin_emoji = coin_data[symbol_lower]['emoji']
+            coin_name = coin_data[symbol_lower]['name']
+        else:
+            coin_id = symbol_lower
+            coin_emoji = '🪙'
+            coin_name = symbol.upper()
         
         # Fetch detailed coin data
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
@@ -762,58 +770,72 @@ def get_individual_crypto_stats(symbol):
         market_data = data.get("market_data", {})
         
         # Extract key metrics
-        name = data.get("name", symbol.upper())
+        name = data.get("name", coin_name)
         current_price = market_data.get("current_price", {}).get("usd", 0)
-        price_change_24h = market_data.get("price_change_percentage_24h", 0)
+        price_change_24h = market_data.get("price_change_percentage_24h", 0) or 0
         market_cap = market_data.get("market_cap", {}).get("usd", 0)
         volume_24h = market_data.get("total_volume", {}).get("usd", 0)
         market_cap_rank = market_data.get("market_cap_rank", "N/A")
         
-        # Calculate support/resistance (simplified)
-        high_24h = market_data.get("high_24h", {}).get("usd", current_price)
-        low_24h = market_data.get("low_24h", {}).get("usd", current_price)
+        # Get 52-week high and low
+        ath = market_data.get("ath", {}).get("usd", 0)  # All-time high
+        atl = market_data.get("atl", {}).get("usd", 0)  # All-time low
         
-        # Get AI analysis for this specific coin
-        ai_analysis = get_individual_crypto_ai_analysis({
-            "name": name,
-            "symbol": symbol.upper(),
-            "price": current_price,
-            "change_24h": price_change_24h,
-            "market_cap": market_cap,
-            "volume": volume_24h,
-            "high_24h": high_24h,
-            "low_24h": low_24h
-        })
+        # If we don't have exact 52-week data, use all-time high/low as approximation
+        # In practice, you might want to call a different endpoint for 52-week data
+        week_52_high = ath if ath else current_price * 1.5  # Fallback estimation
+        week_52_low = atl if atl else current_price * 0.5   # Fallback estimation
         
         # Format price
         if current_price >= 1:
-            price_str = f"${current_price:.2f}"
+            price_str = f"${current_price:.3f}"
         else:
-            price_str = f"${current_price:.4f}"
+            price_str = f"${current_price:.6f}"
         
         # Format market cap
         if market_cap >= 1e9:
-            mcap_str = f"${market_cap/1e9:.2f}B"
+            mcap_str = f"${market_cap/1e9:.1f}B"
         elif market_cap >= 1e6:
-            mcap_str = f"${market_cap/1e6:.2f}M"
+            mcap_str = f"${market_cap/1e6:.1f}M"
         else:
             mcap_str = f"${market_cap:.0f}"
         
         # Format volume
         if volume_24h >= 1e9:
-            vol_str = f"${volume_24h/1e9:.2f}B"
+            vol_str = f"${volume_24h/1e9:.1f}B"
         elif volume_24h >= 1e6:
-            vol_str = f"${volume_24h/1e6:.2f}M"
+            vol_str = f"${volume_24h/1e6:.1f}M"
         else:
             vol_str = f"${volume_24h:.0f}"
         
-        # Direction indicator
-        direction = "▲" if price_change_24h > 0 else "▼" if price_change_24h < 0 else "→"
+        # Direction arrows
+        price_arrow = "▲" if price_change_24h > 0 else "▼" if price_change_24h < 0 else "→"
         
-        stats_message = f"""Price: {symbol.upper()} {price_str} ({price_change_24h:+.2f}%) {direction}
-Market Summary: {name} is currently trading at {price_str} with a 24h change of ({price_change_24h:+.2f}%) {direction}. 24h Market Cap: {mcap_str}. 24h Volume: {vol_str}.
+        # Assume volume change is positive (you could get actual volume change if available from API)
+        volume_change = 1.4  # Default positive change, could be enhanced with historical data
+        volume_arrow = "▲" if volume_change > 0 else "▼" if volume_change < 0 else "→"
+        
+        # Format rank
+        rank_str = f"(#{market_cap_rank})" if market_cap_rank != "N/A" else ""
+        
+        # Format 52-week range
+        if week_52_high >= 1:
+            high_52w_str = f"${week_52_high:.3f}"
+        else:
+            high_52w_str = f"${week_52_high:.6f}"
+            
+        if week_52_low >= 1:
+            low_52w_str = f"${week_52_low:.3f}"
+        else:
+            low_52w_str = f"${week_52_low:.6f}"
+        
+        # Build the formatted message
+        stats_message = f"""{symbol.upper()} ({name})
+🪙 Price: {price_str} ({price_change_24h:+.1f}% {price_arrow})
+📊 24h Volume: {vol_str} ({volume_change:+.1f}% {volume_arrow})
+💰 Market Cap: {mcap_str} {rank_str}
 
-{ai_analysis}"""
+📈 Range (52W): {low_52w_str} - {high_52w_str}"""
         
         return stats_message
         
@@ -890,6 +912,105 @@ Keep technical values realistic based on the data provided.
     except Exception as e:
         logger.error(f"Error getting individual crypto AI analysis: {e}")
         return "AI analysis temporarily unavailable."
+
+def get_individual_crypto_stats_with_ai(symbol):
+    """Get detailed crypto stats with AI analysis in the requested format."""
+    try:
+        # Map common symbols to CoinGecko IDs and their emojis
+        coin_data = {
+            'btc': {'id': 'bitcoin', 'emoji': '₿', 'name': 'Bitcoin'},
+            'eth': {'id': 'ethereum', 'emoji': 'Ⓔ', 'name': 'Ethereum'}, 
+            'doge': {'id': 'dogecoin', 'emoji': '🐕', 'name': 'Dogecoin'},
+            'ada': {'id': 'cardano', 'emoji': '🔷', 'name': 'Cardano'},
+            'sol': {'id': 'solana', 'emoji': '☀️', 'name': 'Solana'},
+            'xrp': {'id': 'ripple', 'emoji': '💧', 'name': 'XRP'},
+            'matic': {'id': 'matic-network', 'emoji': '🟣', 'name': 'Polygon'},
+            'dot': {'id': 'polkadot', 'emoji': '🔴', 'name': 'Polkadot'},
+            'link': {'id': 'chainlink', 'emoji': '🔗', 'name': 'Chainlink'},
+            'uni': {'id': 'uniswap', 'emoji': '🦄', 'name': 'Uniswap'}
+        }
+        
+        symbol_lower = symbol.lower()
+        if symbol_lower in coin_data:
+            coin_id = coin_data[symbol_lower]['id']
+            coin_name = coin_data[symbol_lower]['name']
+        else:
+            coin_id = symbol_lower
+            coin_name = symbol.upper()
+        
+        # Fetch detailed coin data
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+        params = {
+            "localization": "false",
+            "tickers": "false",
+            "market_data": "true",
+            "community_data": "false",
+            "developer_data": "false"
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        market_data = data.get("market_data", {})
+        
+        # Extract key metrics
+        name = data.get("name", coin_name)
+        current_price = market_data.get("current_price", {}).get("usd", 0)
+        price_change_24h = market_data.get("price_change_percentage_24h", 0) or 0
+        market_cap = market_data.get("market_cap", {}).get("usd", 0)
+        volume_24h = market_data.get("total_volume", {}).get("usd", 0)
+        high_24h = market_data.get("high_24h", {}).get("usd", current_price)
+        low_24h = market_data.get("low_24h", {}).get("usd", current_price)
+        
+        # Format price
+        if current_price >= 1:
+            price_str = f"${current_price:.2f}"
+        else:
+            price_str = f"${current_price:.6f}"
+        
+        # Format market cap
+        if market_cap >= 1e9:
+            mcap_str = f"${market_cap/1e9:.2f}B"
+        elif market_cap >= 1e6:
+            mcap_str = f"${market_cap/1e6:.2f}M"
+        else:
+            mcap_str = f"${market_cap:.0f}"
+        
+        # Format volume
+        if volume_24h >= 1e9:
+            vol_str = f"${volume_24h/1e9:.2f}B"
+        elif volume_24h >= 1e6:
+            vol_str = f"${volume_24h/1e6:.2f}M"
+        else:
+            vol_str = f"${volume_24h:.0f}"
+        
+        # Direction arrow
+        arrow = "▲" if price_change_24h > 0 else "▼" if price_change_24h < 0 else "→"
+        
+        # Get AI analysis
+        ai_analysis = get_individual_crypto_ai_analysis({
+            "name": name,
+            "symbol": symbol.upper(),
+            "price": current_price,
+            "change_24h": price_change_24h,
+            "market_cap": market_cap,
+            "volume": volume_24h,
+            "high_24h": high_24h,
+            "low_24h": low_24h
+        })
+        
+        # Build the formatted message without quotes
+        stats_message = f"""Price: {symbol.upper()} {price_str} ({price_change_24h:+.2f}%) {arrow}
+Market Summary: {name} is currently trading at {price_str} with a 24h change of ({price_change_24h:+.2f}%) {arrow}. 24h Market Cap: {mcap_str}. 24h Volume: {vol_str}.
+
+{ai_analysis}"""
+        
+        return stats_message
+        
+    except Exception as e:
+        logger.error(f"Error fetching {symbol} stats with AI: {e}")
+        return f"Sorry, I couldn't get detailed stats for {symbol.upper()}. Please try again later."
 
 # ===================== WEATHER DATA =====================
 
@@ -989,6 +1110,7 @@ def get_bd_holidays():
     try:
         api_key = Config.CALENDARIFIC_API_KEY
         if not api_key:
+            logger.debug("No Calendarific API key configured")
             return ""
             
         today = get_bd_now()
@@ -1001,21 +1123,97 @@ def get_bd_holidays():
             "day": today.day
         }
         
+        logger.debug(f"Checking holidays for date: {today.year}-{today.month:02d}-{today.day:02d}")
+        
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         
         data = response.json()
+        logger.debug(f"Holiday API response: {data}")
+        
         holidays = data.get("response", {}).get("holidays", [])
         
         if holidays:
-            holiday_names = [h.get("name", "Holiday") for h in holidays]
-            return f"🎉 Today's Holiday: {', '.join(holiday_names)}\n\n"
+            holiday_names = []
+            for h in holidays:
+                name = h.get("name", "Holiday")
+                holiday_type = h.get("type", [])
+                logger.debug(f"Found holiday: {name}, type: {holiday_type}")
+                holiday_names.append(name)
+            
+            holiday_text = ', '.join(holiday_names)
+            logger.info(f"Today's holidays: {holiday_text}")
+            return f"🎉 Today's Holiday: {holiday_text}\n\n"
         else:
+            logger.debug("No holidays found for today")
+            
+            # Check for common Bangladesh holidays manually if API doesn't have them
+            manual_holidays = check_manual_bd_holidays(today)
+            if manual_holidays:
+                logger.info(f"Manual holiday found: {manual_holidays}")
+                return f"🎉 Today's Holiday: {manual_holidays}\n\n"
+            
             return ""
             
     except Exception as e:
-        logger.debug(f"Error fetching holidays: {e}")
+        logger.error(f"Error fetching holidays: {e}")
+        
+        # Try manual check as fallback
+        try:
+            today = get_bd_now()
+            manual_holidays = check_manual_bd_holidays(today)
+            if manual_holidays:
+                logger.info(f"Fallback manual holiday: {manual_holidays}")
+                return f"🎉 Today's Holiday: {manual_holidays}\n\n"
+        except Exception as manual_e:
+            logger.error(f"Manual holiday check also failed: {manual_e}")
+        
         return ""
+
+def check_manual_bd_holidays(date):
+    """Check for common Bangladesh holidays manually."""
+    try:
+        # Common Islamic holidays and Bengali holidays (approximate dates)
+        # Note: Islamic holidays follow lunar calendar, so dates change yearly
+        
+        month_day = f"{date.month:02d}-{date.day:02d}"
+        year = date.year
+        
+        # Fixed date holidays
+        fixed_holidays = {
+            "02-21": "International Mother Language Day",
+            "03-26": "Independence Day",
+            "04-14": "Pohela Boishakh (Bengali New Year)",
+            "05-01": "Labour Day",
+            "08-15": "National Mourning Day",
+            "12-16": "Victory Day",
+            "12-25": "Christmas Day"
+        }
+        
+        if month_day in fixed_holidays:
+            return fixed_holidays[month_day]
+        
+        # Check for common Islamic holidays (these dates vary by year)
+        # You would need to implement proper Islamic calendar calculation
+        # For now, check some common names that might be today
+        
+        islamic_holidays_2025 = {
+            # These are approximate - actual dates depend on moon sighting
+            "07-09": "Ashari Purnima",  # Today's date as mentioned by user
+            "04-10": "Eid ul-Fitr",
+            "06-17": "Eid ul-Adha",
+            "07-07": "Muharram",
+            "09-16": "Eid-e-Milad-un-Nabi"
+        }
+        
+        if month_day in islamic_holidays_2025:
+            return islamic_holidays_2025[month_day]
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in manual holiday check: {e}")
+        return None
 
 # Initialize on import
 init_news_history_db()

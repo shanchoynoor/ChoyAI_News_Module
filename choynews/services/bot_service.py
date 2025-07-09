@@ -199,33 +199,33 @@ def handle_help_command(chat_id):
 📚 *ChoyNewsBot Commands*
 
 *📰 News & Information:*
-🚀 `/start` - Initialize the bot and get a welcome message
-📰 `/news` - Get the full daily news digest
-🌤️ `/weather` - Get Dhaka weather information
-⚡ `/status` - Check your subscription status and timezone
+🚀 /start - Initialize the bot and get a welcome message
+📰 /news - Get the full daily news digest
+🌤️ /weather - Get Dhaka weather information
+⚡ /status - Check your subscription status and timezone
 
 *💰 Cryptocurrency:*
-📊 `/cryptostats` - Get AI summary of crypto market
-🪙 `/coin <symbol>` - Get price and 24h change for a coin
-   Examples: `/coin btc`, `/btc`, `/eth`, `/doge`
-📈 `/coinstats <symbol>` - Get price, 24h change, and AI summary
-   Examples: `/coinstats btc`, `/btcstats`, `/ethstats`
+📊 /cryptostats - Get AI summary of crypto market
+🪙 /coin <symbol> - Get price and 24h change for a coin
+   Examples: /coin btc, /btc, /eth, /doge
+📈 /coinstats <symbol> - Get price, 24h change, and AI summary
+   Examples: /coinstats btc, /btcstats, /ethstats
 
 *⚙️ Settings & Subscriptions:*
-🕒 `/timezone <zone>` - Set your timezone for news digest times
-   Examples: `/timezone +6`, `/timezone Asia/Dhaka`
-📬 `/subscribe` - Get news digests automatically at 8am, 1pm, 7pm, 11pm
-📭 `/unsubscribe` - Stop receiving automatic news digests
+🕒 /timezone <zone> - Set your timezone for news digest times
+   Examples: /timezone +6, /timezone Asia/Dhaka
+📬 /subscribe - Get news digests automatically at 8am, 1pm, 7pm, 11pm
+📭 /unsubscribe - Stop receiving automatic news digests
 
 *🆘 Support:*
-❓ `/help` - Show this help message
-🆘 `/support` - Contact the developer for support
+❓ /help - Show this help message
+🆘 /support - Contact the developer for support
 
 *Popular Crypto Commands:*
-• `/btc`, `/eth`, `/doge`, `/ada`, `/sol`, `/xrp`
-• `/btcstats`, `/ethstats`, `/dogestats`
+• /btc, /eth, /doge, /ada, /sol, /xrp
+• /btcstats, /ethstats, /dogestats
 
-All times are shown in your local timezone. Use `/timezone` to set yours!
+All times are shown in your local timezone. Use /timezone to set yours!
     """
     
     send_telegram(help_message, chat_id)
@@ -379,13 +379,13 @@ def handle_coin_command(chat_id, user_id, coin_symbol):
 def handle_coinstats_command(chat_id, user_id, coin_symbol):
     """Handle coin stats commands like /btcstats, /ethstats, etc."""
     from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_individual_crypto_stats
+    from choynews.core.advanced_news_fetcher import get_individual_crypto_stats_with_ai
     
     try:
         send_telegram(f"🔄 Analyzing {coin_symbol.upper()} with AI...", chat_id)
         
-        # Use the same function as coin command but with AI analysis
-        coin_data = get_individual_crypto_stats(coin_symbol)
+        # Use a different function for AI analysis
+        coin_data = get_individual_crypto_stats_with_ai(coin_symbol)
         if coin_data:
             send_telegram(coin_data, chat_id)
         else:
