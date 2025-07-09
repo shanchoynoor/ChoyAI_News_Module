@@ -79,7 +79,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         digest = header + "".join(sections)
         
         # Add footer
-        digest += "\n━━━━━━━━━━━━━━━━━━━━━\n_Built by Shanchoy with 🤖 AI_"
+        digest += "\n━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)"
         
         logger.info("Successfully built news digest")
         return digest

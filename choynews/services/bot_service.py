@@ -19,7 +19,9 @@ def handle_updates(updates):
         updates (list): List of Telegram update objects
         
     Returns:
-        int: ID of the last processed update or None
+        int: ID of the last processed update o👨‍💻 *Developer:* Shanchoy Noor
+💬 *Message:* @shanchoynoor
+📧 *Email:* shanchoyzone@gmail.com
     """
     if not updates:
         return None
@@ -175,8 +177,8 @@ def handle_start_command(chat_id, user_id, username, first_name, last_name):
 
 I'm your personal news assistant. I can provide you with:
 • 📰 Latest news updates
-• 💰 Cryptocurrency market data
 • 🌤️ Weather information
+• 💰 Cryptocurrency market data
 • ⏰ Scheduled news delivery
 
 *Available Commands:*
@@ -504,8 +506,9 @@ def handle_support_command(chat_id):
 For help, feedback, or bug reports:
 
 👨‍💻 *Developer:* Shanchoy Noor
-📧 *Email:* shanchoyzone@gmail.com
-🐛 *Issues:* Report bugs via email
+� *Message:* @shanchoynoor
+�📧 *Email:* shanchoyzone@gmail.com
+🐛 *Issues:* Report bugs via telegarm or email
 
 *Common Issues:*
 • News not loading: Check your internet connection
@@ -513,7 +516,7 @@ For help, feedback, or bug reports:
 • Missing features: Many features are still in development
 
 *Bot Status:* Active development
-*Version:* 1.0.0
+*Version:* v2.0.0
 
 Thank you for using ChoyNewsBot! 🚀
     """

@@ -450,10 +450,10 @@ def get_breaking_local_news():
     bd_sources = {
         "The Daily Star": "https://www.thedailystar.net/rss.xml",  # Updated working RSS
         "Prothom Alo": "https://www.prothomalo.com/feed",
-        "Financial Express": "https://thefinancialexpress.com.bd/rss",
         "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
         "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml",
-        "Jugantor": "https://www.jugantor.com/feed"
+        "New Age": "https://www.newagebd.net/rss.xml",
+        "Dhaka Tribune": "https://www.dhakatribune.com/feed"
     }
     
     entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
@@ -503,8 +503,8 @@ def get_breaking_sports_news():
         "Yahoo Sports": "https://sports.yahoo.com/rss/",
         "CBS Sports": "https://www.cbssports.com/rss/headlines",
         "Sky Sports": "http://www.skysports.com/rss/12040",
-        "Goal.com": "https://www.goal.com/feeds/en/news",
-        "ESPN FC": "https://www.espn.com/espn/rss/soccer/news"
+        "ESPN FC": "https://www.espn.com/espn/rss/soccer/news",
+        "Sports Illustrated": "https://www.si.com/rss/si_topstories.rss"
     }
     
     entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
@@ -517,11 +517,11 @@ def get_breaking_crypto_news():
         "Cointelegraph": "https://cointelegraph.com/rss",
         "The Block": "https://www.theblock.co/rss.xml",
         "Decrypt": "https://decrypt.co/feed",
-        "Bitcoin Magazine": "https://bitcoinmagazine.com/feed",
         "CryptoSlate": "https://cryptoslate.com/feed/",
         "NewsBTC": "https://www.newsbtc.com/feed/",
         "BeInCrypto": "https://beincrypto.com/feed/",
-        "CoinGape": "https://coingape.com/feed/"
+        "CoinTelegraph": "https://cointelegraph.com/rss/tag/bitcoin",
+        "U.Today": "https://u.today/rss"
     }
     
     entries = fetch_breaking_news_rss(crypto_sources, limit=25, category="crypto", target_count=5)
