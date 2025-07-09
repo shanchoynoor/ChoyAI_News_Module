@@ -266,3 +266,25 @@ def should_send_news(now=None):
         logger.info(f"Scheduled time matched: {now.hour}:{now.minute}")
     
     return should_send
+
+def time_in_range(start, end, current):
+    """
+    Check if current time is in range [start, end].
+    
+    Args:
+        start (tuple): Starting time as (hour, minute) tuple
+        end (tuple): Ending time as (hour, minute) tuple
+        current (tuple): Current time as (hour, minute) tuple
+        
+    Returns:
+        bool: True if current time is within the range, False otherwise
+    """
+    start_mins = start[0] * 60 + start[1]
+    end_mins = end[0] * 60 + end[1]
+    current_mins = current[0] * 60 + current[1]
+    
+    if start_mins <= end_mins:
+        return start_mins <= current_mins <= end_mins
+    else:
+        # Handle overnight ranges (e.g., 22:00 to 06:00)
+        return start_mins <= current_mins or current_mins <= end_mins

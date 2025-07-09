@@ -13,7 +13,8 @@ from choynews.utils.time_utils import (
     set_user_timezone,
     parse_timezone_input,
     get_local_time_str,
-    should_send_news
+    should_send_news,
+    time_in_range
 )
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     'set_user_timezone',
     'parse_timezone_input',
     'get_local_time_str',
-    'should_send_news'
+    'should_send_news',
+    'time_in_range'
 ]
