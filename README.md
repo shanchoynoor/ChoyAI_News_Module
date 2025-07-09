@@ -30,14 +30,6 @@ choynews --service both
 
 For detailed documentation, installation instructions, and usage guide, please refer to the `docs` directory.
 
-## License
-
-MIT
-
-## Author
-
-Shanchoy Noor
-
 ## 🚀 Installation
 
 1. Clone the repository:
