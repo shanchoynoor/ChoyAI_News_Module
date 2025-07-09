@@ -139,9 +139,70 @@ def format_time_ago(published_time):
         logger.debug(f"Error formatting time: {e}")
         return "now"
 
-def fetch_breaking_news_rss(sources, limit=15, category="news", target_count=5):
-    """Fetch breaking news from RSS sources with deduplication, ensuring target count."""
-    fresh_entries = []
+def calculate_news_importance_score(entry, source_name, feed_position):
+    """Calculate importance score for news entry based on multiple factors."""
+    score = 0
+    title = entry.get('title', '').lower()
+    
+    # Position in feed (earlier = more important)
+    position_score = max(0, 10 - feed_position)  # First 10 entries get bonus
+    score += position_score
+    
+    # Source credibility weight
+    source_weights = {
+        # Local sources
+        'Prothom Alo': 10, 'The Daily Star': 9, 'BDNews24': 8, 'Dhaka Tribune': 7,
+        'Financial Express': 8, 'New Age': 6, 'Kaler Kantho': 6,
+        # Global sources
+        'BBC': 10, 'Reuters': 10, 'CNN': 8, 'Al Jazeera': 8, 'Associated Press': 9,
+        'The Guardian': 8, 'NBC News': 7, 'Sky News': 7, 'New York Post': 6,
+        # Tech sources
+        'TechCrunch': 10, 'The Verge': 9, 'Ars Technica': 8, 'Wired': 8,
+        'VentureBeat': 7, 'Engadget': 7, 'ZDNet': 6, 'Mashable': 6,
+        # Sports sources
+        'ESPN': 10, 'BBC Sport': 9, 'Sports Illustrated': 8, 'Yahoo Sports': 7,
+        'Fox Sports': 7, 'CBS Sports': 7, 'Sky Sports': 8,
+        # Crypto sources
+        'Cointelegraph': 8, 'CoinDesk': 9, 'Decrypt': 7, 'The Block': 8,
+        'Bitcoin Magazine': 7, 'CryptoSlate': 6, 'NewsBTC': 6
+    }
+    score += source_weights.get(source_name, 5)  # Default weight 5
+    
+    # Breaking news keywords
+    breaking_keywords = ['breaking', 'urgent', 'alert', 'emergency', 'crisis', 'live', 
+                        'developing', 'update', 'latest', 'just in', 'confirmed',
+                        'exclusive', 'major', 'significant', 'important', 'critical']
+    for keyword in breaking_keywords:
+        if keyword in title:
+            score += 5
+    
+    # High-impact keywords by category
+    if any(word in title for word in ['death', 'killed', 'murder', 'accident', 'disaster', 
+                                     'earthquake', 'flood', 'fire', 'explosion', 'crash']):
+        score += 8
+    
+    if any(word in title for word in ['election', 'government', 'minister', 'president', 
+                                     'prime minister', 'parliament', 'court', 'verdict']):
+        score += 7
+    
+    if any(word in title for word in ['bitcoin', 'crypto', 'blockchain', 'ethereum', 
+                                     'market crash', 'surge', 'rally', 'all-time high']):
+        score += 6
+    
+    if any(word in title for word in ['war', 'conflict', 'attack', 'bombing', 'invasion', 
+                                     'ceasefire', 'peace', 'treaty']):
+        score += 9
+    
+    # Technology impact keywords
+    if any(word in title for word in ['ai', 'artificial intelligence', 'chatgpt', 'openai',
+                                     'launch', 'release', 'breakthrough', 'innovation']):
+        score += 5
+    
+    return score
+
+def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
+    """Fetch breaking news from RSS sources prioritizing both recency and importance."""
+    all_entries = []
     
     for source_name, rss_url in sources.items():
         try:
@@ -159,8 +220,8 @@ def fetch_breaking_news_rss(sources, limit=15, category="news", target_count=5):
             if not feed.entries:
                 continue
                 
-            # Get more entries to ensure we have enough after filtering
-            for entry in feed.entries[:limit]:
+            # Process all entries from this source
+            for position, entry in enumerate(feed.entries[:limit]):
                 try:
                     title = entry.get('title', '').strip()
                     if not title:
@@ -172,10 +233,9 @@ def fetch_breaking_news_rss(sources, limit=15, category="news", target_count=5):
                     
                     link = entry.get('link', '')
                     pub_time = entry.get('published', entry.get('updated', ''))
-                    time_ago = format_time_ago(pub_time)
                     
-                    # Check if this is recent news (within last 48 hours for more coverage)
-                    is_recent = True
+                    # Parse and validate publication time
+                    parsed_time = None
                     try:
                         if pub_time:
                             if isinstance(pub_time, str):
@@ -183,41 +243,57 @@ def fetch_breaking_news_rss(sources, limit=15, category="news", target_count=5):
                                     parsed_time = datetime.strptime(pub_time, "%a, %d %b %Y %H:%M:%S %Z")
                                 except:
                                     try:
-                                        parsed_time = datetime.strptime(pub_time[:19], "%Y-%m-%dT%H:%M:%S")
+                                        parsed_time = datetime.strptime(pub_time, "%Y-%m-%dT%H:%M:%S%z")
+                                        parsed_time = parsed_time.replace(tzinfo=None)
                                     except:
-                                        parsed_time = datetime.now()  # Use current time if parsing fails
+                                        try:
+                                            parsed_time = datetime.strptime(pub_time[:19], "%Y-%m-%dT%H:%M:%S")
+                                        except:
+                                            parsed_time = datetime.now()  # Use current time as fallback
                             else:
                                 parsed_time = pub_time
-                                
-                            # Allow news from last 48 hours to ensure enough content
-                            if (datetime.now() - parsed_time).days > 2:
-                                is_recent = False
+                        else:
+                            parsed_time = datetime.now()
                     except:
-                        is_recent = True  # Include if we can't parse time
+                        parsed_time = datetime.now()
                     
-                    if not is_recent:
+                    # Only include news from last 24 hours for freshness
+                    time_diff = datetime.now() - parsed_time
+                    if time_diff.days > 1:  # Stricter time filter
                         continue
                     
-                    # Check for duplicates with shorter time window for more variety
+                    time_ago = format_time_ago(pub_time)
+                    
+                    # Check for duplicates
                     news_hash = get_news_hash(title, source_name)
-                    if is_news_already_sent(news_hash, hours_back=4):  # Reduced from 6 to 4 hours
+                    if is_news_already_sent(news_hash, hours_back=2):  # Reduced to 2 hours for more variety
                         continue
+                    
+                    # Calculate importance score
+                    importance_score = calculate_news_importance_score(entry, source_name, position)
+                    
+                    # Calculate recency score (newer = higher score)
+                    hours_ago = time_diff.total_seconds() / 3600
+                    recency_score = max(0, 24 - hours_ago)  # 24 points for newest, decreasing
+                    
+                    # Combined score (importance + recency)
+                    total_score = importance_score + (recency_score * 0.5)  # Weight recency at 50%
                     
                     entry_data = {
                         'title': title,
                         'link': link,
                         'source': source_name,
                         'published': pub_time,
+                        'parsed_time': parsed_time,
                         'time_ago': time_ago,
                         'hash': news_hash,
-                        'category': category
+                        'category': category,
+                        'importance_score': importance_score,
+                        'recency_score': recency_score,
+                        'total_score': total_score
                     }
                     
-                    fresh_entries.append(entry_data)
-                    
-                    # Stop if we have enough entries
-                    if len(fresh_entries) >= target_count * 3:  # Get 3x target for good selection
-                        break
+                    all_entries.append(entry_data)
                     
                 except Exception as e:
                     logger.warning(f"Error processing entry from {source_name}: {e}")
@@ -226,65 +302,74 @@ def fetch_breaking_news_rss(sources, limit=15, category="news", target_count=5):
         except Exception as e:
             logger.error(f"Error fetching from {source_name}: {e}")
             continue
-        
-        # Break early if we have enough entries
-        if len(fresh_entries) >= target_count * 2:
-            break
     
-    # Sort by recency and return most recent
-    try:
-        fresh_entries.sort(key=lambda x: x.get('published', ''), reverse=True)
-    except:
-        pass
-        
-    return fresh_entries
+    # Sort by combined score (importance + recency) - highest first
+    all_entries.sort(key=lambda x: x['total_score'], reverse=True)
+    
+    # Filter out duplicates and return top entries
+    seen_hashes = set()
+    filtered_entries = []
+    
+    for entry in all_entries:
+        if entry['hash'] not in seen_hashes:
+            seen_hashes.add(entry['hash'])
+            filtered_entries.append(entry)
+            
+            if len(filtered_entries) >= target_count * 2:  # Get 2x target for good selection
+                break
+    
+    return filtered_entries[:target_count * 2]  # Return double for variety
 
 def format_news_section(section_title, entries, limit=5):
-    """Format news entries with source attribution and timestamps, ensuring exactly 5 items."""
+    """Format news entries prioritizing importance and recency, ensuring exactly 5 items."""
     formatted = f"*{section_title}:*\n"
     
     # Define fallback messages for each category
     category_fallbacks = {
         "🇧🇩 LOCAL NEWS": [
-            "Breaking local news updates coming soon...",
-            "Local political developments being monitored...",
-            "Regional economic updates being tracked...",
-            "Local social updates will be available shortly...",
-            "Community news updates in progress..."
+            "🔄 Latest breaking local news being monitored...",
+            "📊 Local political developments being tracked...",
+            "💼 Regional economic updates in progress...",
+            "🏛️ Government policy updates being compiled...",
+            "🌟 Community developments being monitored..."
         ],
         "🌍 GLOBAL NEWS": [
-            "International breaking news being updated...",
-            "Global political developments being tracked...", 
-            "World economic updates coming soon...",
-            "International affairs updates in progress...",
-            "Global crisis updates being monitored..."
+            "🌍 International breaking news being updated...",
+            "🔥 Global crisis developments being tracked...", 
+            "💸 World economic updates coming soon...",
+            "🕊️ International affairs updates in progress...",
+            "⚡ Breaking global events being monitored..."
         ],
         "🚀 TECH NEWS": [
-            "Latest technology breakthroughs being analyzed...",
-            "AI and innovation updates coming soon...",
-            "Tech industry developments being tracked...",
-            "Startup and venture updates in progress...",
-            "Digital transformation news being compiled..."
+            "💡 Latest technology breakthroughs being analyzed...",
+            "🤖 AI and innovation updates coming soon...",
+            "🔧 Tech industry developments being tracked...",
+            "💰 Startup and venture updates in progress...",
+            "📱 Digital transformation news being compiled..."
         ],
         "🏆 SPORTS NEWS": [
-            "Sports scores and updates being compiled...",
-            "League standings and results coming soon...",
-            "Player transfers and moves being tracked...",
-            "Tournament updates in progress...",
-            "Sports analysis and commentary being prepared..."
+            "⚽ Live sports scores and updates being compiled...",
+            "🏅 League standings and results coming soon...",
+            "🔄 Player transfers and moves being tracked...",
+            "🏟️ Tournament updates in progress...",
+            "📈 Sports analysis and commentary being prepared..."
         ],
         "🪙 FINANCE & CRYPTO NEWS": [
-            "Cryptocurrency market movements being analyzed...",
-            "DeFi protocol updates being tracked...",
-            "Blockchain developments coming soon...",
-            "Digital asset regulatory news in progress...",
-            "Crypto trading insights being compiled..."
+            "📊 Cryptocurrency market movements being analyzed...",
+            "🔗 DeFi protocol updates being tracked...",
+            "⛓️ Blockchain developments coming soon...",
+            "📜 Digital asset regulatory news in progress...",
+            "💹 Crypto trading insights being compiled..."
         ]
     }
     
     count = 0
     
-    # First, add real news entries
+    # Sort entries by total score to get the most important ones first
+    if entries:
+        entries = sorted(entries, key=lambda x: x.get('total_score', 0), reverse=True)
+    
+    # First, add real news entries (prioritizing high-importance ones)
     for entry in entries:
         if count >= limit:
             break
@@ -302,10 +387,20 @@ def format_news_section(section_title, entries, limit=5):
         title_escaped = title.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
         
         count += 1
-        if link:
-            formatted += f"{count}. [{title_escaped}]({link}) - {source} ({time_ago})\n"
+        
+        # Add importance indicator for high-scoring news
+        importance_score = entry.get('importance_score', 0)
+        if importance_score > 15:
+            indicator = "🔥 "  # Hot/breaking news
+        elif importance_score > 10:
+            indicator = "⚡ "  # Important news
         else:
-            formatted += f"{count}. {title_escaped} - {source} ({time_ago})\n"
+            indicator = ""
+        
+        if link:
+            formatted += f"{count}. {indicator}[{title_escaped}]({link}) - {source} ({time_ago})\n"
+        else:
+            formatted += f"{count}. {indicator}{title_escaped} - {source} ({time_ago})\n"
         
         # Mark as sent to prevent duplicates
         try:
@@ -315,11 +410,11 @@ def format_news_section(section_title, entries, limit=5):
     
     # Fill remaining slots with fallback messages if needed
     fallback_messages = category_fallbacks.get(section_title, [
-        "News updates will be available shortly...",
-        "Breaking news being monitored...",
-        "Latest developments being tracked...",
-        "Updates coming soon...",
-        "News compilation in progress..."
+        "📰 News updates will be available shortly...",
+        "🔍 Breaking news being monitored...",
+        "📈 Latest developments being tracked...",
+        "⏰ Updates coming soon...",
+        "📝 News compilation in progress..."
     ])
     
     fallback_index = 0
@@ -334,95 +429,96 @@ def format_news_section(section_title, entries, limit=5):
 # ===================== NEWS SOURCES =====================
 
 def get_breaking_local_news():
-    """Get breaking Bangladesh news."""
+    """Get breaking Bangladesh news from top sources."""
     bd_sources = {
+        "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",  # Most reliable for breaking news
+        "BDNews24": "https://bdnews24.com/feed",  # Fast breaking news
         "Prothom Alo": "https://www.prothomalo.com/feed",
-        "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
-        "BDNews24": "https://bdnews24.com/feed",
         "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
-        "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
-        "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml",
-        "Jugantor": "https://www.jugantor.com/feed",
-        "New Age": "http://www.newagebd.net/rss/rss.xml",
         "Financial Express": "https://thefinancialexpress.com.bd/rss",
+        "New Age": "http://www.newagebd.net/rss/rss.xml",
+        "The Business Standard": "https://www.tbsnews.net/feed",
+        "United News": "https://unb.com.bd/feed",
         "Dhaka Post": "https://www.dhakapost.com/rss.xml"
     }
     
-    entries = fetch_breaking_news_rss(bd_sources, limit=20, category="local", target_count=5)
+    entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
     return format_news_section("🇧🇩 LOCAL NEWS", entries, limit=5)
 
 def get_breaking_global_news():
-    """Get breaking global news."""
+    """Get breaking global news from top international sources."""
     global_sources = {
+        "Reuters": "http://feeds.reuters.com/reuters/topNews",  # Most reliable for breaking news
         "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
-        "Reuters": "http://feeds.reuters.com/reuters/topNews",
+        "Associated Press": "https://feeds.apnews.com/rss/apf-topnews", 
         "CNN": "http://rss.cnn.com/rss/edition.rss",
         "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
-        "New York Post": "https://nypost.com/feed/",
         "The Guardian": "https://www.theguardian.com/world/rss",
         "NBC News": "https://feeds.nbcnews.com/nbcnews/public/news",
-        "Associated Press": "https://feeds.apnews.com/rss/apf-topnews",
         "Sky News": "http://feeds.skynews.com/feeds/rss/world.xml",
-        "France24": "https://www.france24.com/en/rss"
+        "France24": "https://www.france24.com/en/rss",
+        "NPR": "https://feeds.npr.org/1001/rss.xml"
     }
     
-    entries = fetch_breaking_news_rss(global_sources, limit=20, category="global", target_count=5)
+    entries = fetch_breaking_news_rss(global_sources, limit=30, category="global", target_count=5)
     return format_news_section("🌍 GLOBAL NEWS", entries, limit=5)
 
 def get_breaking_tech_news():
-    """Get breaking technology news."""
+    """Get breaking technology news from top tech sources."""
     tech_sources = {
-        "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
+        "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",  # Best for breaking tech news
         "The Verge": "https://www.theverge.com/rss/index.xml",
-        "Wired": "https://www.wired.com/feed/rss",
         "Ars Technica": "http://feeds.arstechnica.com/arstechnica/index/",
-        "Mashable": "https://mashable.com/feeds/rss/all",
+        "Wired": "https://www.wired.com/feed/rss",
         "VentureBeat": "https://venturebeat.com/feed/",
         "Engadget": "https://www.engadget.com/rss.xml",
+        "TechRadar": "https://www.techradar.com/rss",
         "ZDNet": "https://www.zdnet.com/news/rss.xml",
-        "TechRadar": "https://www.techradar.com/rss"
+        "Gizmodo": "https://gizmodo.com/rss"
     }
     
-    entries = fetch_breaking_news_rss(tech_sources, limit=15, category="tech", target_count=5)
+    entries = fetch_breaking_news_rss(tech_sources, limit=25, category="tech", target_count=5)
     return format_news_section("🚀 TECH NEWS", entries, limit=5)
 
 def get_breaking_sports_news():
-    """Get breaking sports news."""
+    """Get breaking sports news from top sports sources."""
     sports_sources = {
-        "ESPN": "https://www.espn.com/espn/rss/news",
+        "ESPN": "https://www.espn.com/espn/rss/news",  # Best for breaking sports news
         "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
+        "Sports Illustrated": "https://www.si.com/rss/si_topstories.rss",
         "Yahoo Sports": "https://sports.yahoo.com/rss/",
         "Sporting News": "https://www.sportingnews.com/rss",
-        "Sports Illustrated": "https://www.si.com/rss/si_topstories.rss",
         "Fox Sports": "https://www.foxsports.com/feeds/rss/1.0/sports-news",
         "CBS Sports": "https://www.cbssports.com/rss/headlines",
-        "Sky Sports": "http://www.skysports.com/rss/12040"
+        "Sky Sports": "http://www.skysports.com/rss/12040",
+        "The Athletic": "https://theathletic.com/rss/"
     }
     
-    entries = fetch_breaking_news_rss(sports_sources, limit=15, category="sports", target_count=5)
+    entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
     return format_news_section("🏆 SPORTS NEWS", entries, limit=5)
 
 def get_breaking_crypto_news():
-    """Get breaking cryptocurrency news."""
+    """Get breaking cryptocurrency news from top crypto sources."""
     crypto_sources = {
+        "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",  # Most reliable for breaking crypto news
         "Cointelegraph": "https://cointelegraph.com/rss",
-        "Decrypt": "https://decrypt.co/feed",
-        "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
         "The Block": "https://www.theblock.co/rss.xml",
+        "Decrypt": "https://decrypt.co/feed",
         "Bitcoin Magazine": "https://bitcoinmagazine.com/feed",
         "CryptoSlate": "https://cryptoslate.com/feed/",
         "NewsBTC": "https://www.newsbtc.com/feed/",
         "CoinTelegraph": "https://cointelegraph.com/rss",
-        "Crypto News": "https://cryptonews.com/news/feed/"
+        "Crypto News": "https://cryptonews.com/news/feed/",
+        "BeInCrypto": "https://beincrypto.com/feed/"
     }
     
-    entries = fetch_breaking_news_rss(crypto_sources, limit=15, category="crypto", target_count=5)
+    entries = fetch_breaking_news_rss(crypto_sources, limit=25, category="crypto", target_count=5)
     return format_news_section("🪙 FINANCE & CRYPTO NEWS", entries, limit=5)
 
 # ===================== CRYPTO DATA WITH AI =====================
 
 def fetch_crypto_market_with_ai():
-    """Fetch crypto market data with DeepSeek AI analysis."""
+    """Fetch crypto market data with comprehensive formatting including big cap, gainers, and losers."""
     try:
         # Fetch market overview
         url = "https://api.coingecko.com/api/v3/global"
@@ -434,14 +530,15 @@ def fetch_crypto_market_with_ai():
         volume = data["total_volume"]["usd"]
         market_change = data["market_cap_change_percentage_24h_usd"]
         
-        # Fetch top cryptos for AI analysis
+        # Fetch top 50 cryptos for comprehensive data
         crypto_url = "https://api.coingecko.com/api/v3/coins/markets"
         crypto_params = {
             "vs_currency": "usd",
             "order": "market_cap_desc",
-            "per_page": 20,
+            "per_page": 50,
             "page": 1,
-            "sparkline": False
+            "sparkline": False,
+            "price_change_percentage": "24h"
         }
         
         crypto_response = requests.get(crypto_url, params=crypto_params, timeout=10)
@@ -456,37 +553,98 @@ def fetch_crypto_market_with_ai():
             fear_index = "N/A"
             fear_text = "Unknown"
         
-        # Prepare data for AI analysis
-        market_summary = {
-            "market_cap": market_cap,
-            "volume": volume,
-            "market_change": market_change,
-            "fear_greed": fear_index,
-            "top_cryptos": crypto_data[:10]
-        }
-        
-        # Get AI analysis
-        ai_analysis = get_crypto_ai_analysis(market_summary)
-        
-        # Format response
+        # Format market cap and volume
         market_cap_str = f"${market_cap/1e12:.2f}T" if market_cap >= 1e12 else f"${market_cap/1e9:.2f}B"
         volume_str = f"${volume/1e12:.2f}T" if volume >= 1e12 else f"${volume/1e9:.2f}B"
         
-        crypto_section = f"""*💰 CRYPTO MARKET:*
+        # Build crypto section
+        crypto_section = f"""💰 CRYPTO MARKET:
 Market Cap (24h): {market_cap_str} ({market_change:+.2f}%)
 Volume (24h): {volume_str}
-Fear/Greed Index: {fear_index}/100 ({fear_text})
+Fear/Greed Index: {fear_index}/100
 
-🤖 AI Market Summary:
-{ai_analysis}
-
+💎 Big Cap Crypto:
 """
+        
+        # Define specific big cap cryptos to display
+        big_cap_targets = {
+            'bitcoin': 'BTC',
+            'ethereum': 'ETH', 
+            'ripple': 'XRP',
+            'binancecoin': 'BNB',
+            'solana': 'SOL',
+            'tron': 'TRX',
+            'dogecoin': 'DOGE',
+            'cardano': 'ADA'
+        }
+        
+        # Add big cap cryptos in order
+        for crypto in crypto_data:
+            if crypto['id'] in big_cap_targets:
+                symbol = big_cap_targets[crypto['id']]
+                price = crypto['current_price']
+                change = crypto['price_change_percentage_24h'] or 0
+                arrow = "▲" if change > 0 else "▼" if change < 0 else "→"
+                
+                # Format price appropriately
+                if price >= 1000:
+                    price_str = f"${price:,.2f}"
+                elif price >= 1:
+                    price_str = f"${price:.2f}"
+                else:
+                    price_str = f"${price:.4f}"
+                
+                crypto_section += f"{symbol}: {price_str} ({change:+.2f}%) {arrow}\n"
+        
+        # Sort by 24h change for gainers and losers
+        sorted_cryptos = sorted([c for c in crypto_data if c['price_change_percentage_24h'] is not None], 
+                               key=lambda x: x['price_change_percentage_24h'])
+        
+        # Top 5 gainers (highest positive changes)
+        gainers = sorted_cryptos[-5:][::-1]  # Reverse to get highest first
+        crypto_section += "\n� Crypto Top 5 Gainers:\n"
+        for i, crypto in enumerate(gainers, 1):
+            symbol = crypto['name']
+            price = crypto['current_price']
+            change = crypto['price_change_percentage_24h']
+            arrow = "▲"
+            
+            # Format price appropriately
+            if price >= 1000:
+                price_str = f"${price:,.2f}"
+            elif price >= 1:
+                price_str = f"${price:.2f}"
+            else:
+                price_str = f"${price:.4f}"
+            
+            crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+        
+        # Top 5 losers (lowest negative changes)
+        losers = sorted_cryptos[:5]
+        crypto_section += "\n📉 Crypto Top 5 Losers:\n"
+        for i, crypto in enumerate(losers, 1):
+            symbol = crypto['name']
+            price = crypto['current_price']
+            change = crypto['price_change_percentage_24h']
+            arrow = "▼"
+            
+            # Format price appropriately
+            if price >= 1000:
+                price_str = f"${price:,.2f}"
+            elif price >= 1:
+                price_str = f"${price:.2f}"
+            else:
+                price_str = f"${price:.4f}"
+            
+            crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+        
+        crypto_section += "\n"
         
         return crypto_section
         
     except Exception as e:
         logger.error(f"Error fetching crypto market data: {e}")
-        return "*💰 CRYPTO MARKET:*\nMarket data temporarily unavailable.\n\n"
+        return "💰 CRYPTO MARKET:\nMarket data temporarily unavailable.\n\n"
 
 def get_crypto_ai_analysis(market_data):
     """Get AI analysis of crypto market using DeepSeek API."""
@@ -724,7 +882,7 @@ Keep technical values realistic based on the data provided.
 # ===================== WEATHER DATA =====================
 
 def get_dhaka_weather():
-    """Get comprehensive Dhaka weather data."""
+    """Get comprehensive Dhaka weather data with detailed formatting."""
     try:
         api_key = Config.WEATHERAPI_KEY
         if not api_key:
@@ -744,13 +902,17 @@ def get_dhaka_weather():
         current = data.get("current", {})
         location = data.get("location", {})
         
+        # Temperature data
         temp_c = current.get("temp_c", 0)
-        feels_like = current.get("feelslike_c", temp_c)
         condition = current.get("condition", {}).get("text", "N/A")
         humidity = current.get("humidity", 0)
         
-        # Rain probability (if available)
-        rain_chance = "N/A"  # WeatherAPI current doesn't include rain probability
+        # Wind data
+        wind_kph = current.get("wind_kph", 0)
+        wind_dir = current.get("wind_dir", "N")
+        
+        # UV Index
+        uv = current.get("uv", 0)
         
         # Air quality
         aqi_data = current.get("air_quality", {})
@@ -760,15 +922,14 @@ def get_dhaka_weather():
             4: "Unhealthy", 5: "Very Unhealthy", 6: "Hazardous"
         }
         aqi_text = aqi_levels.get(us_epa, "Moderate")
-        aqi_value = int(aqi_data.get("pm2_5", 50))  # Use PM2.5 as AQI approximation
         
-        uv = current.get("uv", 0)
-        uv_level = "Low" if uv < 3 else "Moderate" if uv < 6 else "High" if uv < 8 else "Very High"
-        
-        weather_section = f"""🌦️ Dhaka: {temp_c:.1f}°C ~ {feels_like:.1f}°C
-🌧️ {condition}
-🫧 AQI: {aqi_text} ({aqi_value})
-🔆 UV: {uv_level} ({uv})
+        weather_section = f"""�️ WEATHER - Dhaka:
+🌡️ Temperature: {temp_c}°C
+☁️ Condition: {condition}
+💧 Humidity: {humidity}%
+💨 Wind: {wind_kph} km/h {wind_dir}
+☀️ UV Index: {uv}
+🌬️ Air Quality: {aqi_text}
 
 """
         
