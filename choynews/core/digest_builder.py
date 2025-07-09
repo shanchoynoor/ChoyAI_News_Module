@@ -1,7 +1,8 @@
 """
-News Digest Builder for Choy News Bot.
-
-This module builds personalized news digests for users.
+News Digest Builder for Choy News Bot.        # Build the digest header with Bangladesh time
+        now = get_bd_now()
+        time_str = get_bd_time_str(now)
+        header = f"📰 *DAILY NEWS DIGEST*\n{time_str}\n━━━━━━━━━━━━━━━━━━━━━\n\n"is module builds personalized news digests for users.
 """
 
 import logging
@@ -26,11 +27,11 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         str: Formatted news digest in Markdown format
     """
     try:
-        # Import news fetcher functions
-        from choynews.core.news_fetcher import (
-            get_local_news, get_global_news, get_tech_news, get_sports_news, 
-            get_crypto_news, fetch_crypto_market, fetch_big_cap_prices, 
-            fetch_top_movers, get_weather_data, get_bd_holidays
+        # Import advanced news fetcher functions
+        from choynews.core.advanced_news_fetcher import (
+            get_breaking_local_news, get_breaking_global_news, get_breaking_tech_news, 
+            get_breaking_sports_news, get_breaking_crypto_news, fetch_crypto_market_with_ai,
+            get_dhaka_weather, get_bd_holidays
         )
         
         # Apply user preferences if provided
@@ -49,7 +50,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         
         # Add weather and holidays first
         if include_weather:
-            weather_section = get_weather_data("Dhaka")
+            weather_section = get_dhaka_weather()
             if weather_section:
                 sections.append(weather_section)
         
@@ -59,28 +60,26 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
             sections.append(holidays_section)
         
         # Add news sections
-        sections.append(get_local_news())
+        sections.append(get_breaking_local_news())
         
         if include_world_news:
-            sections.append(get_global_news())
+            sections.append(get_breaking_global_news())
         
         if include_tech_news:
-            sections.append(get_tech_news())
+            sections.append(get_breaking_tech_news())
             
-        sections.append(get_sports_news())
-        sections.append(get_crypto_news())
+        sections.append(get_breaking_sports_news())
+        sections.append(get_breaking_crypto_news())
         
-        # Add crypto market data if enabled
+        # Add crypto market data with AI analysis if enabled
         if include_crypto:
-            sections.append(fetch_crypto_market())
-            sections.append(fetch_big_cap_prices())
-            sections.append(fetch_top_movers())
+            sections.append(fetch_crypto_market_with_ai())
         
         # Combine all sections
         digest = header + "".join(sections)
         
         # Add footer
-        digest += "\n_Built by Shanchoy_"
+        digest += "\n━━━━━━━━━━━━━━━━━━━━━\n_Built by Shanchoy with 🤖 AI_"
         
         logger.info("Successfully built news digest")
         return digest
@@ -113,14 +112,9 @@ def build_crypto_section():
         str: Formatted crypto section in Markdown
     """
     try:
-        from choynews.core.news_fetcher import fetch_crypto_market, fetch_big_cap_prices, fetch_top_movers
+        from choynews.core.advanced_news_fetcher import fetch_crypto_market_with_ai
         
-        sections = []
-        sections.append(fetch_crypto_market())
-        sections.append(fetch_big_cap_prices())
-        sections.append(fetch_top_movers())
-        
-        return "".join(sections)
+        return fetch_crypto_market_with_ai()
     except Exception as e:
         logger.error(f"Error building crypto section: {e}")
         return "*💰 CRYPTOCURRENCY MARKET*\nMarket data temporarily unavailable.\n\n"
@@ -136,14 +130,11 @@ def build_weather_section(user=None):
         str: Formatted weather section in Markdown
     """
     try:
-        from choynews.core.news_fetcher import get_weather_data
+        from choynews.core.advanced_news_fetcher import get_dhaka_weather
         
-        # Default to Dhaka, can be customized based on user preferences
-        city = "Dhaka"
-        if user and user.get("location"):
-            city = user["location"]
-            
-        return get_weather_data(city)
+        # For now, we only support Dhaka weather
+        # TODO: Add location-based weather support
+        return get_dhaka_weather()
     except Exception as e:
         logger.error(f"Error building weather section: {e}")
         return "*☀️ WEATHER FORECAST*\nWeather data temporarily unavailable.\n\n"
@@ -156,8 +147,8 @@ def build_world_news_section():
         str: Formatted world news section in Markdown
     """
     try:
-        from choynews.core.news_fetcher import get_global_news
-        return get_global_news()
+        from choynews.core.advanced_news_fetcher import get_breaking_global_news
+        return get_breaking_global_news()
     except Exception as e:
         logger.error(f"Error building world news section: {e}")
         return "*🌍 WORLD NEWS*\nWorld news temporarily unavailable.\n\n"
@@ -170,8 +161,8 @@ def build_tech_news_section():
         str: Formatted tech news section in Markdown
     """
     try:
-        from choynews.core.news_fetcher import get_tech_news
-        return get_tech_news()
+        from choynews.core.advanced_news_fetcher import get_breaking_tech_news
+        return get_breaking_tech_news()
     except Exception as e:
         logger.error(f"Error building tech news section: {e}")
         return "*💻 TECHNOLOGY NEWS*\nTechnology news temporarily unavailable.\n\n"

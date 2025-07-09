@@ -318,29 +318,18 @@ def handle_callback_query(callback_query):
 def handle_weather_command(chat_id, user_id):
     """Handle the /weather command."""
     from choynews.api.telegram import send_telegram
+    from choynews.core.advanced_news_fetcher import get_dhaka_weather
     
     try:
-        # For now, send a placeholder. This would integrate with weather API
-        weather_message = """
-🌤️ *Weather in Dhaka*
-
-🌡️ Temperature: 28°C (feels like 32°C)
-🌧️ Condition: Partly cloudy with chance of rain
-💧 Humidity: 78%
-💨 Wind: 12 km/h E
-👁️ Visibility: 8 km
-🌅 Sunrise: 05:12 AM
-🌇 Sunset: 06:47 PM
-
-*Today's Forecast:*
-• Morning: 26°C - Partly cloudy
-• Afternoon: 30°C - Thunderstorms likely  
-• Evening: 27°C - Light rain
-
-Weather data will be fully integrated soon!
-        """
+        send_telegram("🌤️ Getting latest weather data for Dhaka...", chat_id)
         
-        send_telegram(weather_message, chat_id)
+        weather_section = get_dhaka_weather()
+        if weather_section:
+            weather_message = f"☀️ *DHAKA WEATHER*\n\n{weather_section}"
+            send_telegram(weather_message, chat_id)
+        else:
+            send_telegram("Sorry, weather information is temporarily unavailable.", chat_id)
+        
         logger.info(f"Sent weather info to user {user_id}")
         
     except Exception as e:
@@ -350,32 +339,17 @@ Weather data will be fully integrated soon!
 def handle_cryptostats_command(chat_id, user_id):
     """Handle the /cryptostats command."""
     from choynews.api.telegram import send_telegram
+    from choynews.core.advanced_news_fetcher import fetch_crypto_market_with_ai
     
     try:
-        crypto_message = """
-💰 *Cryptocurrency Market Overview*
-
-📊 *Market Cap:* $2.41T (+2.3% 24h)
-📈 *24h Volume:* $85.2B  
-😨 *Fear & Greed Index:* 67 (Greed)
-
-*Top Performers (24h):*
-🚀 SOL: +8.4% ($142.50)
-🚀 ADA: +6.2% ($0.48)
-🚀 DOT: +5.1% ($7.82)
-
-*Top Cryptocurrencies:*
-₿ BTC: $43,250 (+1.2%)
-Ξ ETH: $2,580 (+0.8%)
-🪙 BNB: $315 (-0.5%)
-
-*AI Market Summary:*
-The crypto market shows bullish momentum with altcoins outperforming Bitcoin. Institutional adoption continues to drive growth, while regulatory clarity improves sentiment.
-
-Full market integration coming soon!
-        """
+        send_telegram("� Fetching latest crypto market data with AI analysis...", chat_id)
         
-        send_telegram(crypto_message, chat_id)
+        crypto_section = fetch_crypto_market_with_ai()
+        if crypto_section:
+            send_telegram(crypto_section, chat_id)
+        else:
+            send_telegram("Sorry, cryptocurrency market data is temporarily unavailable.", chat_id)
+        
         logger.info(f"Sent crypto stats to user {user_id}")
         
     except Exception as e:
@@ -385,36 +359,17 @@ Full market integration coming soon!
 def handle_coin_command(chat_id, user_id, coin_symbol):
     """Handle coin price commands like /btc, /eth, etc."""
     from choynews.api.telegram import send_telegram
+    from choynews.core.advanced_news_fetcher import get_individual_crypto_stats
     
     try:
-        # Coin data mapping (this would come from API in full implementation)
-        coin_data = {
-            'btc': {'name': 'Bitcoin', 'price': '$43,250', 'change': '+1.2%', 'symbol': '₿'},
-            'eth': {'name': 'Ethereum', 'price': '$2,580', 'change': '+0.8%', 'symbol': 'Ξ'},
-            'doge': {'name': 'Dogecoin', 'price': '$0.082', 'change': '+3.4%', 'symbol': '🐕'},
-            'ada': {'name': 'Cardano', 'price': '$0.48', 'change': '+6.2%', 'symbol': '🪙'},
-            'sol': {'name': 'Solana', 'price': '$142.50', 'change': '+8.4%', 'symbol': '🚀'},
-            'xrp': {'name': 'XRP', 'price': '$0.58', 'change': '+2.1%', 'symbol': '💧'},
-            'matic': {'name': 'Polygon', 'price': '$0.95', 'change': '-1.5%', 'symbol': '🔷'},
-            'dot': {'name': 'Polkadot', 'price': '$7.82', 'change': '+5.1%', 'symbol': '⚪'},
-            'link': {'name': 'Chainlink', 'price': '$15.30', 'change': '+0.7%', 'symbol': '🔗'},
-            'uni': {'name': 'Uniswap', 'price': '$8.45', 'change': '+1.9%', 'symbol': '🦄'}
-        }
+        send_telegram(f"🔄 Fetching latest {coin_symbol.upper()} data...", chat_id)
         
-        if coin_symbol in coin_data:
-            coin = coin_data[coin_symbol]
-            coin_message = f"""
-{coin['symbol']} *{coin['name']} ({coin_symbol.upper()})*
-
-💰 *Price:* {coin['price']}
-📈 *24h Change:* {coin['change']}
-
-Real-time price data integration coming soon!
-            """
+        coin_data = get_individual_crypto_stats(coin_symbol)
+        if coin_data:
+            send_telegram(coin_data, chat_id)
         else:
-            coin_message = f"Sorry, I don't have data for '{coin_symbol.upper()}' yet. Try popular coins like BTC, ETH, DOGE, ADA, SOL, XRP."
+            send_telegram(f"Sorry, I couldn't get price data for {coin_symbol.upper()}. Try popular coins like BTC, ETH, DOGE, ADA, SOL, XRP.", chat_id)
         
-        send_telegram(coin_message, chat_id)
         logger.info(f"Sent {coin_symbol} price to user {user_id}")
         
     except Exception as e:
@@ -424,46 +379,18 @@ Real-time price data integration coming soon!
 def handle_coinstats_command(chat_id, user_id, coin_symbol):
     """Handle coin stats commands like /btcstats, /ethstats, etc."""
     from choynews.api.telegram import send_telegram
+    from choynews.core.advanced_news_fetcher import get_individual_crypto_stats
     
     try:
-        # Extended coin data (this would come from API in full implementation)
-        coin_stats = {
-            'btc': {
-                'name': 'Bitcoin', 'symbol': '₿', 'price': '$43,250', 'change': '+1.2%',
-                'market_cap': '$842B', 'volume': '$28.5B', 'rank': '1',
-                'summary': 'Bitcoin maintains dominance with steady institutional adoption. Recent ETF inflows suggest continued bullish sentiment.'
-            },
-            'eth': {
-                'name': 'Ethereum', 'symbol': 'Ξ', 'price': '$2,580', 'change': '+0.8%',
-                'market_cap': '$310B', 'volume': '$12.8B', 'rank': '2',
-                'summary': 'Ethereum shows strength with upcoming network upgrades. DeFi activity remains robust across the ecosystem.'
-            },
-            'doge': {
-                'name': 'Dogecoin', 'symbol': '🐕', 'price': '$0.082', 'change': '+3.4%',
-                'market_cap': '$11.8B', 'volume': '$1.2B', 'rank': '8',
-                'summary': 'Dogecoin rallies on social media momentum and increased merchant adoption. Community-driven growth continues.'
-            }
-        }
+        send_telegram(f"🔄 Analyzing {coin_symbol.upper()} with AI...", chat_id)
         
-        if coin_symbol in coin_stats:
-            coin = coin_stats[coin_symbol]
-            stats_message = f"""
-{coin['symbol']} *{coin['name']} ({coin_symbol.upper()}) Statistics*
-
-💰 *Price:* {coin['price']}
-📈 *24h Change:* {coin['change']}
-🏆 *Market Cap:* {coin['market_cap']} (#{coin['rank']})
-📊 *24h Volume:* {coin['volume']}
-
-🤖 *AI Analysis:*
-{coin['summary']}
-
-Detailed analytics integration coming soon!
-            """
+        # Use the same function as coin command but with AI analysis
+        coin_data = get_individual_crypto_stats(coin_symbol)
+        if coin_data:
+            send_telegram(coin_data, chat_id)
         else:
-            stats_message = f"Sorry, I don't have detailed stats for '{coin_symbol.upper()}' yet. Try BTC, ETH, or DOGE."
+            send_telegram(f"Sorry, I don't have detailed stats for '{coin_symbol.upper()}' yet. Try popular coins like BTC, ETH, DOGE, ADA, SOL, XRP.", chat_id)
         
-        send_telegram(stats_message, chat_id)
         logger.info(f"Sent {coin_symbol} stats to user {user_id}")
         
     except Exception as e:
