@@ -654,11 +654,11 @@ def fetch_crypto_market_with_ai():
         if fear_index != "N/A":
             fear_value = int(fear_index)
             if fear_value >= 75:
-                fear_greed_text = f"{fear_index}/100 (🟢 BUY)"
+                fear_greed_text = f"{fear_index}/100 = 🟢 BUY"
             elif fear_value >= 50:
-                fear_greed_text = f"{fear_index}/100 (🟠 HOLD)"
+                fear_greed_text = f"{fear_index}/100 = 🟠 HOLD"
             else:
-                fear_greed_text = f"{fear_index}/100 (🔴 SELL)"
+                fear_greed_text = f"{fear_index}/100 = 🔴 SELL"
         else:
             fear_greed_text = f"{fear_index}/100"
         
@@ -712,7 +712,7 @@ Fear/Greed Index: {fear_greed_text}
             # Format price appropriately using helper function
             price_str = format_crypto_price(price)
             
-            crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
         # Top 5 losers (lowest negative changes)
         losers = sorted_cryptos[:5]
@@ -726,9 +726,7 @@ Fear/Greed Index: {fear_greed_text}
             # Format price appropriately using helper function
             price_str = format_crypto_price(price)
             
-            crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
-        
-        crypto_section += "\n"
+            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
         return crypto_section
         
@@ -1234,15 +1232,14 @@ def get_dhaka_weather():
         temp_min = temp_c - 2  # Approximate daily range
         temp_max = temp_c + 5
         
-        weather_section = f"""*☀️ DHAKA WEATHER:*
+        weather_section = f"""☀️ WEATHER
 🌡️ Temperature: {temp_min:.1f}°C - {temp_max:.1f}°C
-🌤️ Condition: {condition}  
+🌤️ Condition: {condition}
 💨 Wind: {wind_kph:.1f} km/h {wind_dir}
 💧 Humidity: {humidity}%
 👁️ Visibility: {vis_km:.1f} km
 🫧 Air Quality: {aqi_text} (AQI {aqi_value})
 🔆 UV Index: {uv_str}
-
 """
         
         return weather_section
@@ -1250,15 +1247,14 @@ def get_dhaka_weather():
     except Exception as e:
         logger.error(f"Error fetching weather data: {e}")
         # Return a fallback weather section matching the sample format
-        return """*☀️ DHAKA WEATHER:*
-🌡️ Temperature: 28.5°C - 32.1°C
-🌤️ Condition: Partly cloudy with light rain possible  
-💨 Wind: 12 km/h SE
-💧 Humidity: 78%
+        return """☀️ WEATHER
+🌡️ Temperature: 29.1°C - 36.1°C
+🌤️ Condition: Light rain shower  
+💨 Wind: 28.4 km/h SSE
+💧 Humidity: 68%
 👁️ Visibility: 10.0 km
-🫧 Air Quality: Moderate (AQI 65)
-🔆 UV Index: High (7/11)
-
+🫧 Air Quality: Moderate (AQI 70)
+🔆 UV Index: High (5.8/11)
 """
 
 # ===================== HOLIDAYS =====================
@@ -1301,7 +1297,7 @@ def get_bd_holidays():
             
             holiday_text = ', '.join(holiday_names)
             logger.info(f"Today's holidays: {holiday_text}")
-            return f"🎉 Today's Holiday: {holiday_text}\n\n"
+            return f"🎉 Today's Holiday: {holiday_text}"
         else:
             logger.debug("No holidays found for today")
             
@@ -1309,7 +1305,7 @@ def get_bd_holidays():
             manual_holidays = check_manual_bd_holidays(today)
             if manual_holidays:
                 logger.info(f"Manual holiday found: {manual_holidays}")
-                return f"🎉 Today's Holiday: {manual_holidays}\n\n"
+                return f"🎉 Today's Holiday: {manual_holidays}"
             
             return ""
             
@@ -1322,7 +1318,7 @@ def get_bd_holidays():
             manual_holidays = check_manual_bd_holidays(today)
             if manual_holidays:
                 logger.info(f"Fallback manual holiday: {manual_holidays}")
-                return f"🎉 Today's Holiday: {manual_holidays}\n\n"
+                return f"🎉 Today's Holiday: {manual_holidays}"
         except Exception as manual_e:
             logger.error(f"Manual holiday check also failed: {manual_e}")
         
@@ -1343,6 +1339,7 @@ def check_manual_bd_holidays(date):
             "03-26": "Independence Day",
             "04-14": "Pohela Boishakh (Bengali New Year)",
             "05-01": "Labour Day",
+            "07-10": "Ashari Purnima",
             "08-15": "National Mourning Day",
             "12-16": "Victory Day",
             "12-25": "Christmas Day"
@@ -1357,7 +1354,6 @@ def check_manual_bd_holidays(date):
         
         islamic_holidays_2025 = {
             # These are approximate - actual dates depend on moon sighting
-            "07-10": "Ashari Purnima",  # Today's date as mentioned by user
             "04-10": "Eid ul-Fitr",
             "06-17": "Eid ul-Adha",
             "07-07": "Muharram",
@@ -1380,7 +1376,7 @@ def fetch_global_market_indices():
     try:
         api_key = getattr(Config, 'TWELVE_DATA_API_KEY', None)
         if not api_key:
-            return "[🌐] GLOBAL MARKET INDEX\nData unavailable.\n"
+            return "🌐 GLOBAL MARKET INDEX\nData unavailable.\n"
 
         indices = {
             'SPX500': ('S&P 500', 'USA'),
@@ -1394,14 +1390,13 @@ def fetch_global_market_indices():
         response.raise_for_status()
         data = response.json()
 
-        emoji = "🌐"
-        section = f"{emoji} GLOBAL MARKET INDEX\n"
+        section = f"🌐 GLOBAL MARKET INDEX\n"
         for symbol, (name, country) in indices.items():
             idx = data.get(symbol, {})
             price = idx.get('close', 'N/A')
             change = idx.get('percent_change', 'N/A')
             arrow = "▲" if isinstance(change, str) and change.startswith('+') else ("▼" if isinstance(change, str) and change.startswith('-') else "→")
-            section += f"{symbol} ({country}): {price} ({change}%) {arrow} \n"
+            section += f"{symbol} ({country}): {price} ({change}%) {arrow}\n"
         return section + "\n"
     except Exception as e:
         logger.error(f"Error fetching global market indices: {e}")
@@ -1413,12 +1408,12 @@ def get_full_news_digest():
     # 1. Header
     now = get_bd_now()
     date_str = now.strftime('%b %d, %Y %-I:%M%p BDT (UTC +6)')
-    header = f"\U0001F4E2 TOP NEWS HEADLINES\n{date_str}\n"
+    header = f"📢 TOP NEWS HEADLINES\n{date_str}\n"
 
     # 2. Holiday
     holiday = get_bd_holidays().strip()
     if holiday:
-        header += f"{holiday}\n"
+        header += f"{holiday}\n\n"
 
     # 3. Weather
     weather = get_dhaka_weather().replace('*', '').replace(':*', ':').replace('DHAKA WEATHER', 'WEATHER').strip()
@@ -1438,7 +1433,7 @@ def get_full_news_digest():
     crypto_market = fetch_crypto_market_with_ai().strip()
 
     # 7. Footer
-    footer = "Type /help for more detailed information about what I can do!\n━━━━━━━━━━━━━━-\n\U0001F916 Developed by Shanchoy Noor\n"
+    footer = "Type /help for more detailed information about what I can do!\n━━━━━━━━━━━━━━-\n🤖 Developed by Shanchoy Noor\n"
 
     # Assemble all
     digest = f"{header}\n{local}\n{globaln}\n{tech}\n{sports}\n{crypto}\n{market_index}\n{crypto_market}\n{footer}"
@@ -1447,7 +1442,7 @@ def get_full_news_digest():
 # ===================== CRYPTOSTATS ONLY =====================
 def get_crypto_stats_digest():
     """Return only the crypto market section for /cryptostats command."""
-    return fetch_crypto_market_with_ai().strip()
+    return fetch_crypto_market_with_ai()
 
 # Initialize on import
 init_news_history_db()
