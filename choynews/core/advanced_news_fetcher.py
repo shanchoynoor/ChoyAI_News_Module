@@ -16,6 +16,16 @@ import pytz
 from choynews.utils.logging import get_logger
 from choynews.utils.config import Config
 from choynews.utils.time_utils import get_bd_now
+import sys
+import os
+import requests
+import time
+from datetime import datetime, timedelta
+import hashlib
+import sqlite3
+import json
+import re
+import feedparser
 
 logger = get_logger(__name__)
 
@@ -392,7 +402,7 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
 
 def format_news_section(section_title, entries, limit=5):
     """Format news entries prioritizing importance and recency, ensuring exactly 5 items."""
-    formatted = f"*{section_title}:*\n"
+    formatted = f"{section_title}:\n\n"
     
     # Define fallback messages for each category
     category_fallbacks = {
@@ -459,19 +469,12 @@ def format_news_section(section_title, entries, limit=5):
         count += 1
         
         # Remove importance indicators for cleaner display
-        # importance_score = entry.get('importance_score', 0)
-        # if importance_score > 15:
-        #     indicator = "🔥 "  # Hot/breaking news
-        # elif importance_score > 10:
-        #     indicator = "⚡ "  # Important news
-        # else:
-        #     indicator = ""
         indicator = ""  # No indicators for clean display
         
         if link:
-            formatted += f"{count}. {indicator}[{title_escaped}]({link}) - {source} ({time_ago})\n"
+            formatted += f"{indicator}[{title_escaped}]({link}) - {source} ({time_ago})\n"
         else:
-            formatted += f"{count}. {indicator}{title_escaped} - {source} ({time_ago})\n"
+            formatted += f"{indicator}{title_escaped} - {source} ({time_ago})\n"
         
         # Mark as sent to prevent duplicates
         try:
@@ -492,7 +495,7 @@ def format_news_section(section_title, entries, limit=5):
     while count < limit:
         count += 1
         fallback_msg = fallback_messages[fallback_index % len(fallback_messages)]
-        formatted += f"{count}. {fallback_msg}\n"
+        formatted += f"{fallback_msg}\n"
         fallback_index += 1
     
     return formatted + "\n"
@@ -603,7 +606,7 @@ def get_breaking_crypto_news():
 # ===================== CRYPTO DATA WITH AI =====================
 
 def fetch_crypto_market_with_ai():
-    """Fetch crypto market data with comprehensive formatting including big cap, gainers, and losers."""
+    """Fetch crypto market data with comprehensive formatting for the news digest."""
     try:
         # Fetch market overview
         url = "https://api.coingecko.com/api/v3/global"
@@ -618,19 +621,13 @@ def fetch_crypto_market_with_ai():
         # Get volume change (if available, otherwise estimate as same as market cap change)
         volume_change = market_change  # API doesn't provide volume change, use market change as approximation
         
-        # Fetch top 50 cryptos for comprehensive data
-        crypto_url = "https://api.coingecko.com/api/v3/coins/markets"
-        crypto_params = {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 50,
-            "page": 1,
-            "sparkline": False,
-            "price_change_percentage": "24h"
-        }
+        # Format market cap and volume with arrows
+        market_cap_str = f"${market_cap/1e12:.2f}T" if market_cap >= 1e12 else f"${market_cap/1e9:.2f}B"
+        volume_str = f"${volume/1e12:.2f}T" if volume >= 1e12 else f"${volume/1e9:.2f}B"
         
-        crypto_response = requests.get(crypto_url, params=crypto_params, timeout=10)
-        crypto_data = crypto_response.json()
+        # Add arrows for market cap and volume
+        market_arrow = "▲" if market_change > 0 else "▼" if market_change < 0 else "→"
+        volume_arrow = "▲" if volume_change > 0 else "▼" if volume_change < 0 else "→"
         
         # Fetch Fear & Greed Index
         try:
@@ -640,15 +637,7 @@ def fetch_crypto_market_with_ai():
         except:
             fear_index = "N/A"
             fear_text = "Unknown"
-        
-        # Format market cap and volume with arrows
-        market_cap_str = f"${market_cap/1e12:.2f}T" if market_cap >= 1e12 else f"${market_cap/1e9:.2f}B"
-        volume_str = f"${volume/1e12:.2f}T" if volume >= 1e12 else f"${volume/1e9:.2f}B"
-        
-        # Add arrows for market cap and volume
-        market_arrow = "▲" if market_change > 0 else "▼" if market_change < 0 else "→"
-        volume_arrow = "▲" if volume_change > 0 else "▼" if volume_change < 0 else "→"
-        
+            
         # Fear/Greed Index with buy/sell/hold indicator
         fear_greed_text = ""
         if fear_index != "N/A":
@@ -662,77 +651,18 @@ def fetch_crypto_market_with_ai():
         else:
             fear_greed_text = f"{fear_index}/100"
         
-        # Build crypto section
-        crypto_section = f"""💰 CRYPTO MARKET:
+        # Build crypto section for news digest (simpler format)
+        crypto_section = f"""💰 CRYPTO MARKET STATUS
 Market Cap: {market_cap_str} ({market_change:+.2f}%) {market_arrow}
 Volume: {volume_str} ({volume_change:+.2f}%) {volume_arrow}
 Fear/Greed Index: {fear_greed_text}
-
-💎 Big Cap Crypto:
 """
-        
-        # Define specific big cap cryptos to display
-        big_cap_targets = {
-            'bitcoin': 'BTC',
-            'ethereum': 'ETH', 
-            'ripple': 'XRP',
-            'binancecoin': 'BNB',
-            'solana': 'SOL',
-            'tron': 'TRX',
-            'dogecoin': 'DOGE',
-            'cardano': 'ADA'
-        }
-        
-        # Add big cap cryptos in order
-        for crypto in crypto_data:
-            if crypto['id'] in big_cap_targets:
-                symbol = big_cap_targets[crypto['id']]
-                price = crypto['current_price']
-                change = crypto['price_change_percentage_24h'] or 0
-                arrow = "▲" if change > 0 else "▼" if change < 0 else "→"
-                
-                # Format price appropriately using helper function
-                price_str = format_crypto_price(price)
-                
-                crypto_section += f"{symbol}: {price_str} ({change:+.2f}%) {arrow}\n"
-        
-        # Sort by 24h change for gainers and losers
-        sorted_cryptos = sorted([c for c in crypto_data if c['price_change_percentage_24h'] is not None], 
-                               key=lambda x: x['price_change_percentage_24h'])
-        
-        # Top 5 gainers (highest positive changes)
-        gainers = sorted_cryptos[-5:][::-1]  # Reverse to get highest first
-        crypto_section += "\n📈 Crypto Top 5 Gainers:\n"
-        for i, crypto in enumerate(gainers, 1):
-            symbol = crypto['symbol'].upper()  # Use symbol instead of name
-            price = crypto['current_price']
-            change = crypto['price_change_percentage_24h']
-            arrow = "▲"
-            
-            # Format price appropriately using helper function
-            price_str = format_crypto_price(price)
-            
-            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
-        
-        # Top 5 losers (lowest negative changes)
-        losers = sorted_cryptos[:5]
-        crypto_section += "\n📉 Crypto Top 5 Losers:\n"
-        for i, crypto in enumerate(losers, 1):
-            symbol = crypto['symbol'].upper()  # Use symbol instead of name
-            price = crypto['current_price']
-            change = crypto['price_change_percentage_24h']
-            arrow = "▼"
-            
-            # Format price appropriately using helper function
-            price_str = format_crypto_price(price)
-            
-            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
         return crypto_section
         
     except Exception as e:
         logger.error(f"Error fetching crypto market data: {e}")
-        return "💰 CRYPTO MARKET:\nMarket data temporarily unavailable.\n\n"
+        return "💰 CRYPTO MARKET STATUS\nMarket data temporarily unavailable.\n"
 
 def get_crypto_ai_analysis(market_data):
     """Get AI analysis of crypto market using DeepSeek API."""
@@ -1408,16 +1338,16 @@ def get_full_news_digest():
     # 1. Header
     now = get_bd_now()
     date_str = now.strftime('%b %d, %Y %-I:%M%p BDT (UTC +6)')
-    header = f"📢 TOP NEWS HEADLINES\n{date_str}\n"
-
+    header = f"📢 TOP NEWS HEADLINES\n{date_str}"
+    
     # 2. Holiday
     holiday = get_bd_holidays().strip()
     if holiday:
-        header += f"{holiday}\n\n"
+        header += f"\n{holiday}"
 
     # 3. Weather
-    weather = get_dhaka_weather().replace('*', '').replace(':*', ':').replace('DHAKA WEATHER', 'WEATHER').strip()
-    header += f"{weather}\n\n"
+    weather = get_dhaka_weather().replace('*', '').replace(':*', ':').strip()
+    header += f"\n\n{weather}"
 
     # 4. News sections
     local = get_breaking_local_news().replace('*', '').replace(':*', ':').strip()
@@ -1433,16 +1363,144 @@ def get_full_news_digest():
     crypto_market = fetch_crypto_market_with_ai().strip()
 
     # 7. Footer
-    footer = "Type /help for more detailed information about what I can do!\n━━━━━━━━━━━━━━-\n🤖 Developed by Shanchoy Noor\n"
+    footer = "Type /help for more detailed information about what I can do!\n━━━━━━━━━━━━━━-\n🤖 Developed by Shanchoy Noor"
 
     # Assemble all
-    digest = f"{header}\n{local}\n{globaln}\n{tech}\n{sports}\n{crypto}\n{market_index}\n{crypto_market}\n{footer}"
+    digest = f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{sports}\n\n{crypto}\n\n{market_index}\n\n{crypto_market}\n\n{footer}"
     return digest
 
 # ===================== CRYPTOSTATS ONLY =====================
 def get_crypto_stats_digest():
     """Return only the crypto market section for /cryptostats command."""
-    return fetch_crypto_market_with_ai()
+    try:
+        # Fetch market overview
+        url = "https://api.coingecko.com/api/v3/global"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()["data"]
+        market_cap = data["total_market_cap"]["usd"]
+        volume = data["total_volume"]["usd"]
+        market_change = data["market_cap_change_percentage_24h_usd"]
+        
+        # Get volume change (if available, otherwise estimate as same as market cap change)
+        volume_change = market_change  # API doesn't provide volume change, use market change as approximation
+        
+        # Fetch top 50 cryptos for comprehensive data
+        crypto_url = "https://api.coingecko.com/api/v3/coins/markets"
+        crypto_params = {
+            "vs_currency": "usd",
+            "order": "market_cap_desc",
+            "per_page": 50,
+            "page": 1,
+            "sparkline": False,
+            "price_change_percentage": "24h"
+        }
+        
+        crypto_response = requests.get(crypto_url, params=crypto_params, timeout=10)
+        crypto_data = crypto_response.json()
+        
+        # Fetch Fear & Greed Index
+        try:
+            fear_response = requests.get("https://api.alternative.me/fng/?limit=1", timeout=5)
+            fear_index = fear_response.json()["data"][0]["value"]
+            fear_text = fear_response.json()["data"][0]["value_classification"]
+        except:
+            fear_index = "N/A"
+            fear_text = "Unknown"
+        
+        # Format market cap and volume with arrows
+        market_cap_str = f"${market_cap/1e12:.2f}T" if market_cap >= 1e12 else f"${market_cap/1e9:.2f}B"
+        volume_str = f"${volume/1e12:.2f}T" if volume >= 1e12 else f"${volume/1e9:.2f}B"
+        
+        # Add arrows for market cap and volume
+        market_arrow = "▲" if market_change > 0 else "▼" if market_change < 0 else "→"
+        volume_arrow = "▲" if volume_change > 0 else "▼" if volume_change < 0 else "→"
+        
+        # Fear/Greed Index with buy/sell/hold indicator
+        fear_greed_text = ""
+        if fear_index != "N/A":
+            fear_value = int(fear_index)
+            if fear_value >= 75:
+                fear_greed_text = f"{fear_index}/100 = 🟢 BUY"
+            elif fear_value >= 50:
+                fear_greed_text = f"{fear_index}/100 = 🟠 HOLD"
+            else:
+                fear_greed_text = f"{fear_index}/100 = 🔴 SELL"
+        else:
+            fear_greed_text = f"{fear_index}/100"
+        
+        # Build crypto section for /cryptostats
+        crypto_section = f"""💰 CRYPTO MARKET:
+Market Cap: {market_cap_str} ({market_change:+.2f}%) {market_arrow}
+Volume: {volume_str} ({volume_change:+.2f}%) {volume_arrow}
+Fear/Greed Index: {fear_greed_text}
+
+💎 Big Cap Crypto:
+"""
+        
+        # Define specific big cap cryptos to display
+        big_cap_targets = {
+            'bitcoin': 'BTC',
+            'ethereum': 'ETH', 
+            'ripple': 'XRP',
+            'binancecoin': 'BNB',
+            'solana': 'SOL',
+            'tron': 'TRX',
+            'dogecoin': 'DOGE',
+            'cardano': 'ADA'
+        }
+        
+        # Add big cap cryptos in order
+        for crypto in crypto_data:
+            if crypto['id'] in big_cap_targets:
+                symbol = big_cap_targets[crypto['id']]
+                price = crypto['current_price']
+                change = crypto['price_change_percentage_24h'] or 0
+                arrow = "▲" if change > 0 else "▼" if change < 0 else "→"
+                
+                # Format price appropriately using helper function
+                price_str = format_crypto_price(price)
+                
+                crypto_section += f"{symbol}: {price_str} ({change:+.2f}%) {arrow}\n"
+        
+        # Sort by 24h change for gainers and losers
+        sorted_cryptos = sorted([c for c in crypto_data if c['price_change_percentage_24h'] is not None], 
+                               key=lambda x: x['price_change_percentage_24h'])
+        
+        # Top 5 gainers (highest positive changes)
+        gainers = sorted_cryptos[-5:][::-1]  # Reverse to get highest first
+        crypto_section += "\n📈 Crypto Top 5 Gainers:\n\n"
+        for crypto in gainers:
+            symbol = crypto['symbol'].upper()  # Use symbol instead of name
+            price = crypto['current_price']
+            change = crypto['price_change_percentage_24h']
+            arrow = "▲"
+            
+            # Format price appropriately using helper function
+            price_str = format_crypto_price(price)
+            
+            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+        
+        # Top 5 losers (lowest negative changes)
+        losers = sorted_cryptos[:5]
+        crypto_section += "\n📉 Crypto Top 5 Losers:\n\n"
+        for crypto in losers:
+            symbol = crypto['symbol'].upper()  # Use symbol instead of name
+            price = crypto['current_price']
+            change = crypto['price_change_percentage_24h']
+            arrow = "▼"
+            
+            # Format price appropriately using helper function
+            price_str = format_crypto_price(price)
+            
+            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+        
+        return crypto_section
+        
+    except Exception as e:
+        logger.error(f"Error fetching crypto market data: {e}")
+        return "💰 CRYPTO MARKET:\nMarket data temporarily unavailable.\n\n"
 
 # Initialize on import
 init_news_history_db()
