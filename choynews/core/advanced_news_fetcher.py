@@ -130,12 +130,15 @@ def format_time_ago(published_time):
             return f"{diff.days}d ago"
         elif total_minutes >= 60:
             hours = int(total_minutes // 60)
-            return f"{hours}hr ago"
+            if hours == 1:
+                return f"{hours}hr ago"
+            else:
+                return f"{hours}hr ago"
         elif total_minutes >= 1:
             minutes = int(total_minutes)
             return f"{minutes}min ago"
         else:
-            return "now"
+            return "1min ago"  # Show "1min ago" instead of "now" for better consistency
     except Exception as e:
         logger.debug(f"Error formatting time: {e}")
         return "now"
@@ -241,10 +244,24 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     title = re.sub(r'\s+', ' ', title)     # Normalize whitespace
                     title = title.strip()
                     
-                    # Skip titles that are just image descriptions or contain image indicators
+                    # Enhanced quality filtering for news titles
                     if (not title or 
-                        any(indicator in title.lower() for indicator in ['image:', 'photo:', 'picture:', 'thumbnail:', '[img]', '[image]']) or
-                        len(title) < 10):  # Skip very short titles that might be image captions
+                        len(title) < 15 or  # Increased minimum length
+                        len(title) > 200 or  # Too long
+                        title.lower().strip() in ['momentkohli', 'admin', 'test', 'update', 'loading', 'null', 'undefined', 'error', 'live', 'breaking'] or  # Low quality titles
+                        title.lower().startswith(('momentkohli', 'admin -', 'test -', 'error -', 'null -', 'undefined -', 'live -', 'breaking -')) or  # Prefix filtering
+                        any(indicator in title.lower() for indicator in ['image:', 'photo:', 'picture:', 'thumbnail:', '[img]', '[image]', 'gallery:', 'slideshow:']) or
+                        title.count('?') > 3 or  # Too many question marks
+                        title.count('!') > 3 or  # Too many exclamation marks
+                        re.search(r'^[^a-zA-Z]*$', title) or  # No letters at all
+                        re.search(r'^[0-9\s\-\.]*$', title) or  # Only numbers and basic punctuation
+                        len(re.findall(r'[a-zA-Z]', title)) < 8 or  # Less than 8 letters (increased from 5)
+                        re.match(r'^[a-zA-Z]+\s*-\s*$', title) or  # Just name/word followed by dash (like "momentkohli -")
+                        re.match(r'^[A-Z][a-z]+$', title)):  # Single word titles like "Breaking" or "Update"
+                        continue
+                        
+                    # Skip titles that are just image descriptions or contain image indicators
+                    if any(indicator in title.lower() for indicator in ['image:', 'photo:', 'picture:', 'thumbnail:', '[img]', '[image]']):
                         continue
                         
                     # Clean and limit title length
@@ -282,7 +299,7 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     except:
                         parsed_time = datetime.now()
                     
-                    # Time filtering: Allow news from last 6 hours, but heavily prioritize last 3 hours
+                    # Time filtering: Heavily prioritize very recent news (last 2 hours), but allow up to 6 hours
                     time_diff = datetime.now() - parsed_time
                     hours_ago = time_diff.total_seconds() / 3600
                     
@@ -294,19 +311,21 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     
                     # Check for duplicates
                     news_hash = get_news_hash(title, source_name)
-                    if is_news_already_sent(news_hash, hours_back=2):
+                    if is_news_already_sent(news_hash, hours_back=1):  # Reduced from 2 hours to 1 hour
                         continue
                     
                     # Calculate importance score
                     importance_score = calculate_news_importance_score(entry, source_name, position)
                     
-                    # Calculate recency score with heavy bias for recent news
-                    if hours_ago <= 1:
+                    # Calculate recency score with very heavy bias for recent news (like old format)
+                    if hours_ago <= 0.5:  # Last 30 minutes
+                        recency_score = 80 + (0.5 - hours_ago) * 40  # 80-100 points for last 30 min
+                    elif hours_ago <= 1:  # Last hour
                         recency_score = 60 + (1 - hours_ago) * 20  # 60-80 points for last hour
-                    elif hours_ago <= 3:
-                        recency_score = 40 + (3 - hours_ago) * 10  # 40-60 points for 1-3 hours
+                    elif hours_ago <= 2:  # Last 2 hours
+                        recency_score = 40 + (2 - hours_ago) * 10  # 40-60 points for 1-2 hours
                     else:
-                        recency_score = max(0, 20 - (hours_ago - 3) * 5)  # Decreasing after 3 hours
+                        recency_score = max(0, 20 - (hours_ago - 2) * 3)  # Rapidly decreasing after 2 hours
                     
                     # Combined score (importance + heavy recency weighting)
                     total_score = importance_score + recency_score
@@ -468,7 +487,7 @@ def format_news_section(section_title, entries, limit=5):
         except Exception as e:
             logger.debug(f"Error marking news as sent: {e}")
     
-    # Fill remaining slots with fallback messages if needed
+    # Fill remaining slots with fallback messages if needed (but only if we have very few real news items)
     fallback_messages = category_fallbacks.get(section_title, [
         "📰 News updates will be available shortly...",
         "🔍 Breaking news being monitored...",
@@ -478,7 +497,8 @@ def format_news_section(section_title, entries, limit=5):
     ])
     
     fallback_index = 0
-    while count < limit:
+    # Only add fallbacks if we have less than 3 real news items
+    while count < limit and count < 3:
         count += 1
         fallback_msg = fallback_messages[fallback_index % len(fallback_messages)]
         formatted += f"{count}. {fallback_msg}\n"
@@ -502,7 +522,7 @@ def get_breaking_local_news():
         "Daily Sun": "https://www.daily-sun.com/rss/all-news.xml"  # Additional source
     }
     
-    entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
+    entries = fetch_breaking_news_rss(bd_sources, limit=40, category="local", target_count=8)  # Increased target count
     logger.info(f"Local news: fetched {len(entries)} entries")
     return format_news_section("🇧🇩 LOCAL NEWS", entries, limit=5)
 
@@ -523,7 +543,7 @@ def get_breaking_global_news():
         "Euronews": "https://www.euronews.com/rss?format=mrss&level=theme&name=news"  # Additional source
     }
     
-    entries = fetch_breaking_news_rss(global_sources, limit=30, category="global", target_count=5)
+    entries = fetch_breaking_news_rss(global_sources, limit=40, category="global", target_count=8)  # Increased target count
     logger.info(f"Global news: fetched {len(entries)} entries")
     return format_news_section("🌍 GLOBAL NEWS", entries, limit=5)
 
@@ -544,7 +564,7 @@ def get_breaking_tech_news():
         "9to5Mac": "https://9to5mac.com/feed/"  # Additional source
     }
     
-    entries = fetch_breaking_news_rss(tech_sources, limit=25, category="tech", target_count=5)
+    entries = fetch_breaking_news_rss(tech_sources, limit=35, category="tech", target_count=8)  # Increased target count
     logger.info(f"Tech news: fetched {len(entries)} entries")
     return format_news_section("🚀 TECH NEWS", entries, limit=5)
 
@@ -565,7 +585,7 @@ def get_breaking_sports_news():
         "Fox Sports": "https://www.foxsports.com/rss"  # Additional source
     }
     
-    entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
+    entries = fetch_breaking_news_rss(sports_sources, limit=35, category="sports", target_count=8)  # Increased target count
     logger.info(f"Sports news: fetched {len(entries)} entries")
     return format_news_section("🏆 SPORTS NEWS", entries, limit=5)
 
@@ -585,7 +605,7 @@ def get_breaking_crypto_news():
         "Bitcoin.com": "https://news.bitcoin.com/feed/"  # Additional source
     }
     
-    entries = fetch_breaking_news_rss(crypto_sources, limit=25, category="crypto", target_count=5)
+    entries = fetch_breaking_news_rss(crypto_sources, limit=35, category="crypto", target_count=8)  # Increased target count
     logger.info(f"Crypto news: fetched {len(entries)} entries")
     return format_news_section("🪙 FINANCE & CRYPTO NEWS", entries, limit=5)
 
@@ -680,13 +700,8 @@ Fear/Greed Index: {fear_greed_text}
                 change = crypto['price_change_percentage_24h'] or 0
                 arrow = "▲" if change > 0 else "▼" if change < 0 else "→"
                 
-                # Format price appropriately
-                if price >= 1000:
-                    price_str = f"${price:,.2f}"
-                elif price >= 1:
-                    price_str = f"${price:.2f}"
-                else:
-                    price_str = f"${price:.4f}"
+                # Format price appropriately using helper function
+                price_str = format_crypto_price(price)
                 
                 crypto_section += f"{symbol}: {price_str} ({change:+.2f}%) {arrow}\n"
         
@@ -703,13 +718,8 @@ Fear/Greed Index: {fear_greed_text}
             change = crypto['price_change_percentage_24h']
             arrow = "▲"
             
-            # Format price appropriately
-            if price >= 1000:
-                price_str = f"${price:,.2f}"
-            elif price >= 1:
-                price_str = f"${price:.2f}"
-            else:
-                price_str = f"${price:.4f}"
+            # Format price appropriately using helper function
+            price_str = format_crypto_price(price)
             
             crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
@@ -722,13 +732,8 @@ Fear/Greed Index: {fear_greed_text}
             change = crypto['price_change_percentage_24h']
             arrow = "▼"
             
-            # Format price appropriately
-            if price >= 1000:
-                price_str = f"${price:,.2f}"
-            elif price >= 1:
-                price_str = f"${price:.2f}"
-            else:
-                price_str = f"${price:.4f}"
+            # Format price appropriately using helper function
+            price_str = format_crypto_price(price)
             
             crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
@@ -862,6 +867,27 @@ def get_coin_emoji(symbol):
     }
     return emoji_map.get(symbol.lower(), '🪙')
 
+def format_crypto_price(price):
+    """
+    Format cryptocurrency price with appropriate decimal places.
+    
+    Args:
+        price (float): The price to format
+        
+    Returns:
+        str: Formatted price string with $ prefix
+    """
+    if price >= 1000:
+        return f"${price:,.2f}"
+    elif price >= 1:
+        return f"${price:.2f}"
+    elif price >= 0.0001:
+        return f"${price:.4f}"
+    elif price >= 0.000001:
+        return f"${price:.6f}"
+    else:
+        return f"${price:.8f}"
+
 def get_individual_crypto_stats(symbol):
     """Get detailed crypto stats with dynamic CoinGecko lookup for any coin."""
     try:
@@ -906,11 +932,8 @@ def get_individual_crypto_stats(symbol):
         week_52_high = ath if ath else current_price * 1.5  # Fallback estimation
         week_52_low = atl if atl else current_price * 0.5   # Fallback estimation
         
-        # Format price
-        if current_price >= 1:
-            price_str = f"${current_price:.3f}"
-        else:
-            price_str = f"${current_price:.6f}"
+        # Format price using helper function
+        price_str = format_crypto_price(current_price)
         
         # Format market cap
         if market_cap >= 1e9:
@@ -1061,25 +1084,6 @@ def get_individual_crypto_stats_with_ai(symbol):
         market_data = data.get("market_data", {})
         
         # Extract key metrics
-        name = coin_name or data.get("name", symbol.upper())
-        current_price = market_data.get("current_price", {}).get("usd", 0)
-        price_change_24h = market_data.get("price_change_percentage_24h", 0) or 0
-        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
-        params = {
-            "localization": "false",
-            "tickers": "false",
-            "market_data": "true",
-            "community_data": "false",
-            "developer_data": "false"
-        }
-        
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        market_data = data.get("market_data", {})
-        
-        # Extract key metrics
         name = data.get("name", coin_name)
         current_price = market_data.get("current_price", {}).get("usd", 0)
         price_change_24h = market_data.get("price_change_percentage_24h", 0) or 0
@@ -1088,11 +1092,8 @@ def get_individual_crypto_stats_with_ai(symbol):
         high_24h = market_data.get("high_24h", {}).get("usd", current_price)
         low_24h = market_data.get("low_24h", {}).get("usd", current_price)
         
-        # Format price
-        if current_price >= 1:
-            price_str = f"${current_price:.2f}"
-        else:
-            price_str = f"${current_price:.6f}"
+        # Format price using helper function
+        price_str = format_crypto_price(current_price)
         
         # Format market cap
         if market_cap >= 1e9:

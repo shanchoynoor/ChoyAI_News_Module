@@ -323,8 +323,12 @@ def fetch_big_cap_prices():
             
             if price >= 1:
                 price_str = f"${price:.2f}"
-            else:
+            elif price >= 0.0001:
                 price_str = f"${price:.4f}"
+            elif price >= 0.000001:
+                price_str = f"${price:.6f}"
+            else:
+                price_str = f"${price:.8f}"
                 
             msg += f"{symbol}: {price_str} ({change:+.2f}%)\n"
         return msg + "\n"
@@ -361,8 +365,12 @@ def fetch_top_movers():
             
             if price >= 1:
                 price_str = f"${price:.2f}"
-            else:
+            elif price >= 0.0001:
                 price_str = f"${price:.4f}"
+            elif price >= 0.000001:
+                price_str = f"${price:.6f}"
+            else:
+                price_str = f"${price:.8f}"
                 
             msg += f"{i}. {name} {price_str} ({change:+.2f}%)\n"
 
@@ -374,8 +382,12 @@ def fetch_top_movers():
             
             if price >= 1:
                 price_str = f"${price:.2f}"
-            else:
+            elif price >= 0.0001:
                 price_str = f"${price:.4f}"
+            elif price >= 0.000001:
+                price_str = f"${price:.6f}"
+            else:
+                price_str = f"${price:.8f}"
                 
             msg += f"{i}. {name} {price_str} ({change:+.2f}%)\n"
 
