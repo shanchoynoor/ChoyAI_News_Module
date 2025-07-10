@@ -144,14 +144,12 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
         handle_unsubscribe_command(chat_id, user_id)
     elif command == '/support':
         handle_support_command(chat_id)
+    elif command == '/about':
+        handle_about_command(chat_id)
     elif command.startswith('/timezone'):
         handle_timezone_command(chat_id, user_id, args)
-    elif command in ['/btc', '/eth', '/doge', '/ada', '/sol', '/xrp', '/matic', '/dot', '/link', '/uni']:
-        # Individual coin commands
-        coin_symbol = command[1:]  # Remove the '/' prefix
-        handle_coin_command(chat_id, user_id, coin_symbol)
     elif command.endswith('stats') and len(command) > 6:
-        # Coin stats commands like /btcstats, /ethstats
+        # Coin stats commands like /btcstats, /ethstats, /pepestats
         coin_symbol = command[1:-5]  # Remove '/' prefix and 'stats' suffix
         handle_coinstats_command(chat_id, user_id, coin_symbol)
     elif command.startswith('/coin'):
@@ -160,6 +158,21 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
             handle_coin_command(chat_id, user_id, args.strip().lower())
         else:
             send_telegram("Please specify a coin symbol. Example: `/coin btc` or use `/btc`", chat_id)
+    elif command.startswith('/') and len(command) > 1:
+        # Try to handle as coin symbol (e.g., /btc, /eth, /pepe, /shib, etc.)
+        coin_symbol = command[1:]  # Remove the '/' prefix
+        
+        # Skip known non-coin commands
+        if coin_symbol.lower() in ['start', 'help', 'news', 'weather', 'subscribe', 'unsubscribe', 
+                                  'status', 'cryptostats', 'support', 'about', 'timezone', 'coin']:
+            # Unknown command
+            send_telegram(
+                f"Sorry, I don't understand the command '{command}'. Type /help to see available commands.",
+                chat_id
+            )
+        else:
+            # Try as coin command
+            handle_coin_command(chat_id, user_id, coin_symbol)
     else:
         # Unknown command
         send_telegram(
@@ -184,6 +197,7 @@ I'm your personal news assistant. I can provide you with:
 *Available Commands:*
 /start - Show this welcome message
 /help - Get help and see all commands
+/about - Learn about ChoyNewsBot features
 /news - Get latest news digest
 /status - Check bot status
 
@@ -208,10 +222,10 @@ def handle_help_command(chat_id):
 
 *💰 Cryptocurrency:*
 📊 /cryptostats - Get AI summary of crypto market
-🪙 /coin <symbol> - Get price and 24h change for a coin
-   Examples: /coin btc, /btc, /eth, /doge
+🪙 /coin <symbol> - Get price and 24h change for any coin
+   Examples: /coin btc, /btc, /eth, /pepe, /shib
 📈 /coinstats <symbol> - Get price, 24h change, and AI summary
-   Examples: /coinstats btc, /btcstats, /ethstats
+   Examples: /coinstats btc, /btcstats, /pepestats
 
 *⚙️ Settings & Subscriptions:*
 🕒 /timezone <zone> - Set your timezone for news digest times
@@ -221,11 +235,14 @@ def handle_help_command(chat_id):
 
 *🆘 Support:*
 ❓ /help - Show this help message
+ℹ️ /about - Learn about ChoyNewsBot features and capabilities
 🆘 /support - Contact the developer for support
 
 *Popular Crypto Commands:*
-• /btc, /eth, /doge, /ada, /sol, /xrp
-• /btcstats, /ethstats, /dogestats
+• /btc, /eth, /doge, /ada, /sol, /xrp, /pepe, /shib
+• /btcstats, /ethstats, /dogestats, /pepestats
+
+🪙 *Supports 17,500+ coins from CoinGecko!* Try any coin symbol like /pepe, /shib, /link, /uni, etc.
 
 All times are shown in your local timezone. Use /timezone to set yours!
     """
@@ -266,10 +283,20 @@ def handle_news_command(chat_id, user_id, args):
         }
         
         # Send loading message like in the example
-        send_telegram("Loading latest news...", chat_id)
+        send_telegram("📰 Loading latest news...", chat_id)
         
         # Build and send news digest
         digest = build_news_digest(user)
+        
+        # Double-check for any extra content after footer
+        footer_marker = "🤖 Developed by [Shanchoy Noor]"
+        if footer_marker in digest:
+            footer_index = digest.find(footer_marker)
+            github_end = digest.find(")", footer_index)
+            if github_end > 0:
+                # Ensure we only send content up to the GitHub link
+                digest = digest[:github_end + 1]
+        
         send_telegram(digest, chat_id)
         
         logger.info(f"Sent news digest to user {user_id}")
@@ -370,7 +397,7 @@ def handle_coin_command(chat_id, user_id, coin_symbol):
         if coin_data:
             send_telegram(coin_data, chat_id)
         else:
-            send_telegram(f"Sorry, I couldn't get price data for {coin_symbol.upper()}. Try popular coins like BTC, ETH, DOGE, ADA, SOL, XRP.", chat_id)
+            send_telegram(f"Sorry, I couldn't find '{coin_symbol.upper()}' on CoinGecko. Please check the symbol and try again. Example: `/pepe` for PEPE, `/btc` for Bitcoin.", chat_id)
         
         logger.info(f"Sent {coin_symbol} price to user {user_id}")
         
@@ -391,7 +418,7 @@ def handle_coinstats_command(chat_id, user_id, coin_symbol):
         if coin_data:
             send_telegram(coin_data, chat_id)
         else:
-            send_telegram(f"Sorry, I don't have detailed stats for '{coin_symbol.upper()}' yet. Try popular coins like BTC, ETH, DOGE, ADA, SOL, XRP.", chat_id)
+            send_telegram(f"Sorry, I couldn't find '{coin_symbol.upper()}' on CoinGecko or generate AI analysis. Please check the symbol and try again. Example: `/pepestats` for PEPE analysis.", chat_id)
         
         logger.info(f"Sent {coin_symbol} stats to user {user_id}")
         
@@ -524,34 +551,89 @@ Thank you for using ChoyNewsBot! 🚀
     send_telegram(support_message, chat_id)
     logger.info(f"Sent support info to chat {chat_id}")
 
-def handle_status_command(chat_id, user_id):
-    """Handle the /status command."""
+def handle_about_command(chat_id):
+    """Handle the /about command."""
     from choynews.api.telegram import send_telegram
-    import datetime
+    import json
+    import os
     
     try:
-        # This would query the database for user's actual status
-        status_message = f"""
-🤖 *Your Bot Status*
+        # Load bot information from memory.json
+        memory_file = os.path.join(os.path.dirname(__file__), "..", "..", "data", "memory.json")
+        
+        with open(memory_file, 'r', encoding='utf-8') as f:
+            bot_data = json.load(f)
+        
+        bot_info = bot_data["bot_info"]
+        
+        # Build the about message
+        about_message = f"""
+🤖 *{bot_info["name"]}*
+_{bot_info["tagline"]}_
 
-👤 *User ID:* {user_id}
-📬 *Subscription:* Active (demo)
-🕒 *Timezone:* UTC+6 (Asia/Dhaka)
-📰 *Last Digest:* Demo mode
-⏰ *Next Digest:* Demo mode
+{bot_info["description"]}
 
-*Bot System:*
-✅ Online and operational
-🕒 Server time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-📡 API connections: Active
-🔧 Services: Bot + Auto News
+*🏷️ Version:* {bot_info["version"]}
+*🛠️ Built with:* {", ".join(bot_info["technologies"])}
 
-Database integration coming soon!
+{bot_info["what_makes_special"]["title"]}
+
+"""
+        
+        # Add special features
+        for feature in bot_info["what_makes_special"]["features"]:
+            about_message += f"• {feature}\n"
+        
+        about_message += f"\n{bot_info['core_features']['title']}\n\n"
+        
+        # Add core feature sections
+        for section in bot_info["core_features"]["sections"]:
+            about_message += f"*{section['title']}*\n"
+            about_message += f"{section['description']}\n\n"
+            
+            for feature in section["features"]:
+                about_message += f"{feature}\n"
+            about_message += "\n"
+        
+        # Add statistics
+        stats = bot_info["statistics"]
+        about_message += f"""
+*📊 Key Statistics:*
+• News Sources: {stats["news_sources"]} premium outlets
+• Update Frequency: {stats["update_frequency"]}
+• Daily Digests: {stats["daily_digests"]} scheduled times
+• Timezone Support: {stats["supported_timezones"]} worldwide
+• Crypto Coverage: {stats["crypto_coins_supported"]} cryptocurrencies
+
+*👨‍💻 Developer:*
+{bot_info["developer"]["name"]}
+📱 Telegram: {bot_info["developer"]["contact"]["telegram"]}
+📧 Email: {bot_info["developer"]["contact"]["email"]}
+🔗 GitHub: {bot_info["developer"]["contact"]["github"]}
+
+*🚀 Ready to get started?*
+Type /help to see all available commands!
         """
         
-        send_telegram(status_message, chat_id)
-        logger.info(f"Sent status to user {user_id}")
+        send_telegram(about_message, chat_id)
+        logger.info(f"Sent about info to chat {chat_id}")
         
     except Exception as e:
-        logger.error(f"Error getting status for user {user_id}: {e}")
-        send_telegram("Sorry, I couldn't retrieve your status. Please try again later.", chat_id)
+        logger.error(f"Error loading about info: {e}")
+        # Fallback message
+        fallback_message = """
+🤖 *ChoyNewsBot*
+_AI-Powered Breaking News & Crypto Intelligence_
+
+I'm an advanced Telegram news bot that provides:
+• 📰 Real-time breaking news from 50+ sources
+• 🤖 AI-powered crypto analysis with DeepSeek
+• 🌤️ Live weather and market data
+• ⏰ Smart scheduling with zero duplicate news
+
+Type /help to explore all my features!
+
+*Developer:* Shanchoy Noor
+*Contact:* @shanchoynoor
+        """
+        send_telegram(fallback_message, chat_id)

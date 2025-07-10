@@ -40,7 +40,7 @@
 - **Time Intelligence** - User timezone support with accurate local scheduling
 
 ### 🎯 **Smart User Experience**
-- **Individual coin commands** - `/btc`, `/eth`, `/doge` with instant AI analysis
+- **Individual coin commands** - `/btc`, `/eth`, `/pepe`, `/shib` with instant AI analysis for all 17,500+ CoinGecko coins
 - **Interactive help system** - Context-aware assistance and tutorials
 - **Subscription management** - Easy opt-in/out with timezone preferences
 - **Error resilience** - Graceful handling of API failures with cached data
@@ -48,41 +48,75 @@
 ## 💻 **Sample Output**
 
 ```
-📰 DAILY NEWS DIGEST
-Jul 10, 2025 8:00AM BDT (UTC +6)
+� DAILY NEWS DIGEST
+Wednesday, July 10, 2025 • 8:00 AM (UTC+6)
+🎉 Today: Ashari Purnima (Public Holiday)
 ━━━━━━━━━━━━━━━━━━━━━
 
-🌦️ Dhaka: 28.5°C ~ 32.1°C
-🌧️ Partly cloudy
-🫧 AQI: Moderate (65)
-🔆 UV: High (7)
+*☀️ DHAKA WEATHER:*
+🌡️ Temperature: 28.5°C - 32.1°C
+�️ Condition: Partly cloudy with light rain possible  
+💨 Wind: 12 km/h SE
+💧 Humidity: 78%
+🫧 Air Quality: Moderate (AQI 65)
+🔆 UV Index: High (7/11)
 
-🇧🇩 LOCAL NEWS:
-1. [সরকারি কর্মকর্তাদের বেতন বৃদ্ধি ঘোষণা](link) - Prothom Alo (2hr ago)
-2. [ঢাকায় নতুন মেট্রো লাইন উদ্বোধন](link) - Daily Star (3hr ago)
-3. [শিক্ষা খাতে বাজেট বরাদ্দ বৃদ্ধি](link) - Jugantor (4hr ago)
-4. [ডিজিটাল ব্যাংকিং সেবা সম্প্রসারণ](link) - Financial Express (5hr ago)
-5. [স্বাস্থ্য বীমা কভারেজ বৃদ্ধি](link) - New Age (6hr ago)
+*🇧🇩 LOCAL NEWS:*
+1. [Government announces salary increase for civil servants](link) - Prothom Alo (2hr ago)
+2. [New metro line inaugurated in Dhaka](link) - The Daily Star (3hr ago)  
+3. [Education budget allocation increased significantly](link) - Jugantor (4hr ago)
+4. [Digital banking services expand nationwide](link) - Financial Express (5hr ago)
+5. [Health insurance coverage extended to rural areas](link) - New Age (6hr ago)
 
-🌍 GLOBAL NEWS:
+*🌍 GLOBAL NEWS:*
 1. [Global climate summit reaches breakthrough accord](link) - BBC (1hr ago)
 2. [Tech giants announce AI safety alliance](link) - Reuters (2hr ago)
-3. [Economic recovery shows strong momentum](link) - CNN (3hr ago)
-4. [Space mission discovers new exoplanets](link) - Al Jazeera (4hr ago)
-5. [International trade agreements finalized](link) - Guardian (5hr ago)
+3. [Economic recovery shows strong momentum worldwide](link) - CNN (3hr ago)
+4. [Space mission discovers potentially habitable exoplanets](link) - Al Jazeera (4hr ago)
+5. [International trade agreements finalized after months](link) - Guardian (5hr ago)
 
-💰 CRYPTO MARKET:
-Market Cap: $3.48T (+2.42%)
-Volume (24h): $156.8B
-Fear/Greed Index: 72/100 (Greed)
+*🚀 TECH NEWS:*
+1. [Apple unveils revolutionary AR glasses prototype](link) - TechCrunch (1hr ago)
+2. [Google's quantum computer achieves new milestone](link) - The Verge (2hr ago)
+3. [Tesla announces self-driving car breakthrough](link) - Ars Technica (3hr ago)
+4. [Microsoft integrates advanced AI into Office suite](link) - Wired (4hr ago)
+5. [Meta launches new VR social platform](link) - Engadget (5hr ago)
+
+*🏆 SPORTS NEWS:*
+1. [Bangladesh cricket team wins series against Australia](link) - ESPN Cricinfo (2hr ago)
+2. [Dhaka Dynamites sign international star player](link) - Cricbuzz (3hr ago)
+3. [Football World Cup qualifiers: Bangladesh advances](link) - Goal.com (4hr ago)
+4. [Olympic preparations underway for Paris 2028](link) - Olympic.org (5hr ago)
+5. [Tennis championship final set for this weekend](link) - ATP Tour (6hr ago)
+
+*🪙 FINANCE & CRYPTO NEWS:*
+1. [Bitcoin reaches new all-time high above $110,000](link) - CoinDesk (1hr ago)
+2. [Ethereum network upgrade improves transaction speed](link) - Decrypt (2hr ago)
+3. [Central banks explore digital currency adoption](link) - Bloomberg (3hr ago)
+4. [DeFi protocols see record trading volume surge](link) - The Block (4hr ago)
+5. [Cryptocurrency regulation framework finalized](link) - CoinTelegraph (5hr ago)
+
+*💰 CRYPTOCURRENCY MARKET:*
+📊 Market Cap: $3.48T ↗️ (+2.42%)
+💹 Volume (24h): $156.8B ↗️ (+8.1%)
+😨 Fear & Greed Index: 72/100 (Greed) 🟢 BUY
+
+📈 Crypto Top 5 Gainers:
+• SOL: +12.4% ↗️ • ADA: +8.9% ↗️ • DOT: +7.2% ↗️
+• MATIC: +6.8% ↗️ • AVAX: +5.3% ↗️
+
+📉 Top 5 Losers:
+• DOGE: -3.1% ↘️ • LTC: -2.8% ↘️ • BCH: -2.4% ↘️
+• XRP: -1.9% ↘️ • ADA: -1.2% ↘️
 
 🤖 AI Market Analysis:
-Crypto markets show strong bullish momentum with institutional inflows driving BTC above $110k resistance. Altcoins outperforming with DeFi sector leading gains. Technical indicators suggest continuation pattern forming.
+Crypto markets demonstrate robust bullish momentum with substantial institutional inflows propelling BTC beyond the $110k resistance threshold. Altcoins are significantly outperforming with the DeFi sector spearheading gains across the board. Technical indicators suggest a continuation pattern forming with strong volume confirmation.
 
-Prediction (Next 24h): 🟢 BULLISH 📈
+📈 24h Prediction: 🟢 BULLISH with 78% confidence
+🎯 Key Levels: BTC Support $108k | Resistance $115k
 
-━━━━━━━━━━━━━━━━━━━━━
-Built by Shanchoy with 🤖 AI
+━━━━━━━━━━━━━━━
+🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)
 ```
 
 ## ⚡ Quick Start
@@ -122,9 +156,9 @@ CALENDARIFIC_API_KEY=your_calendar_api_key
 | Command | Description | AI Feature |
 |---------|-------------|------------|
 | `/cryptostats` | Complete market overview | ✅ DeepSeek sentiment analysis |
-| `/btc` `/eth` `/doge` | Individual coin prices | ✅ Real-time price + basic info |
-| `/btcstats` `/ethstats` | Detailed coin analysis | ✅ Technical analysis + trading signals |
-| `/coin <symbol>` | Generic coin lookup | ✅ Support for 100+ cryptocurrencies |
+| `/btc` `/eth` `/pepe` `/shib` | Individual coin prices | ✅ Real-time price + basic info |
+| `/btcstats` `/ethstats` `/pepestats` | Detailed coin analysis | ✅ Technical analysis + trading signals |
+| `/coin <symbol>` | Generic coin lookup | ✅ Support for **17,500+ CoinGecko coins** |
 
 ### 🌤️ **Live Data**
 | Command | Description | Data Source |
@@ -330,19 +364,20 @@ sqlite3 data/news_history.db "SELECT COUNT(*) FROM news_history;"
 ## 🏗️ Architecture & Code Structure
 
 ```
-choynews/                          # 🏠 Main application package
+choynews/                         # 🏠 Main application package
 ├── api/                          # 🌐 External API integrations
 │   └── telegram.py               # Telegram Bot API wrapper
 ├── core/                         # 🧠 Core business logic
-│   ├── advanced_news_fetcher.py  # AI-powered news aggregation
-│   ├── digest_builder.py         # News digest compilation
+│   ├── advanced_news_fetcher.py  # AI-powered news aggregation with smart filtering
+│   ├── digest_builder.py         # News digest compilation with content cleaning
 │   └── bot.py                    # Main bot controller
 ├── data/                         # 💾 Data models & persistence
 │   ├── models.py                 # User data models
 │   ├── subscriptions.py          # Subscription management
+│   ├── user_logs.py              # User interaction logging
 │   └── crypto_cache.py           # Price data caching
 ├── services/                     # 🚀 High-level services
-│   └── bot_service.py            # Command handling service
+│   └── bot_service.py            # Command handling service with /about support
 └── utils/                        # 🛠️ Utility functions
     ├── config.py                 # Configuration management
     ├── logging.py                # Logging setup
@@ -351,6 +386,7 @@ choynews/                          # 🏠 Main application package
 bin/                              # 📦 Executable scripts
 ├── choynews                      # Main application entry point
 └── utils/                        # Additional utilities
+    └── update_coinlist.py        # Cryptocurrency list updater
 
 config/                           # ⚙️ Configuration files
 ├── requirements.txt              # Python dependencies
@@ -358,28 +394,60 @@ config/                           # ⚙️ Configuration files
 
 data/                             # 📊 Data storage
 ├── cache/                        # API response cache
+│   ├── crypto_bigcap_cache.json  # Large cap crypto cache
+│   ├── crypto_market_cache.json  # Market data cache
+│   └── crypto_movers_cache.json  # Price movement cache
 ├── static/                       # Static data files
-└── *.db                          # SQLite databases
+│   ├── coinlist.json             # Supported cryptocurrency list
+│   └── user_timezones.json       # Timezone mappings
+├── memory.json                   # Bot information for /about command
+└── *.db                          # SQLite databases (news_history.db)
 
 docs/                             # 📚 Documentation
 ├── api-docs.md                   # API documentation
 ├── developer-guide.md            # Development guide
-└── user-guide.md                 # User manual
+├── deployment.md                 # Deployment instructions
+├── installation.md               # Installation guide
+├── user-guide.md                 # User manual
+├── README.md                     # Documentation overview
+└── user/                         # User-focused documentation
+    └── getting_started.md        # Quick start guide
 
 tools/                            # 🔧 Development tools
 ├── deploy/                       # Deployment scripts
+│   ├── migrate.sh                # Database migration
+│   ├── pm2_config.json           # PM2 configuration
+│   └── setup_server.sh           # Server setup script
 └── dev/                          # Development utilities
+    ├── cleanup.sh                # Development cleanup
+    ├── final_cleanup.sh          # Final project cleanup
+    ├── migrate.sh                # Development migration
+    └── run.sh                    # Development runner
+
+logs/                             # 📝 Application logs
+build/                            # 🔨 Build artifacts
+choynews.egg-info/                # 📦 Package metadata
 ```
 
 ### **🔌 Key Components**
 
-| Component | Purpose | Technologies |
+| Component | Purpose | Key Features |
 |-----------|---------|--------------|
-| **advanced_news_fetcher.py** | RSS aggregation + AI analysis | feedparser, DeepSeek API |
-| **digest_builder.py** | News compilation + formatting | Markdown, Emoji rendering |
-| **bot_service.py** | Command routing + user interaction | python-telegram-bot |
-| **telegram.py** | Low-level Telegram API | HTTP requests, webhooks |
-| **models.py** | User data + subscription logic | SQLite, timezone handling |
+| **advanced_news_fetcher.py** | RSS aggregation + AI analysis | 3-hour time filtering, max 3 per source, smart scoring |
+| **digest_builder.py** | News compilation + formatting | Content cleaning, footer protection, Markdown rendering |
+| **bot_service.py** | Command routing + user interaction | All commands including new /about, error handling |
+| **telegram.py** | Low-level Telegram API | HTTP requests, message formatting, rate limiting |
+| **models.py** | User data + subscription logic | SQLite operations, timezone handling |
+| **memory.json** | Bot information storage | Dynamic /about content, feature descriptions |
+
+### **🆕 Recent Enhancements**
+
+- **🕒 Smart Time Filtering**: News limited to 3-hour window with 1-hour priority
+- **📊 Source Distribution**: Maximum 3 articles per source per category  
+- **🧹 Content Cleaning**: Advanced digest cleaning to prevent extra content
+- **📱 About Command**: Dynamic /about command reading from memory.json
+- **🗑️ Clean Architecture**: All test files removed for production focus
+- **⚡ Enhanced Scoring**: Combined importance + recency scoring algorithm
 
 ## 🚨 Troubleshooting
 

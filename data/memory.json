@@ -1,0 +1,88 @@
+{
+  "bot_info": {
+    "name": "ChoyNewsBot",
+    "tagline": "AI-Powered Breaking News & Crypto Intelligence",
+    "description": "The most advanced Telegram news bot with real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.",
+    "version": "v2.0.0",
+    "technologies": [
+      "Python 3.12+",
+      "Telegram Bot API",
+      "DeepSeek AI",
+      "Real-time RSS"
+    ],
+    "what_makes_special": {
+      "title": "🚀 What Makes ChoyNewsBot Special?",
+      "features": [
+        "🧠 AI-Powered Analysis: DeepSeek AI provides intelligent market insights and crypto predictions",
+        "🔄 Zero Duplicate News: Advanced SQLite deduplication ensures no repeated news across 4 daily time slots",
+        "⚡ Real-time Breaking News: Fetches latest news from 50+ premium sources every minute",
+        "💰 Live Crypto Intelligence: Real-time prices with AI technical analysis and trading signals for 17,500+ CoinGecko coins",
+        "🌍 Multi-language Support: Local Bangladesh news + Global coverage in English",
+        "⏰ Smart Scheduling: 8am, 1pm, 7pm, 11pm delivery based on user timezone",
+        "🎯 5-Item Guarantee: Each category always shows exactly 5 news items with smart fallbacks"
+      ]
+    },
+    "core_features": {
+      "title": "🌟 Core Features",
+      "sections": [
+        {
+          "title": "📰 Advanced News System",
+          "description": "Comprehensive news aggregation with intelligent filtering and presentation.",
+          "features": [
+            "- Real-time RSS aggregation from 50+ premium sources (BBC, Reuters, CNN, TechCrunch, etc.)",
+            "- Breaking news priority - Only recent, important news (last 48 hours)",
+            "- Smart deduplication - SQLite tracking prevents repeated news across time slots",
+            "- Rich formatting - Clickable links, timestamps, and emoji indicators",
+            "- Fallback intelligence - Always 5 items per category with relevant placeholder content"
+          ]
+        },
+        {
+          "title": "🤖 AI-Powered Crypto Analysis",
+          "description": "Advanced cryptocurrency market analysis powered by DeepSeek AI technology.",
+          "features": [
+            "- DeepSeek AI integration for market sentiment and technical analysis",
+            "- Real-time price data from CoinGecko API with 1-minute updates",
+            "- Technical indicators - Support/Resistance, RSI, Moving averages",
+            "- Trading signals - BUY/HOLD/SELL recommendations with confidence scores",
+            "- Market overview - Fear & Greed Index, market cap trends, volume analysis"
+          ]
+        },
+        {
+          "title": "🌤️ Live Data Integration",
+          "description": "Real-time data from multiple APIs to provide comprehensive information.",
+          "features": [
+            "- Weather API - Real-time Dhaka weather with AQI and UV index",
+            "- Holiday Calendar - Bangladesh public holidays from Calendarific",
+            "- Market Data - Live crypto prices, forex rates, and economic indicators",
+            "- Time Intelligence - User timezone support with accurate local scheduling"
+          ]
+        },
+        {
+          "title": "🎯 Smart User Experience",
+          "description": "Intelligent features designed for optimal user interaction and engagement.",
+          "features": [
+            "- Individual coin commands - /btc, /eth, /pepe, /shib with instant AI analysis for all 17,500+ CoinGecko coins",
+            "- Interactive help system - Context-aware assistance and tutorials",
+            "- Subscription management - Easy opt-in/out with timezone preferences",
+            "- Error resilience - Graceful handling of API failures with cached data"
+          ]
+        }
+      ]
+    },
+    "developer": {
+      "name": "Shanchoy Noor",
+      "contact": {
+        "telegram": "@shanchoynoor",
+        "email": "shanchoyzone@gmail.com",
+        "github": "https://github.com/shanchoynoor"
+      }
+    },
+    "statistics": {
+      "news_sources": "50+",
+      "update_frequency": "Every minute",
+      "daily_digests": 4,
+      "supported_timezones": "400+",
+      "crypto_coins_supported": "17,500+"
+    }
+  }
+}

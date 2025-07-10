@@ -44,20 +44,20 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         # Build the digest header with Bangladesh time
         now = get_bd_now()
         time_str = get_bd_time_str(now)
-        header = f"� *DAILY NEWS DIGEST*\n{time_str}\n\n"
+        
+        # Get holiday information
+        holidays_info = get_bd_holidays()
+        
+        # Build header with megaphone emoji and holiday info
+        header = f"📢 *DAILY NEWS DIGEST*\n{time_str}\n{holidays_info}\n"
         
         sections = []
         
-        # Add weather and holidays first
+        # Add weather first
         if include_weather:
             weather_section = get_dhaka_weather()
             if weather_section:
                 sections.append(weather_section)
-        
-        # Add holidays
-        holidays_section = get_bd_holidays()
-        if holidays_section:
-            sections.append(holidays_section)
         
         # Add news sections
         sections.append(get_breaking_local_news())
@@ -75,14 +75,24 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         if include_crypto:
             sections.append(fetch_crypto_market_with_ai())
         
-        # Combine all sections
-        digest = header + "".join(sections)
+        # Combine all sections with explicit filtering
+        digest = header
+        for section in sections:
+            if section and section.strip():  # Only add non-empty sections
+                digest += section
         
-        # Add footer
-        digest += "\n━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)"
+        # Add footer and ensure proper termination
+        digest += "\n━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)\n"
         
         logger.info("Successfully built news digest")
-        return digest
+        # Clean and return only the digest content, nothing more
+        cleaned_digest = clean_digest_content(digest)
+        
+        # Debug logging to track content
+        logger.debug(f"Digest length: {len(cleaned_digest)} chars")
+        logger.debug(f"Digest ends with: {repr(cleaned_digest[-50:])}")
+        
+        return cleaned_digest
         
     except Exception as e:
         logger.error(f"Error building news digest: {e}", exc_info=True)
@@ -166,3 +176,46 @@ def build_tech_news_section():
     except Exception as e:
         logger.error(f"Error building tech news section: {e}")
         return "*💻 TECHNOLOGY NEWS*\nTechnology news temporarily unavailable.\n\n"
+
+def clean_digest_content(content):
+    """Clean and validate digest content to prevent extra unwanted content."""
+    if not content:
+        return ""
+    
+    # Split by the footer marker to ensure nothing appears after it
+    footer_marker = "🤖 Developed by [Shanchoy Noor]"
+    
+    if footer_marker in content:
+        # Find the footer and cut everything after it
+        footer_index = content.find(footer_marker)
+        # Keep content up to the end of the GitHub link
+        github_end = content.find(")", footer_index)
+        if github_end > footer_index:
+            content = content[:github_end + 1]
+        else:
+            # Fallback: just keep up to the footer line
+            lines = content[:footer_index + len(footer_marker)].split('\n')
+            lines.append("(https://github.com/shanchoynoor)")
+            content = '\n'.join(lines)
+    
+    # Additional cleanup: remove any lines that look like RSS titles or unexpected content
+    lines = content.split('\n')
+    cleaned_lines = []
+    footer_found = False
+    
+    for line in lines:
+        # Once we hit the footer, only include that line and stop
+        if footer_marker in line:
+            cleaned_lines.append(line)
+            footer_found = True
+            break
+        # Only add lines that don't look like stray RSS content
+        elif not footer_found:
+            # Skip lines that look like RSS titles without proper formatting
+            if line.strip() and not (
+                line.strip().startswith(('http', 'www.')) or  # URLs
+                (len(line.strip()) > 50 and '.' in line and 'com' in line)  # Likely RSS content
+            ):
+                cleaned_lines.append(line)
+    
+    return '\n'.join(cleaned_lines).strip()

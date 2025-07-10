@@ -105,7 +105,7 @@ def cleanup_old_news_history(days_back=7):
         logger.error(f"Error cleaning up news history: {e}")
 
 def format_time_ago(published_time):
-    """Convert published time to relative time format."""
+    """Convert published time to relative time format with precision for recent news."""
     try:
         if isinstance(published_time, str):
             try:
@@ -124,14 +124,15 @@ def format_time_ago(published_time):
             
         now = datetime.now()
         diff = now - pub_time
+        total_minutes = diff.total_seconds() / 60
         
         if diff.days > 0:
             return f"{diff.days}d ago"
-        elif diff.seconds > 3600:
-            hours = diff.seconds // 3600
+        elif total_minutes >= 60:
+            hours = int(total_minutes // 60)
             return f"{hours}hr ago"
-        elif diff.seconds > 60:
-            minutes = diff.seconds // 60
+        elif total_minutes >= 1:
+            minutes = int(total_minutes)
             return f"{minutes}min ago"
         else:
             return "now"
@@ -201,9 +202,10 @@ def calculate_news_importance_score(entry, source_name, feed_position):
     return score
 
 def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
-    """Fetch breaking news from RSS sources prioritizing both recency and importance."""
+    """Fetch breaking news from RSS sources with smart filtering and source distribution."""
     all_entries = []
     successful_sources = 0
+    source_count = {}  # Track how many articles per source
     
     for source_name, rss_url in sources.items():
         try:
@@ -213,7 +215,7 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
-            response = requests.get(rss_url, headers=headers, timeout=10)  # Reduced timeout
+            response = requests.get(rss_url, headers=headers, timeout=10)
             response.raise_for_status()
             
             feed = feedparser.parse(response.content)
@@ -224,6 +226,7 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
             
             successful_sources += 1
             logger.debug(f"Successfully fetched {len(feed.entries)} entries from {source_name}")
+            source_articles = 0  # Count articles from this source
                 
             # Process all entries from this source
             for position, entry in enumerate(feed.entries[:limit]):
@@ -254,7 +257,7 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                                         try:
                                             parsed_time = datetime.strptime(pub_time[:19], "%Y-%m-%dT%H:%M:%S")
                                         except:
-                                            parsed_time = datetime.now()  # Use current time as fallback
+                                            parsed_time = datetime.now()
                             else:
                                 parsed_time = pub_time
                         else:
@@ -262,27 +265,32 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     except:
                         parsed_time = datetime.now()
                     
-                    # Only include news from last 24 hours for freshness
+                    # Time filtering: Only news from last 3 hours, prioritize last 1 hour
                     time_diff = datetime.now() - parsed_time
-                    if time_diff.days > 1:  # Stricter time filter
+                    hours_ago = time_diff.total_seconds() / 3600
+                    
+                    # Skip news older than 3 hours
+                    if hours_ago > 3:
                         continue
                     
                     time_ago = format_time_ago(pub_time)
                     
                     # Check for duplicates
                     news_hash = get_news_hash(title, source_name)
-                    if is_news_already_sent(news_hash, hours_back=2):  # Reduced to 2 hours for more variety
+                    if is_news_already_sent(news_hash, hours_back=2):
                         continue
                     
                     # Calculate importance score
                     importance_score = calculate_news_importance_score(entry, source_name, position)
                     
-                    # Calculate recency score (newer = higher score)
-                    hours_ago = time_diff.total_seconds() / 3600
-                    recency_score = max(0, 24 - hours_ago)  # 24 points for newest, decreasing
+                    # Calculate recency score with heavy bias for last 1 hour
+                    if hours_ago <= 1:
+                        recency_score = 50 + (1 - hours_ago) * 20  # 50-70 points for last hour
+                    else:
+                        recency_score = max(0, 30 - (hours_ago - 1) * 10)  # Decreasing after 1 hour
                     
-                    # Combined score (importance + recency)
-                    total_score = importance_score + (recency_score * 0.5)  # Weight recency at 50%
+                    # Combined score (importance + heavy recency weighting)
+                    total_score = importance_score + recency_score
                     
                     entry_data = {
                         'title': title,
@@ -295,46 +303,55 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                         'category': category,
                         'importance_score': importance_score,
                         'recency_score': recency_score,
-                        'total_score': total_score
+                        'total_score': total_score,
+                        'hours_ago': hours_ago
                     }
                     
                     all_entries.append(entry_data)
+                    source_articles += 1
                     
+                    # Limit to max 3 articles per source for this category
+                    if source_articles >= 3:
+                        break
+                        
                 except Exception as e:
                     logger.debug(f"Error processing entry from {source_name}: {e}")
                     continue
                     
-        except requests.exceptions.Timeout:
-            logger.warning(f"Timeout fetching from {source_name}")
-            continue
-        except requests.exceptions.ConnectionError:
-            logger.warning(f"Connection error fetching from {source_name}")
-            continue
-        except requests.exceptions.HTTPError as e:
-            logger.warning(f"HTTP error {e.response.status_code} fetching from {source_name}")
-            continue
+            source_count[source_name] = source_articles
+            
         except Exception as e:
-            logger.debug(f"Unexpected error fetching from {source_name}: {e}")
+            logger.warning(f"Error fetching from {source_name}: {e}")
             continue
     
-    logger.info(f"Successfully fetched from {successful_sources}/{len(sources)} sources, got {len(all_entries)} entries")
+    logger.info(f"Fetched {len(all_entries)} total entries from {successful_sources} sources for {category}")
+    logger.debug(f"Source distribution: {source_count}")
     
-    # Sort by combined score (importance + recency) - highest first
-    all_entries.sort(key=lambda x: x['total_score'], reverse=True)
+    # Sort by total score (recency + importance) descending, then by recency
+    all_entries.sort(key=lambda x: (x['total_score'], -x['hours_ago']), reverse=True)
     
-    # Filter out duplicates and return top entries
-    seen_hashes = set()
-    filtered_entries = []
+    # Ensure source diversity in final selection
+    final_entries = []
+    used_sources = {}
     
     for entry in all_entries:
-        if entry['hash'] not in seen_hashes:
-            seen_hashes.add(entry['hash'])
-            filtered_entries.append(entry)
-            
-            if len(filtered_entries) >= target_count * 2:  # Get 2x target for good selection
-                break
+        source = entry['source']
+        
+        # Only add if we haven't hit the limit for this source (max 3 per category)
+        if used_sources.get(source, 0) < 3 and len(final_entries) < target_count:
+            final_entries.append(entry)
+            used_sources[source] = used_sources.get(source, 0) + 1
     
-    return filtered_entries[:target_count * 2]  # Return double for variety
+    # If we still need more entries and have exhausted source limits, fill remaining slots
+    if len(final_entries) < target_count:
+        remaining_entries = [e for e in all_entries if e not in final_entries]
+        remaining_entries.sort(key=lambda x: x['total_score'], reverse=True)
+        
+        while len(final_entries) < target_count and remaining_entries:
+            final_entries.append(remaining_entries.pop(0))
+    
+    logger.info(f"Selected {len(final_entries)} entries for {category} with source diversity")
+    return final_entries
 
 def format_news_section(section_title, entries, limit=5):
     """Format news entries prioritizing importance and recency, ensuring exactly 5 items."""
@@ -452,8 +469,8 @@ def get_breaking_local_news():
         "Prothom Alo": "https://www.prothomalo.com/feed",
         "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
         "Bangladesh Pratidin": "https://www.bd-pratidin.com/rss.xml",
-        "New Age": "https://www.newagebd.net/rss.xml",
-        "Dhaka Tribune": "https://www.dhakatribune.com/feed"
+        "Bangla Tribune": "https://www.banglatribune.com/rss.xml",
+        "Samakal": "https://samakal.com/rss.xml"
     }
     
     entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
@@ -498,13 +515,17 @@ def get_breaking_tech_news():
 def get_breaking_sports_news():
     """Get breaking sports news from working sports sources."""
     sports_sources = {
-        "ESPN": "https://www.espn.com/espn/rss/news",
-        "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
-        "Yahoo Sports": "https://sports.yahoo.com/rss/",
-        "CBS Sports": "https://www.cbssports.com/rss/headlines",
-        "Sky Sports": "http://www.skysports.com/rss/12040",
-        "ESPN FC": "https://www.espn.com/espn/rss/soccer/news",
-        "Sports Illustrated": "https://www.si.com/rss/si_topstories.rss"
+        # Bangladesh Sports Sources
+        "Prothom Alo Sports": "https://www.prothomalo.com/feed/sports.rss",
+        "Bangla Tribune Sports": "https://www.banglatribune.com/feed/sports",
+        "BDNews24 Sports": "https://bangla.bdnews24.com/rss/sports.rss",
+        "Jugantor Sports": "https://www.jugantor.com/feed/rss/sports",
+        "Kaler Kantho Sports": "https://www.kalerkantho.com/rss/sports/",
+        # Dedicated Sports News
+        "Jagonews24 Sports": "https://www.jagonews24.com/rss/sports.xml",
+        "BDCricTime": "https://www.bdcrictime.com/feed/",
+        "Goal.com Bangladesh": "https://www.goal.com/bn/feeds/news?fmt=rss",
+        "Bangladesh Cricket News": "https://www.espncricinfo.com/rss/content/story/feeds/6.xml"
     }
     
     entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
@@ -542,6 +563,9 @@ def fetch_crypto_market_with_ai():
         volume = data["total_volume"]["usd"]
         market_change = data["market_cap_change_percentage_24h_usd"]
         
+        # Get volume change (if available, otherwise estimate as same as market cap change)
+        volume_change = market_change  # API doesn't provide volume change, use market change as approximation
+        
         # Fetch top 50 cryptos for comprehensive data
         crypto_url = "https://api.coingecko.com/api/v3/coins/markets"
         crypto_params = {
@@ -565,15 +589,32 @@ def fetch_crypto_market_with_ai():
             fear_index = "N/A"
             fear_text = "Unknown"
         
-        # Format market cap and volume
+        # Format market cap and volume with arrows
         market_cap_str = f"${market_cap/1e12:.2f}T" if market_cap >= 1e12 else f"${market_cap/1e9:.2f}B"
         volume_str = f"${volume/1e12:.2f}T" if volume >= 1e12 else f"${volume/1e9:.2f}B"
         
+        # Add arrows for market cap and volume
+        market_arrow = "▲" if market_change > 0 else "▼" if market_change < 0 else "→"
+        volume_arrow = "▲" if volume_change > 0 else "▼" if volume_change < 0 else "→"
+        
+        # Fear/Greed Index with buy/sell/hold indicator
+        fear_greed_text = ""
+        if fear_index != "N/A":
+            fear_value = int(fear_index)
+            if fear_value >= 75:
+                fear_greed_text = f"{fear_index}/100 (🟢 BUY)"
+            elif fear_value >= 50:
+                fear_greed_text = f"{fear_index}/100 (🟠 HOLD)"
+            else:
+                fear_greed_text = f"{fear_index}/100 (🔴 SELL)"
+        else:
+            fear_greed_text = f"{fear_index}/100"
+        
         # Build crypto section
         crypto_section = f"""💰 CRYPTO MARKET:
-Market Cap (24h): {market_cap_str} ({market_change:+.2f}%)
-Volume (24h): {volume_str}
-Fear/Greed Index: {fear_index}/100
+Market Cap: {market_cap_str} ({market_change:+.2f}%) {market_arrow}
+Volume: {volume_str} ({volume_change:+.2f}%) {volume_arrow}
+Fear/Greed Index: {fear_greed_text}
 
 💎 Big Cap Crypto:
 """
@@ -726,32 +767,70 @@ Keep it under 250 characters and end with prediction like: "Prediction (Next 24h
         logger.error(f"Error getting AI analysis: {e}")
         return "AI analysis temporarily unavailable."
 
-def get_individual_crypto_stats(symbol):
-    """Get detailed crypto stats with new format for individual coins."""
+def get_coingecko_coin_id(symbol):
+    """Get CoinGecko coin ID from symbol using their search API."""
     try:
-        # Map common symbols to CoinGecko IDs and their emojis
-        coin_data = {
-            'btc': {'id': 'bitcoin', 'emoji': '₿', 'name': 'Bitcoin'},
-            'eth': {'id': 'ethereum', 'emoji': 'Ⓔ', 'name': 'Ethereum'}, 
-            'doge': {'id': 'dogecoin', 'emoji': '🐕', 'name': 'Dogecoin'},
-            'ada': {'id': 'cardano', 'emoji': '🔷', 'name': 'Cardano'},
-            'sol': {'id': 'solana', 'emoji': '☀️', 'name': 'Solana'},
-            'xrp': {'id': 'ripple', 'emoji': '💧', 'name': 'XRP'},
-            'matic': {'id': 'matic-network', 'emoji': '🟣', 'name': 'Polygon'},
-            'dot': {'id': 'polkadot', 'emoji': '🔴', 'name': 'Polkadot'},
-            'link': {'id': 'chainlink', 'emoji': '🔗', 'name': 'Chainlink'},
-            'uni': {'id': 'uniswap', 'emoji': '🦄', 'name': 'Uniswap'}
-        }
+        # First try direct symbol lookup
+        search_url = f"https://api.coingecko.com/api/v3/search"
+        params = {"query": symbol.lower()}
         
-        symbol_lower = symbol.lower()
-        if symbol_lower in coin_data:
-            coin_id = coin_data[symbol_lower]['id']
-            coin_emoji = coin_data[symbol_lower]['emoji']
-            coin_name = coin_data[symbol_lower]['name']
-        else:
-            coin_id = symbol_lower
-            coin_emoji = '🪙'
-            coin_name = symbol.upper()
+        response = requests.get(search_url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        coins = data.get("coins", [])
+        
+        # Look for exact symbol match first
+        for coin in coins:
+            if coin.get("symbol", "").lower() == symbol.lower():
+                return coin.get("id"), coin.get("name"), coin.get("symbol", "").upper()
+        
+        # If no exact match, try partial match or popular coins
+        if coins:
+            first_result = coins[0]
+            return first_result.get("id"), first_result.get("name"), first_result.get("symbol", "").upper()
+            
+        return None, None, None
+        
+    except Exception as e:
+        logger.debug(f"Error searching for coin {symbol}: {e}")
+        return None, None, None
+
+def get_coin_emoji(symbol):
+    """Get emoji for specific coins."""
+    emoji_map = {
+        'btc': '₿', 'bitcoin': '₿',
+        'eth': 'Ⓔ', 'ethereum': 'Ⓔ', 
+        'doge': '🐕', 'dogecoin': '�',
+        'ada': '🔷', 'cardano': '🔷',
+        'sol': '☀️', 'solana': '☀️',
+        'xrp': '💧', 'ripple': '💧',
+        'matic': '�', 'polygon': '🟣',
+        'dot': '🔴', 'polkadot': '🔴',
+        'link': '🔗', 'chainlink': '🔗',
+        'uni': '🦄', 'uniswap': '🦄',
+        'pepe': '🐸', 
+        'shib': '🐕', 'shiba': '🐕',
+        'bnb': '🟡', 'binancecoin': '�',
+        'avax': '🔺', 'avalanche': '🔺',
+        'ltc': '⚡', 'litecoin': '⚡',
+        'bch': '💚', 'bitcoin-cash': '�',
+        'atom': '⚛️', 'cosmos': '⚛️',
+        'luna': '🌙', 'terra-luna': '🌙',
+        'near': '🔸', 'near-protocol': '🔸'
+    }
+    return emoji_map.get(symbol.lower(), '🪙')
+
+def get_individual_crypto_stats(symbol):
+    """Get detailed crypto stats with dynamic CoinGecko lookup for any coin."""
+    try:
+        # Get coin ID from CoinGecko search
+        coin_id, coin_name, coin_symbol = get_coingecko_coin_id(symbol)
+        
+        if not coin_id:
+            return None
+        
+        coin_emoji = get_coin_emoji(coin_symbol or symbol)
         
         # Fetch detailed coin data
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
@@ -770,7 +849,7 @@ def get_individual_crypto_stats(symbol):
         market_data = data.get("market_data", {})
         
         # Extract key metrics
-        name = data.get("name", coin_name)
+        name = coin_name or data.get("name", symbol.upper())
         current_price = market_data.get("current_price", {}).get("usd", 0)
         price_change_24h = market_data.get("price_change_percentage_24h", 0) or 0
         market_cap = market_data.get("market_cap", {}).get("usd", 0)
@@ -914,31 +993,36 @@ Keep technical values realistic based on the data provided.
         return "AI analysis temporarily unavailable."
 
 def get_individual_crypto_stats_with_ai(symbol):
-    """Get detailed crypto stats with AI analysis in the requested format."""
+    """Get detailed crypto stats with AI analysis using dynamic CoinGecko lookup."""
     try:
-        # Map common symbols to CoinGecko IDs and their emojis
-        coin_data = {
-            'btc': {'id': 'bitcoin', 'emoji': '₿', 'name': 'Bitcoin'},
-            'eth': {'id': 'ethereum', 'emoji': 'Ⓔ', 'name': 'Ethereum'}, 
-            'doge': {'id': 'dogecoin', 'emoji': '🐕', 'name': 'Dogecoin'},
-            'ada': {'id': 'cardano', 'emoji': '🔷', 'name': 'Cardano'},
-            'sol': {'id': 'solana', 'emoji': '☀️', 'name': 'Solana'},
-            'xrp': {'id': 'ripple', 'emoji': '💧', 'name': 'XRP'},
-            'matic': {'id': 'matic-network', 'emoji': '🟣', 'name': 'Polygon'},
-            'dot': {'id': 'polkadot', 'emoji': '🔴', 'name': 'Polkadot'},
-            'link': {'id': 'chainlink', 'emoji': '🔗', 'name': 'Chainlink'},
-            'uni': {'id': 'uniswap', 'emoji': '🦄', 'name': 'Uniswap'}
-        }
+        # Get coin ID from CoinGecko search
+        coin_id, coin_name, coin_symbol = get_coingecko_coin_id(symbol)
         
-        symbol_lower = symbol.lower()
-        if symbol_lower in coin_data:
-            coin_id = coin_data[symbol_lower]['id']
-            coin_name = coin_data[symbol_lower]['name']
-        else:
-            coin_id = symbol_lower
-            coin_name = symbol.upper()
+        if not coin_id:
+            return None
+        
+        coin_emoji = get_coin_emoji(coin_symbol or symbol)
         
         # Fetch detailed coin data
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+        params = {
+            "localization": "false",
+            "tickers": "false", 
+            "market_data": "true",
+            "community_data": "false",
+            "developer_data": "false"
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        market_data = data.get("market_data", {})
+        
+        # Extract key metrics
+        name = coin_name or data.get("name", symbol.upper())
+        current_price = market_data.get("current_price", {}).get("usd", 0)
+        price_change_24h = market_data.get("price_change_percentage_24h", 0) or 0
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
         params = {
             "localization": "false",
