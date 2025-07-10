@@ -216,122 +216,47 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
     all_entries = []
     successful_sources = 0
     source_count = {}  # Track how many articles per source
+    debug_titles = []
     
     for source_name, rss_url in sources.items():
         try:
             logger.debug(f"Fetching breaking news from {source_name}")
-            
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            
             response = requests.get(rss_url, headers=headers, timeout=10)
             response.raise_for_status()
-            
             feed = feedparser.parse(response.content)
-            
             if not feed.entries:
                 logger.debug(f"No entries found in feed from {source_name}")
                 continue
-            
             successful_sources += 1
             logger.debug(f"Successfully fetched {len(feed.entries)} entries from {source_name}")
             source_articles = 0  # Count articles from this source
-                
-            # Process all entries from this source
             for position, entry in enumerate(feed.entries[:limit]):
                 try:
                     title = entry.get('title', '').strip()
                     if not title:
                         continue
-                    
                     # Clean HTML tags and image references from title
-                    import re
-                    title = re.sub(r'<[^>]+>', '', title)  # Remove HTML tags
-                    title = re.sub(r'\s+', ' ', title)     # Normalize whitespace
+                    title = re.sub(r'<[^>]+>', '', title)
+                    title = re.sub(r'\s+', ' ', title)
                     title = title.strip()
-                    
-                    # Enhanced quality filtering for news titles
-                    if (not title or 
-                        len(title) < 10 or  # Too short
-                        len(title) > 200 or  # Too long
-                        title.lower() in ['momentkohli', 'admin', 'test', 'update', 'loading'] or  # Low quality titles
-                        any(indicator in title.lower() for indicator in ['image:', 'photo:', 'picture:', 'thumbnail:', '[img]', '[image]']) or
-                        title.count('?') > 3 or  # Too many question marks
-                        title.count('!') > 3 or  # Too many exclamation marks
-                        re.search(r'^[^a-zA-Z]*$', title) or  # No letters at all
-                        re.search(r'^[0-9\s\-\.]*$', title) or  # Only numbers and basic punctuation
-                        len(re.findall(r'[a-zA-Z]', title)) < 5):  # Less than 5 letters
+                    # Log every title for debug
+                    debug_titles.append(f"{source_name}: {title}")
+                    # RELAXED FILTERS FOR DEBUGGING: Only skip if title is empty or < 5 chars
+                    if len(title) < 5:
                         continue
-                        
-                    # Skip titles that are just image descriptions or contain image indicators
-                    if any(indicator in title.lower() for indicator in ['image:', 'photo:', 'picture:', 'thumbnail:', '[img]', '[image]']):
-                        continue
-                        
-                    # Clean and limit title length
-                    if len(title) > 120:
-                        title = title[:117] + "..."
-                    
                     link = entry.get('link', '')
                     pub_time = entry.get('published', entry.get('updated', ''))
-                    
-                    # Ensure we only get clean text link without any image or media URLs
-                    if link and any(img_ext in link.lower() for img_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']):
-                        # This is an image link, not a news article link, skip it
-                        continue
-                    
-                    # Parse and validate publication time
-                    parsed_time = None
-                    try:
-                        if pub_time:
-                            if isinstance(pub_time, str):
-                                try:
-                                    parsed_time = datetime.strptime(pub_time, "%a, %d %b %Y %H:%M:%S %Z")
-                                except:
-                                    try:
-                                        parsed_time = datetime.strptime(pub_time, "%Y-%m-%dT%H:%M:%S%z")
-                                        parsed_time = parsed_time.replace(tzinfo=None)
-                                    except:
-                                        try:
-                                            parsed_time = datetime.strptime(pub_time[:19], "%Y-%m-%dT%H:%M:%S")
-                                        except:
-                                            parsed_time = datetime.now()
-                            else:
-                                parsed_time = pub_time
-                        else:
-                            parsed_time = datetime.now()
-                    except:
-                        parsed_time = datetime.now()
-                    
-                    # Time filtering: Allow news from last 6 hours, but heavily prioritize last 3 hours
-                    time_diff = datetime.now() - parsed_time
-                    hours_ago = time_diff.total_seconds() / 3600
-                    
-                    # Skip news older than 6 hours
-                    if hours_ago > 6:
-                        continue
-                    
+                    # Accept all times for debug (no time filter)
+                    parsed_time = datetime.now()
                     time_ago = format_time_ago(pub_time)
-                    
-                    # Check for duplicates
                     news_hash = get_news_hash(title, source_name)
-                    if is_news_already_sent(news_hash, hours_back=2):
-                        continue
-                    
-                    # Calculate importance score
+                    # Accept all duplicates for debug (no duplicate filter)
                     importance_score = calculate_news_importance_score(entry, source_name, position)
-                    
-                    # Calculate recency score with heavy bias for recent news
-                    if hours_ago <= 1:
-                        recency_score = 60 + (1 - hours_ago) * 20  # 60-80 points for last hour
-                    elif hours_ago <= 3:
-                        recency_score = 40 + (3 - hours_ago) * 10  # 40-60 points for 1-3 hours
-                    else:
-                        recency_score = max(0, 20 - (hours_ago - 3) * 5)  # Decreasing after 3 hours
-                    
-                    # Combined score (importance + heavy recency weighting)
+                    recency_score = 50  # Fixed for debug
                     total_score = importance_score + recency_score
-                    
                     entry_data = {
                         'title': title,
                         'link': link,
@@ -344,24 +269,17 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                         'importance_score': importance_score,
                         'recency_score': recency_score,
                         'total_score': total_score,
-                        'hours_ago': hours_ago
+                        'hours_ago': 0
                     }
-                    
                     all_entries.append(entry_data)
                     source_articles += 1
-                    
-                    # Limit to max 3 articles per source for this category
                     if source_articles >= 3:
                         break
-                        
                 except Exception as e:
                     logger.debug(f"Error processing entry from {source_name}: {e}")
                     continue
-                    
             source_count[source_name] = source_articles
-            
         except Exception as e:
-            # Only log major errors (not 404s or common RSS issues)
             if "403" in str(e) or "Gone" in str(e):
                 logger.debug(f"RSS feed unavailable for {source_name}: {type(e).__name__}")
             elif "404" in str(e):
@@ -369,136 +287,61 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
             else:
                 logger.warning(f"Error fetching from {source_name}: {e}")
             continue
+            continue
     
     success_rate = (successful_sources / len(sources)) * 100 if sources else 0
     logger.info(f"Fetched {len(all_entries)} total entries from {successful_sources}/{len(sources)} sources for {category} ({success_rate:.1f}% success)")
     logger.debug(f"Source distribution: {source_count}")
-    
+    logger.debug(f"Fetched news titles for {category}:\n" + "\n".join(debug_titles))
     # Sort by total score (recency + importance) descending, then by recency
     all_entries.sort(key=lambda x: (x['total_score'], -x['hours_ago']), reverse=True)
-    
     # Ensure source diversity in final selection
     final_entries = []
     used_sources = {}
-    
     for entry in all_entries:
         source = entry['source']
-        
-        # Only add if we haven't hit the limit for this source (max 3 per category)
         if used_sources.get(source, 0) < 3 and len(final_entries) < target_count:
             final_entries.append(entry)
             used_sources[source] = used_sources.get(source, 0) + 1
-    
-    # If we still need more entries and have exhausted source limits, fill remaining slots
     if len(final_entries) < target_count:
         remaining_entries = [e for e in all_entries if e not in final_entries]
         remaining_entries.sort(key=lambda x: x['total_score'], reverse=True)
-        
         while len(final_entries) < target_count and remaining_entries:
             final_entries.append(remaining_entries.pop(0))
-    
     logger.info(f"Selected {len(final_entries)} entries for {category} with source diversity")
     return final_entries
 
 def format_news_section(section_title, entries, limit=5):
     """Format news entries prioritizing importance and recency, ensuring exactly 5 items."""
-    formatted = f"{section_title}:\n\n"
-    
-    # Define fallback messages for each category
-    category_fallbacks = {
-        "🇧🇩 LOCAL NEWS": [
-            "🔄 Latest breaking local news being monitored...",
-            "📊 Local political developments being tracked...",
-            "💼 Regional economic updates in progress...",
-            "🏛️ Government policy updates being compiled...",
-            "🌟 Community developments being monitored..."
-        ],
-        "🌍 GLOBAL NEWS": [
-            "🌍 International breaking news being updated...",
-            "🔥 Global crisis developments being tracked...", 
-            "💸 World economic updates coming soon...",
-            "🕊️ International affairs updates in progress...",
-            "⚡ Breaking global events being monitored..."
-        ],
-        "🚀 TECH NEWS": [
-            "💡 Latest technology breakthroughs being analyzed...",
-            "🤖 AI and innovation updates coming soon...",
-            "🔧 Tech industry developments being tracked...",
-            "💰 Startup and venture updates in progress...",
-            "📱 Digital transformation news being compiled..."
-        ],
-        "🏆 SPORTS NEWS": [
-            "⚽ Live sports scores and updates being compiled...",
-            "🏅 League standings and results coming soon...",
-            "🔄 Player transfers and moves being tracked...",
-            "🏟️ Tournament updates in progress...",
-            "📈 Sports analysis and commentary being prepared..."
-        ],
-        "🪙 FINANCE & CRYPTO NEWS": [
-            "📊 Cryptocurrency market movements being analyzed...",
-            "🔗 DeFi protocol updates being tracked...",
-            "⛓️ Blockchain developments coming soon...",
-            "📜 Digital asset regulatory news in progress...",
-            "💹 Crypto trading insights being compiled..."
-        ]
-    }
-    
+    formatted = f"{section_title}:\n"
     count = 0
-    
     # Sort entries by total score to get the most important ones first
     if entries:
         entries = sorted(entries, key=lambda x: x.get('total_score', 0), reverse=True)
-    
-    # First, add real news entries (prioritizing high-importance ones)
-    for entry in entries:
+    # Only use real news, up to limit
+    for idx, entry in enumerate(entries):
         if count >= limit:
             break
-            
-        title = entry.get('title', '')
-        source = entry.get('source', '')
-        time_ago = entry.get('time_ago', '')
-        link = entry.get('link', '')
-        
-        # Skip empty titles
-        if not title.strip():
+        title = entry.get('title', '').strip()
+        source = entry.get('source', '').strip()
+        time_ago = entry.get('time_ago', '').strip()
+        link = entry.get('link', '').strip()
+        if not title:
             continue
-        
         # Escape markdown characters in title
         title_escaped = title.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
-        
         count += 1
-        
-        # Remove importance indicators for cleaner display
-        indicator = ""  # No indicators for clean display
-        
+        # Numbered format, as in your sample
         if link:
-            formatted += f"{indicator}[{title_escaped}]({link}) - {source} ({time_ago})\n"
+            formatted += f"{count}. {title_escaped} - {source} ({time_ago})\n"
         else:
-            formatted += f"{indicator}{title_escaped} - {source} ({time_ago})\n"
-        
-        # Mark as sent to prevent duplicates
+            formatted += f"{count}. {title_escaped} - {source} ({time_ago})\n"
         try:
             mark_news_as_sent(entry['hash'], title, source, entry.get('published', ''), entry.get('category', ''), link)
         except Exception as e:
             logger.debug(f"Error marking news as sent: {e}")
-    
-    # Fill remaining slots with fallback messages if needed
-    fallback_messages = category_fallbacks.get(section_title, [
-        "📰 News updates will be available shortly...",
-        "🔍 Breaking news being monitored...",
-        "📈 Latest developments being tracked...",
-        "⏰ Updates coming soon...",
-        "📝 News compilation in progress..."
-    ])
-    
-    fallback_index = 0
-    while count < limit:
-        count += 1
-        fallback_msg = fallback_messages[fallback_index % len(fallback_messages)]
-        formatted += f"{fallback_msg}\n"
-        fallback_index += 1
-    
-    return formatted + "\n"
+    # If not enough real news, just leave blank (no fallback)
+    return formatted + ("\n" if count > 0 else "\n")
 
 # ===================== NEWS SOURCES =====================
 
