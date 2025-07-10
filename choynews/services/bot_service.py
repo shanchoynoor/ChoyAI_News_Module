@@ -131,7 +131,7 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
     elif command == '/help':
         handle_help_command(chat_id)
     elif command == '/status':
-        handle_status_command(chat_id, user_id)
+        handle_status_command(chat_id)
     elif command == '/news':
         handle_news_command(chat_id, user_id, args)
     elif command == '/weather':

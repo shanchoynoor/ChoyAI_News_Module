@@ -143,11 +143,14 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         # Clean and return only the digest content, nothing more
         cleaned_digest = clean_digest_content(digest)
         
-        # Debug logging to track content
-        logger.debug(f"Digest length: {len(cleaned_digest)} chars")
-        logger.debug(f"Digest ends with: {repr(cleaned_digest[-50:])}")
+        # Additional safety check: ensure no article content leaked through
+        final_digest = final_content_safety_check(cleaned_digest)
         
-        return cleaned_digest
+        # Debug logging to track content
+        logger.debug(f"Digest length: {len(final_digest)} chars")
+        logger.debug(f"Digest ends with: {repr(final_digest[-50:])}")
+        
+        return final_digest
         
     except Exception as e:
         logger.error(f"Error building news digest: {e}", exc_info=True)
@@ -254,27 +257,152 @@ def clean_digest_content(content):
     # Remove any stray content that doesn't belong in a news digest
     lines = content.split('\n')
     cleaned_lines = []
-    in_digest = True
+    in_valid_section = False
+    
+    # Define valid section headers that should appear in our digest
+    valid_section_markers = [
+        '📢', '📰', '🇧🇩', '🌍', '🚀', '🏆', '🪙', '💰', '☀️', '🌤️', '🌡️', 
+        '*DAILY NEWS DIGEST*', '*LOCAL NEWS*', '*GLOBAL NEWS*', '*TECH NEWS*', 
+        '*SPORTS NEWS*', '*FINANCE & CRYPTO NEWS*', '*CRYPTOCURRENCY MARKET*',
+        '*WEATHER FORECAST*', 'Today:', '━━━━━', footer_marker
+    ]
     
     for line in lines:
+        original_line = line
         line = line.strip()
         
         # Stop processing once we hit the footer
         if footer_marker in line:
-            cleaned_lines.append(line)
+            cleaned_lines.append(original_line)
             break
         
         # Skip empty lines at the start, but keep them within sections
         if not line and not cleaned_lines:
             continue
-            
-        # Skip lines that look like raw RSS content (URLs, long domain names, etc.)
-        if (line.startswith(('http://', 'https://', 'www.')) or 
-            (len(line) > 60 and any(domain in line.lower() for domain in ['.com', '.org', '.net', '.gov']) and 
-             not line.startswith(('*', '📰', '🇧🇩', '🌍', '🚀', '🏆', '🪙', '💰', '☀️', '🌤️')))):
-            # This looks like stray RSS content, skip it
+        
+        # Check if this line starts a valid section
+        if any(marker in line for marker in valid_section_markers):
+            in_valid_section = True
+            cleaned_lines.append(original_line)
             continue
         
-        cleaned_lines.append(line)
+        # Skip lines that are clearly not part of a news digest
+        if not in_valid_section:
+            continue
+            
+        # Skip lines that look like raw RSS content or article body text
+        if (
+            # URLs or domain patterns
+            line.startswith(('http://', 'https://', 'www.')) or
+            # Image URLs or HTML image tags
+            ('<img' in line.lower() or 'src=' in line.lower() or 
+             any(img_ext in line.lower() for img_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']) or
+             line.lower().strip().startswith(('data:image', 'blob:'))) or
+            # Long text blocks that might be article content (over 200 chars without proper formatting)
+            (len(line) > 200 and not line.startswith(('*', '[', '1.', '2.', '3.', '4.', '5.'))) or
+            # Lines with common RSS/article patterns
+            any(pattern in line.lower() for pattern in [
+                'read more at', 'continue reading', 'full article', 'source:', 'reuters.com',
+                'cnn.com', 'bbc.com', 'ap.org', 'bloomberg.com', 'published by',
+                'copyright', '© ', 'all rights reserved', 'terms of use', 'privacy policy',
+                'image:', 'photo:', 'picture:', 'thumbnail:', 'media:'
+            ]) or
+            # Very long single sentences that look like article content
+            (len(line) > 150 and line.count('.') == 1 and line.endswith('.') and 
+             not any(num in line for num in ['1.', '2.', '3.', '4.', '5.'])) or
+            # Lines that look like metadata or RSS feed info
+            (any(word in line.lower() for word in ['feed', 'rss', 'xml', 'syndication']) and 
+             not line.startswith(('*', '[', '1.', '2.', '3.', '4.', '5.')))
+        ):
+            # This looks like stray RSS content, skip it
+            logger.debug(f"Filtering out RSS content: {line[:100]}...")
+            continue
+        
+        # Only include numbered list items (1-5) and section headers
+        if (line.startswith(('1.', '2.', '3.', '4.', '5.', '*', '�', '🇧🇩', '🌍', '🚀', '🏆', '🪙', '💰', '☀️', '🌤️', '━━━━━')) or
+            line == '' or  # Allow empty lines for spacing
+            'Today:' in line or  # Holiday info
+            any(marker in line for marker in valid_section_markers)):
+            cleaned_lines.append(original_line)
+        else:
+            # Log what we're filtering out for debugging
+            logger.debug(f"Filtering out non-digest content: {line[:100]}...")
     
-    return '\n'.join(cleaned_lines).strip()
+    result = '\n'.join(cleaned_lines).strip()
+    
+    # Final safety check: ensure we don't have any long paragraphs that snuck through
+    final_lines = result.split('\n')
+    final_cleaned = []
+    
+    for line in final_lines:
+        # Allow all lines that are clearly part of our format
+        if (line.strip() == '' or 
+            line.strip().startswith(('*', '1.', '2.', '3.', '4.', '5.', '📢', '🇧🇩', '🌍', '🚀', '🏆', '🪙', '💰', '☀️', '🌤️', '━━━━━')) or
+            'Today:' in line or
+            footer_marker in line):
+            final_cleaned.append(line)
+        elif len(line.strip()) > 300:  # Very long lines are likely article content
+            logger.debug(f"Final filter: removing long line: {line.strip()[:100]}...")
+            continue
+        else:
+            final_cleaned.append(line)
+    
+    return '\n'.join(final_cleaned).strip()
+
+def final_content_safety_check(content):
+    """Final safety check to remove any remaining unwanted content."""
+    if not content:
+        return ""
+    
+    lines = content.split('\n')
+    safe_lines = []
+    footer_seen = False
+    
+    for line in lines:
+        # Once we see the footer, only include the footer line itself
+        if "🤖 Developed by [Shanchoy Noor]" in line:
+            safe_lines.append(line)
+            footer_seen = True
+            break
+        
+        # Skip any line that looks like raw article content
+        stripped = line.strip()
+        if not stripped:
+            safe_lines.append(line)  # Keep empty lines for formatting
+            continue
+            
+        # Check for patterns that indicate raw article content
+        is_article_content = (
+            # Very long single paragraphs without proper formatting
+            (len(stripped) > 250 and not stripped.startswith(('*', '[', '1.', '2.', '3.', '4.', '5.', '📢', '🇧🇩', '🌍', '🚀', '🏆', '🪙', '💰', '☀️', '🌤️', '━━━━━'))) or
+            # Image content or HTML tags
+            ('<img' in stripped.lower() or 'src=' in stripped.lower() or 
+             '<html' in stripped.lower() or '<div' in stripped.lower() or '<p>' in stripped.lower() or
+             any(img_ext in stripped.lower() for img_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']) or
+             stripped.lower().startswith(('data:image', 'blob:', 'image:', 'photo:', 'picture:')) or
+             'thumbnail' in stripped.lower()) or
+            # Article-like sentences ending with attribution
+            (len(stripped) > 100 and any(pattern in stripped.lower() for pattern in [
+                'according to', 'reuters reports', 'cnn said', 'the report said',
+                'officials said', 'sources said', 'the statement read'
+            ])) or
+            # Copyright and legal text
+            any(pattern in stripped.lower() for pattern in [
+                'copyright', '©', 'all rights reserved', 'terms of service',
+                'privacy policy', 'disclaimer', 'contact us'
+            ]) or
+            # URLs that aren't part of markdown links
+            (('http://' in stripped or 'https://' in stripped) and not '[' in stripped) or
+            # RSS feed metadata
+            any(pattern in stripped.lower() for pattern in [
+                'rss feed', 'subscribe to', 'xml feed', 'syndication'
+            ])
+        )
+        
+        if is_article_content:
+            logger.debug(f"Final safety check: filtering {stripped[:100]}...")
+            continue
+        
+        safe_lines.append(line)
+    
+    return '\n'.join(safe_lines).strip()

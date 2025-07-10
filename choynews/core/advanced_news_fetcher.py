@@ -234,6 +234,18 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     title = entry.get('title', '').strip()
                     if not title:
                         continue
+                    
+                    # Clean HTML tags and image references from title
+                    import re
+                    title = re.sub(r'<[^>]+>', '', title)  # Remove HTML tags
+                    title = re.sub(r'\s+', ' ', title)     # Normalize whitespace
+                    title = title.strip()
+                    
+                    # Skip titles that are just image descriptions or contain image indicators
+                    if (not title or 
+                        any(indicator in title.lower() for indicator in ['image:', 'photo:', 'picture:', 'thumbnail:', '[img]', '[image]']) or
+                        len(title) < 10):  # Skip very short titles that might be image captions
+                        continue
                         
                     # Clean and limit title length
                     if len(title) > 120:
@@ -241,6 +253,11 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     
                     link = entry.get('link', '')
                     pub_time = entry.get('published', entry.get('updated', ''))
+                    
+                    # Ensure we only get clean text link without any image or media URLs
+                    if link and any(img_ext in link.lower() for img_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']):
+                        # This is an image link, not a news article link, skip it
+                        continue
                     
                     # Parse and validate publication time
                     parsed_time = None
