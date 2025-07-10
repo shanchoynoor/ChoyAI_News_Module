@@ -289,14 +289,12 @@ def handle_news_command(chat_id, user_id, args):
         # Build and send news digest
         digest = build_news_digest(user)
         
-        # Double-check for any extra content after footer
-        footer_marker = "🤖 Developed by [Shanchoy Noor]"
+        # Double-check for any extra content after footer (plain text, not markdown)
+        footer_marker = "🤖 Developed by Shanchoy Noor"
         if footer_marker in digest:
             footer_index = digest.find(footer_marker)
-            github_end = digest.find(")", footer_index)
-            if github_end > 0:
-                # Ensure we only send content up to the GitHub link
-                digest = digest[:github_end + 1]
+            # If there is any content after the footer, trim it (footer should be last)
+            digest = digest[:footer_index + len(footer_marker)]
         
         # Split the message at crypto market section for better readability
         crypto_market_marker = "💰 CRYPTO MARKET:"
