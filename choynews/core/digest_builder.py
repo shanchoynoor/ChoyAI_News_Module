@@ -74,7 +74,8 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         if include_weather:
             weather_section = get_dhaka_weather()
             if weather_section:
-                sections.append(weather_section)
+                # Always show weather with all details, and with a section header
+                sections.append(f"☀️ WEATHER\n{weather_section.strip()}\n")
         
         # Add news sections with better error handling
         try:
@@ -137,7 +138,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         # Add footer with proper spacing
         if not digest.endswith('\n'):
             digest += '\n'
-        digest += "━━━━━━━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)\n"
+        digest += "━━━━━━━━━━━━━━━━━━━━━\n🤖 Developed by Shanchoy Noor\n"
         
         logger.info("Successfully built news digest")
         # Clean and return only the digest content, nothing more
