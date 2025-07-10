@@ -1,4 +1,11 @@
-# 🤖 ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
+# 🤖 ChoyNewsBot - AI-Powered Breaking News & Crypto In*☀️ DHAKA WEATHER:*
+🌡️ Temperature: 28.5°C - 32.1°C
+🌤️ Condition: Partly cloudy with light rain possible  
+💨 Wind: 12 km/h SE
+💧 Humidity: 78%
+👁️ Visibility: 10.0 km
+🫧 Air Quality: Moderate (AQI 65)
+🔆 UV Index: High (7/11)nce
 
 **The most advanced Telegram news bot with real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.**
 
@@ -34,7 +41,7 @@
 - **Market overview** - Fear & Greed Index, market cap trends, volume analysis
 
 ### 🌤️ **Live Data Integration**
-- **Weather API** - Real-time Dhaka weather with AQI and UV index
+- **Weather API** - Real-time Dhaka weather with temperature, wind, humidity, visibility, AQI and UV index
 - **Holiday Calendar** - Bangladesh public holidays from Calendarific
 - **Market Data** - Live crypto prices, forex rates, and economic indicators
 - **Time Intelligence** - User timezone support with accurate local scheduling
@@ -163,7 +170,7 @@ CALENDARIFIC_API_KEY=your_calendar_api_key
 ### 🌤️ **Live Data**
 | Command | Description | Data Source |
 |---------|-------------|-------------|
-| `/weather` | Dhaka weather + AQI | WeatherAPI (real-time) |
+| `/weather` | Dhaka weather with full metrics | WeatherAPI (real-time) |
 | `/status` | Bot status & user info | System health check |
 
 ### ⚙️ **User Management**

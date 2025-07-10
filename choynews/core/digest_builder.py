@@ -46,10 +46,27 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         time_str = get_bd_time_str(now)
         
         # Get holiday information
-        holidays_info = get_bd_holidays()
+        holidays_info = ""
+        try:
+            holidays_info = get_bd_holidays()
+        except Exception as e:
+            logger.debug(f"Holiday API failed: {e}")
         
-        # Build header with megaphone emoji and holiday info
-        header = f"📢 *DAILY NEWS DIGEST*\n{time_str}\n{holidays_info}\n"
+        if not holidays_info.strip():
+            # Fallback to manual check for today's holiday
+            try:
+                from choynews.core.advanced_news_fetcher import check_manual_bd_holidays
+                manual_holiday = check_manual_bd_holidays(now)
+                if manual_holiday:
+                    holidays_info = f"🎉 Today: {manual_holiday}\n"
+            except Exception as e:
+                logger.debug(f"Manual holiday check failed: {e}")
+        
+        # Build header with proper formatting
+        header = f"📢 *DAILY NEWS DIGEST*\n{time_str}\n"
+        if holidays_info.strip():
+            header += holidays_info
+        header += "━━━━━━━━━━━━━━━━━━━━━\n\n"
         
         sections = []
         
@@ -59,30 +76,68 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
             if weather_section:
                 sections.append(weather_section)
         
-        # Add news sections
-        sections.append(get_breaking_local_news())
+        # Add news sections with better error handling
+        try:
+            local_news = get_breaking_local_news()
+            sections.append(local_news if local_news and local_news.strip() else "*🇧🇩 LOCAL NEWS:*\n1. 🔄 Latest breaking local news being monitored...\n2. 📊 Local political developments being tracked...\n3. 💼 Regional economic updates in progress...\n4. 🏛️ Government policy updates being compiled...\n5. 🌟 Community developments being monitored...\n")
+        except Exception as e:
+            logger.warning(f"Error getting local news: {e}")
+            sections.append("*🇧🇩 LOCAL NEWS:*\n1. 📰 News updates will be available shortly...\n2. 🔍 Breaking news being monitored...\n3. 📈 Latest developments being tracked...\n4. ⏰ Updates coming soon...\n5. 📝 News compilation in progress...\n")
         
         if include_world_news:
-            sections.append(get_breaking_global_news())
+            try:
+                global_news = get_breaking_global_news()
+                sections.append(global_news if global_news and global_news.strip() else "*🌍 GLOBAL NEWS:*\n1. 🌍 International breaking news being updated...\n2. 🔥 Global crisis developments being tracked...\n3. 💸 World economic updates coming soon...\n4. 🕊️ International affairs updates in progress...\n5. ⚡ Breaking global events being monitored...\n")
+            except Exception as e:
+                logger.warning(f"Error getting global news: {e}")
+                sections.append("*🌍 GLOBAL NEWS:*\n1. 📰 News updates will be available shortly...\n2. 🔍 Breaking news being monitored...\n3. 📈 Latest developments being tracked...\n4. ⏰ Updates coming soon...\n5. 📝 News compilation in progress...\n")
         
         if include_tech_news:
-            sections.append(get_breaking_tech_news())
-            
-        sections.append(get_breaking_sports_news())
-        sections.append(get_breaking_crypto_news())
+            try:
+                tech_news = get_breaking_tech_news()
+                sections.append(tech_news if tech_news and tech_news.strip() else "*🚀 TECH NEWS:*\n1. 💡 Latest technology breakthroughs being analyzed...\n2. 🤖 AI and innovation updates coming soon...\n3. 🔧 Tech industry developments being tracked...\n4. 💰 Startup and venture updates in progress...\n5. 📱 Digital transformation news being compiled...\n")
+            except Exception as e:
+                logger.warning(f"Error getting tech news: {e}")
+                sections.append("*🚀 TECH NEWS:*\n1. 📰 News updates will be available shortly...\n2. 🔍 Breaking news being monitored...\n3. 📈 Latest developments being tracked...\n4. ⏰ Updates coming soon...\n5. 📝 News compilation in progress...\n")
+        
+        try:
+            sports_news = get_breaking_sports_news()
+            sections.append(sports_news if sports_news and sports_news.strip() else "*🏆 SPORTS NEWS:*\n1. ⚽ Live sports scores and updates being compiled...\n2. 🏅 League standings and results coming soon...\n3. 🔄 Player transfers and moves being tracked...\n4. 🏟️ Tournament updates in progress...\n5. 📈 Sports analysis and commentary being prepared...\n")
+        except Exception as e:
+            logger.warning(f"Error getting sports news: {e}")
+            sections.append("*🏆 SPORTS NEWS:*\n1. 📰 News updates will be available shortly...\n2. 🔍 Breaking news being monitored...\n3. 📈 Latest developments being tracked...\n4. ⏰ Updates coming soon...\n5. 📝 News compilation in progress...\n")
+        
+        try:
+            crypto_news = get_breaking_crypto_news()
+            sections.append(crypto_news if crypto_news and crypto_news.strip() else "*🪙 FINANCE & CRYPTO NEWS:*\n1. 📊 Cryptocurrency market movements being analyzed...\n2. 🔗 DeFi protocol updates being tracked...\n3. ⛓️ Blockchain developments coming soon...\n4. 📜 Digital asset regulatory news in progress...\n5. 💹 Crypto trading insights being compiled...\n")
+        except Exception as e:
+            logger.warning(f"Error getting crypto news: {e}")
+            sections.append("*🪙 FINANCE & CRYPTO NEWS:*\n1. 📰 News updates will be available shortly...\n2. 🔍 Breaking news being monitored...\n3. 📈 Latest developments being tracked...\n4. ⏰ Updates coming soon...\n5. 📝 News compilation in progress...\n")
         
         # Add crypto market data with AI analysis if enabled
         if include_crypto:
-            sections.append(fetch_crypto_market_with_ai())
+            try:
+                crypto_market = fetch_crypto_market_with_ai()
+                sections.append(crypto_market if crypto_market and crypto_market.strip() else "*💰 CRYPTOCURRENCY MARKET:*\nMarket data temporarily unavailable. Updates coming soon...\n")
+            except Exception as e:
+                logger.warning(f"Error getting crypto market data: {e}")
+                sections.append("*💰 CRYPTOCURRENCY MARKET:*\nMarket data temporarily unavailable. Updates coming soon...\n")
         
-        # Combine all sections with explicit filtering
+        # Combine all sections with proper spacing
         digest = header
         for section in sections:
             if section and section.strip():  # Only add non-empty sections
+                # Ensure proper spacing between sections
+                if not digest.endswith('\n\n'):
+                    digest += '\n'
                 digest += section
+                if not digest.endswith('\n'):
+                    digest += '\n'
         
-        # Add footer and ensure proper termination
-        digest += "\n━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)\n"
+        # Add footer with proper spacing
+        if not digest.endswith('\n'):
+            digest += '\n'
+        digest += "━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)\n"
         
         logger.info("Successfully built news digest")
         # Clean and return only the digest content, nothing more
@@ -186,36 +241,40 @@ def clean_digest_content(content):
     footer_marker = "🤖 Developed by [Shanchoy Noor]"
     
     if footer_marker in content:
-        # Find the footer and cut everything after it
+        # Find the footer and cut everything after the GitHub link
         footer_index = content.find(footer_marker)
-        # Keep content up to the end of the GitHub link
         github_end = content.find(")", footer_index)
         if github_end > footer_index:
+            # Keep content only up to the end of the GitHub link
             content = content[:github_end + 1]
         else:
-            # Fallback: just keep up to the footer line
-            lines = content[:footer_index + len(footer_marker)].split('\n')
-            lines.append("(https://github.com/shanchoynoor)")
-            content = '\n'.join(lines)
+            # Fallback: add the GitHub link properly
+            content = content[:footer_index] + f"{footer_marker}(https://github.com/shanchoynoor)"
     
-    # Additional cleanup: remove any lines that look like RSS titles or unexpected content
+    # Remove any stray content that doesn't belong in a news digest
     lines = content.split('\n')
     cleaned_lines = []
-    footer_found = False
+    in_digest = True
     
     for line in lines:
-        # Once we hit the footer, only include that line and stop
+        line = line.strip()
+        
+        # Stop processing once we hit the footer
         if footer_marker in line:
             cleaned_lines.append(line)
-            footer_found = True
             break
-        # Only add lines that don't look like stray RSS content
-        elif not footer_found:
-            # Skip lines that look like RSS titles without proper formatting
-            if line.strip() and not (
-                line.strip().startswith(('http', 'www.')) or  # URLs
-                (len(line.strip()) > 50 and '.' in line and 'com' in line)  # Likely RSS content
-            ):
-                cleaned_lines.append(line)
+        
+        # Skip empty lines at the start, but keep them within sections
+        if not line and not cleaned_lines:
+            continue
+            
+        # Skip lines that look like raw RSS content (URLs, long domain names, etc.)
+        if (line.startswith(('http://', 'https://', 'www.')) or 
+            (len(line) > 60 and any(domain in line.lower() for domain in ['.com', '.org', '.net', '.gov']) and 
+             not line.startswith(('*', '📰', '🇧🇩', '🌍', '🚀', '🏆', '🪙', '💰', '☀️', '🌤️')))):
+            # This looks like stray RSS content, skip it
+            continue
+        
+        cleaned_lines.append(line)
     
     return '\n'.join(cleaned_lines).strip()
