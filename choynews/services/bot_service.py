@@ -196,10 +196,11 @@ I'm your personal news assistant. I can provide you with:
 
 *Available Commands:*
 /start - Show this welcome message
-/help - Get help and see all commands
-/about - Learn about ChoyNewsBot features
 /news - Get latest news digest
+/help - Get help and see all commands
 /status - Check bot status
+/about - Learn about ChoyNewsBot features
+
 
 Type /help for more detailed information about what I can do!
     """
