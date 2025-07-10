@@ -265,12 +265,12 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     except:
                         parsed_time = datetime.now()
                     
-                    # Time filtering: Only news from last 3 hours, prioritize last 1 hour
+                    # Time filtering: Allow news from last 6 hours, but heavily prioritize last 3 hours
                     time_diff = datetime.now() - parsed_time
                     hours_ago = time_diff.total_seconds() / 3600
                     
-                    # Skip news older than 3 hours
-                    if hours_ago > 3:
+                    # Skip news older than 6 hours
+                    if hours_ago > 6:
                         continue
                     
                     time_ago = format_time_ago(pub_time)
@@ -283,11 +283,13 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     # Calculate importance score
                     importance_score = calculate_news_importance_score(entry, source_name, position)
                     
-                    # Calculate recency score with heavy bias for last 1 hour
+                    # Calculate recency score with heavy bias for recent news
                     if hours_ago <= 1:
-                        recency_score = 50 + (1 - hours_ago) * 20  # 50-70 points for last hour
+                        recency_score = 60 + (1 - hours_ago) * 20  # 60-80 points for last hour
+                    elif hours_ago <= 3:
+                        recency_score = 40 + (3 - hours_ago) * 10  # 40-60 points for 1-3 hours
                     else:
-                        recency_score = max(0, 30 - (hours_ago - 1) * 10)  # Decreasing after 1 hour
+                        recency_score = max(0, 20 - (hours_ago - 3) * 5)  # Decreasing after 3 hours
                     
                     # Combined score (importance + heavy recency weighting)
                     total_score = importance_score + recency_score
@@ -478,10 +480,13 @@ def get_breaking_local_news():
         "Dhaka Tribune": "https://www.dhakatribune.com/feed",  # Working alternative
         "Financial Express": "https://thefinancialexpress.com.bd/feed",  # Working alternative
         "New Age": "http://www.newagebd.net/feed",  # Working alternative
-        "UNB": "https://unb.com.bd/feed"  # Working alternative
+        "UNB": "https://unb.com.bd/feed",  # Working alternative
+        "Bangladesh Sangbad Sangstha": "https://www.bssnews.net/feed",  # Additional source
+        "Daily Sun": "https://www.daily-sun.com/rss/all-news.xml"  # Additional source
     }
     
     entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
+    logger.info(f"Local news: fetched {len(entries)} entries")
     return format_news_section("🇧🇩 LOCAL NEWS", entries, limit=5)
 
 def get_breaking_global_news():
@@ -495,11 +500,14 @@ def get_breaking_global_news():
         "Sky News": "http://feeds.skynews.com/feeds/rss/world.xml",
         "France24": "https://www.france24.com/en/rss",
         "NPR": "https://feeds.npr.org/1001/rss.xml",
-        "Associated Press": "https://feeds.apnews.com/rss/apf-topnews",  # More reliable
-        "NBC News": "https://feeds.nbcnews.com/nbcnews/public/world"  # Updated URL
+        "Yahoo News": "https://news.yahoo.com/rss/",  # Working alternative
+        "NBC News": "https://feeds.nbcnews.com/nbcnews/public/world",  # Updated URL
+        "Deutsche Welle": "https://rss.dw.com/rdf/rss-en-world",  # Additional reliable source
+        "Euronews": "https://www.euronews.com/rss?format=mrss&level=theme&name=news"  # Additional source
     }
     
     entries = fetch_breaking_news_rss(global_sources, limit=30, category="global", target_count=5)
+    logger.info(f"Global news: fetched {len(entries)} entries")
     return format_news_section("🌍 GLOBAL NEWS", entries, limit=5)
 
 def get_breaking_tech_news():
@@ -514,10 +522,13 @@ def get_breaking_tech_news():
         "TechRadar": "https://www.techradar.com/rss",
         "ZDNet": "https://www.zdnet.com/news/rss.xml",
         "Gizmodo": "https://gizmodo.com/rss",
-        "Mashable": "https://mashable.com/feeds/rss/all"
+        "Mashable": "https://mashable.com/feeds/rss/all",
+        "MIT Tech Review": "https://www.technologyreview.com/feed/",  # Additional source
+        "9to5Mac": "https://9to5mac.com/feed/"  # Additional source
     }
     
     entries = fetch_breaking_news_rss(tech_sources, limit=25, category="tech", target_count=5)
+    logger.info(f"Tech news: fetched {len(entries)} entries")
     return format_news_section("🚀 TECH NEWS", entries, limit=5)
 
 def get_breaking_sports_news():
@@ -533,10 +544,12 @@ def get_breaking_sports_news():
         "The Daily Star Sports": "https://www.thedailystar.net/sports/rss.xml",
         "Dhaka Tribune Sports": "https://www.dhakatribune.com/sport/feed",
         "Daily Sun Sports": "https://www.daily-sun.com/rss/sports.xml",
-        "Sports24": "https://www.sports24.com.bd/feed"
+        "Sports24": "https://www.sports24.com.bd/feed",
+        "Fox Sports": "https://www.foxsports.com/rss"  # Additional source
     }
     
     entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
+    logger.info(f"Sports news: fetched {len(entries)} entries")
     return format_news_section("🏆 SPORTS NEWS", entries, limit=5)
 
 def get_breaking_crypto_news():
@@ -550,10 +563,13 @@ def get_breaking_crypto_news():
         "NewsBTC": "https://www.newsbtc.com/feed/",
         "BeInCrypto": "https://beincrypto.com/feed/",
         "CoinTelegraph": "https://cointelegraph.com/rss/tag/bitcoin",
-        "U.Today": "https://u.today/rss"
+        "U.Today": "https://u.today/rss",
+        "CryptoNews": "https://cryptonews.com/news/feed",  # Additional source
+        "Bitcoin.com": "https://news.bitcoin.com/feed/"  # Additional source
     }
     
     entries = fetch_breaking_news_rss(crypto_sources, limit=25, category="crypto", target_count=5)
+    logger.info(f"Crypto news: fetched {len(entries)} entries")
     return format_news_section("🪙 FINANCE & CRYPTO NEWS", entries, limit=5)
 
 # ===================== CRYPTO DATA WITH AI =====================
@@ -1332,7 +1348,7 @@ def check_manual_bd_holidays(date):
         
         islamic_holidays_2025 = {
             # These are approximate - actual dates depend on moon sighting
-            "07-09": "Ashari Purnima",  # Today's date as mentioned by user
+            "07-10": "Ashari Purnima",  # Today's date as mentioned by user
             "04-10": "Eid ul-Fitr",
             "06-17": "Eid ul-Adha",
             "07-07": "Muharram",

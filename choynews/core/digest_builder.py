@@ -137,7 +137,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         # Add footer with proper spacing
         if not digest.endswith('\n'):
             digest += '\n'
-        digest += "━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)\n"
+        digest += "━━━━━━━━━━━━━━━━━━━━━\n🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)\n"
         
         logger.info("Successfully built news digest")
         # Clean and return only the digest content, nothing more

@@ -297,7 +297,29 @@ def handle_news_command(chat_id, user_id, args):
                 # Ensure we only send content up to the GitHub link
                 digest = digest[:github_end + 1]
         
-        send_telegram(digest, chat_id)
+        # Split the message at crypto market section for better readability
+        crypto_market_marker = "💰 CRYPTO MARKET:"
+        if crypto_market_marker in digest:
+            split_index = digest.find(crypto_market_marker)
+            
+            # First part: News sections
+            first_part = digest[:split_index].rstrip()
+            
+            # Second part: Crypto market + footer
+            second_part = digest[split_index:]
+            
+            # Send first part (news)
+            send_telegram(first_part, chat_id)
+            
+            # Add proper spacing to second part
+            if not second_part.startswith('\n'):
+                second_part = '\n' + second_part
+            
+            # Send second part (crypto market)
+            send_telegram(second_part, chat_id)
+        else:
+            # Fallback: send as one message if no crypto section found
+            send_telegram(digest, chat_id)
         
         logger.info(f"Sent news digest to user {user_id}")
         
