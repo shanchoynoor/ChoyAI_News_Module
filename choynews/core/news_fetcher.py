@@ -14,36 +14,54 @@ from choynews.utils.config import Config
 
 logger = get_logger(__name__)
 
-def format_time_ago(published_time):
-    """Convert published time to relative time format."""
+def get_hours_ago(published_time_str):
+    """Calculate accurate hours ago from published time string."""
+    if not published_time_str:
+        return "Unknown"
+    
     try:
-        if isinstance(published_time, str):
-            # Try to parse various time formats
+        # Parse various date formats
+        if "GMT" in published_time_str or "UTC" in published_time_str:
+            # Handle RFC 822 format: "Mon, 25 Nov 2024 14:30:00 GMT"
+            pub_time = datetime.strptime(published_time_str.replace("GMT", "").replace("UTC", "").strip(), "%a, %d %b %Y %H:%M:%S")
+        elif "T" in published_time_str:
+            # Handle ISO format: "2024-11-25T14:30:00Z" or "2024-11-25T14:30:00"
+            if published_time_str.endswith('Z'):
+                pub_time = datetime.strptime(published_time_str[:-1], "%Y-%m-%dT%H:%M:%S")
+            elif '+' in published_time_str:
+                # Handle timezone offset
+                pub_time = datetime.strptime(published_time_str.split('+')[0], "%Y-%m-%dT%H:%M:%S")
+            else:
+                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%dT%H:%M:%S")
+        else:
+            # Try other common formats
             try:
-                pub_time = datetime.strptime(published_time, "%a, %d %b %Y %H:%M:%S %Z")
-            except:
-                try:
-                    pub_time = datetime.strptime(published_time, "%Y-%m-%dT%H:%M:%S%z")
-                except:
-                    return "Unknown"
-        else:
-            pub_time = published_time
-            
-        now = datetime.now()
-        diff = now - pub_time.replace(tzinfo=None)
+                pub_time = datetime.strptime(published_time_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                # If all else fails, try parsing just the first 19 characters
+                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%d %H:%M:%S")
         
-        if diff.days > 0:
-            return f"{diff.days}d ago"
-        elif diff.seconds > 3600:
-            hours = diff.seconds // 3600
-            return f"{hours}hr ago"
-        elif diff.seconds > 60:
-            minutes = diff.seconds // 60
-            return f"{minutes}min ago"
+        # Calculate time difference
+        now = datetime.now()
+        time_diff = now - pub_time
+        
+        # Convert to hours
+        hours_diff = time_diff.total_seconds() / 3600
+        
+        if hours_diff < 1:
+            minutes_diff = int(time_diff.total_seconds() / 60)
+            if minutes_diff < 1:
+                return "now"
+            else:
+                return f"{minutes_diff}min ago"
+        elif hours_diff < 24:
+            return f"{int(hours_diff)}hr ago"
         else:
-            return "now"
+            days_diff = int(hours_diff / 24)
+            return f"{days_diff}d ago"
+            
     except Exception as e:
-        logger.debug(f"Error formatting time: {e}")
+        logger.debug(f"Error parsing time '{published_time_str}': {e}")
         return "Unknown"
 
 def fetch_rss_entries(sources, limit=5):
@@ -83,7 +101,7 @@ def fetch_rss_entries(sources, limit=5):
                 try:
                     # Extract publication time
                     pub_time = entry.get('published', entry.get('updated', ''))
-                    time_ago = format_time_ago(pub_time)
+                    time_ago = get_hours_ago(pub_time)
                     
                     # Clean title
                     title = entry.get('title', 'No title').strip()

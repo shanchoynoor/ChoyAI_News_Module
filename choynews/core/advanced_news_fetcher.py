@@ -233,41 +233,55 @@ def cleanup_old_news_history(days_back=7):
     except Exception as e:
         logger.error(f"Error cleaning up news history: {e}")
 
-def format_time_ago(published_time):
-    """Convert published time to relative time format with precision for recent news."""
+def get_hours_ago(published_time_str):
+    """Calculate accurate hours ago from published time string."""
+    if not published_time_str:
+        return "Unknown"
+    
     try:
-        if isinstance(published_time, str):
+        # Parse various date formats
+        if "GMT" in published_time_str or "UTC" in published_time_str:
+            # Handle RFC 822 format: "Mon, 25 Nov 2024 14:30:00 GMT"
+            pub_time = datetime.strptime(published_time_str.replace("GMT", "").replace("UTC", "").strip(), "%a, %d %b %Y %H:%M:%S")
+        elif "T" in published_time_str:
+            # Handle ISO format: "2024-11-25T14:30:00Z" or "2024-11-25T14:30:00"
+            if published_time_str.endswith('Z'):
+                pub_time = datetime.strptime(published_time_str[:-1], "%Y-%m-%dT%H:%M:%S")
+            elif '+' in published_time_str:
+                # Handle timezone offset
+                pub_time = datetime.strptime(published_time_str.split('+')[0], "%Y-%m-%dT%H:%M:%S")
+            else:
+                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%dT%H:%M:%S")
+        else:
+            # Try other common formats
             try:
-                pub_time = datetime.strptime(published_time, "%a, %d %b %Y %H:%M:%S %Z")
-            except:
-                try:
-                    pub_time = datetime.strptime(published_time, "%Y-%m-%dT%H:%M:%S%z")
-                    pub_time = pub_time.replace(tzinfo=None)
-                except:
-                    try:
-                        pub_time = datetime.strptime(published_time[:19], "%Y-%m-%dT%H:%M:%S")
-                    except:
-                        return "now"
-        else:
-            pub_time = published_time
-            
-        now = datetime.now()
-        diff = now - pub_time
-        total_minutes = diff.total_seconds() / 60
+                pub_time = datetime.strptime(published_time_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                # If all else fails, try parsing just the first 19 characters
+                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%d %H:%M:%S")
         
-        if diff.days > 0:
-            return f"{diff.days}d ago"
-        elif total_minutes >= 60:
-            hours = int(total_minutes // 60)
-            return f"{hours}hr ago"
-        elif total_minutes >= 1:
-            minutes = int(total_minutes)
-            return f"{minutes}min ago"
+        # Calculate time difference
+        now = datetime.now()
+        time_diff = now - pub_time
+        
+        # Convert to hours
+        hours_diff = time_diff.total_seconds() / 3600
+        
+        if hours_diff < 1:
+            minutes_diff = int(time_diff.total_seconds() / 60)
+            if minutes_diff < 1:
+                return "now"
+            else:
+                return f"{minutes_diff}min ago"
+        elif hours_diff < 24:
+            return f"{int(hours_diff)}hr ago"
         else:
-            return "now"
+            days_diff = int(hours_diff / 24)
+            return f"{days_diff}d ago"
+            
     except Exception as e:
-        logger.debug(f"Error formatting time: {e}")
-        return "now"
+        logger.debug(f"Error parsing time '{published_time_str}': {e}")
+        return "Unknown"
 
 def calculate_news_importance_score(entry, source_name, feed_position):
     """Calculate importance score for news entry based on multiple factors."""
@@ -372,7 +386,7 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     pub_time = entry.get('published', entry.get('updated', ''))
                     # Accept all times for debug (no time filter)
                     parsed_time = datetime.now()
-                    time_ago = format_time_ago(pub_time)
+                    time_ago = get_hours_ago(pub_time)
                     news_hash = get_news_hash(title, source_name)
                     # Accept all duplicates for debug (no duplicate filter)
                     importance_score = calculate_news_importance_score(entry, source_name, position)
