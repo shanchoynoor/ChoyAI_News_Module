@@ -1,11 +1,4 @@
-# 🤖 ChoyNewsBot - AI-Powered Breaking News & Crypto In*☀️ DHAKA WEATHER:*
-🌡️ Temperature: 28.5°C - 32.1°C
-🌤️ Condition: Partly cloudy with light rain possible  
-💨 Wind: 12 km/h SE
-💧 Humidity: 78%
-👁️ Visibility: 10.0 km
-🫧 Air Quality: Moderate (AQI 65)
-🔆 UV Index: High (7/11)nce
+# 🤖 ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
 
 **The most advanced Telegram news bot with real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.**
 
@@ -55,75 +48,68 @@
 ## 💻 **Sample Output**
 
 ```
-� DAILY NEWS DIGEST
-Wednesday, July 10, 2025 • 8:00 AM (UTC+6)
-🎉 Today: Ashari Purnima (Public Holiday)
-━━━━━━━━━━━━━━━━━━━━━
+📢 TOP NEWS HEADLINES
+Jan 14, 2025 8:00AM BDT (UTC +6)
+🎉 Today's Holiday: Makar Sankranti
 
-*☀️ DHAKA WEATHER:*
-🌡️ Temperature: 28.5°C - 32.1°C
-�️ Condition: Partly cloudy with light rain possible  
-💨 Wind: 12 km/h SE
-💧 Humidity: 78%
-🫧 Air Quality: Moderate (AQI 65)
-🔆 UV Index: High (7/11)
+☀️ DHAKA WEATHER:
+🌡️ Temperature: 18.2°C - 26.1°C
+🌤️ Condition: Partly cloudy
+💨 Wind: 8 km/h NW
+💧 Humidity: 65%
+👁️ Visibility: 10.0 km
+🫧 Air Quality: Moderate (AQI 72)
+🔆 UV Index: Moderate (4/11)
 
-*🇧🇩 LOCAL NEWS:*
-1. [Government announces salary increase for civil servants](link) - Prothom Alo (2hr ago)
-2. [New metro line inaugurated in Dhaka](link) - The Daily Star (3hr ago)  
-3. [Education budget allocation increased significantly](link) - Jugantor (4hr ago)
-4. [Digital banking services expand nationwide](link) - Financial Express (5hr ago)
-5. [Health insurance coverage extended to rural areas](link) - New Age (6hr ago)
+🇧🇩 LOCAL NEWS:
+1. Winter grips Bangladesh as temperature drops to 8°C in northern districts - The Daily Star (2hr ago)
+2. Dhaka Stock Exchange shows strong recovery with 2.3% gain - Bangladesh Pratidin (1hr ago)
+3. Government announces new digital payment system for public services - Prothom Alo (3hr ago)
+4. Bangladesh cricket team prepares for upcoming series against Sri Lanka - BDNews24 (4hr ago)
+5. Dhaka Metro Rail expansion project receives final approval - The Daily Star (5hr ago)
 
-*🌍 GLOBAL NEWS:*
-1. [Global climate summit reaches breakthrough accord](link) - BBC (1hr ago)
-2. [Tech giants announce AI safety alliance](link) - Reuters (2hr ago)
-3. [Economic recovery shows strong momentum worldwide](link) - CNN (3hr ago)
-4. [Space mission discovers potentially habitable exoplanets](link) - Al Jazeera (4hr ago)
-5. [International trade agreements finalized after months](link) - Guardian (5hr ago)
+🌍 GLOBAL NEWS:
+1. Global climate summit reaches historic agreement on carbon reduction - BBC News (1hr ago)
+2. Tech giants report record quarterly earnings amid market volatility - Reuters (2hr ago)
+3. International trade talks resume after months of deadlock - CNN (3hr ago)
+4. Scientists discover breakthrough in renewable energy storage - The Guardian (4hr ago)
+5. World leaders gather for emergency economic forum in Switzerland - Al Jazeera (5hr ago)
 
-*🚀 TECH NEWS:*
-1. [Apple unveils revolutionary AR glasses prototype](link) - TechCrunch (1hr ago)
-2. [Google's quantum computer achieves new milestone](link) - The Verge (2hr ago)
-3. [Tesla announces self-driving car breakthrough](link) - Ars Technica (3hr ago)
-4. [Microsoft integrates advanced AI into Office suite](link) - Wired (4hr ago)
-5. [Meta launches new VR social platform](link) - Engadget (5hr ago)
+🚀 TECH NEWS:
+1. Apple announces new AI chip breakthrough for next-generation devices - TechCrunch (1hr ago)
+2. Google's quantum computing milestone promises faster problem solving - The Verge (2hr ago)
+3. Microsoft launches advanced cloud security platform for enterprises - Ars Technica (3hr ago)
+4. Tesla's autonomous driving software receives major safety update - Wired (4hr ago)
+5. Meta unveils new VR headset with improved display technology - Engadget (5hr ago)
 
-*🏆 SPORTS NEWS:*
-1. [Bangladesh cricket team wins series against Australia](link) - ESPN Cricinfo (2hr ago)
-2. [Dhaka Dynamites sign international star player](link) - Cricbuzz (3hr ago)
-3. [Football World Cup qualifiers: Bangladesh advances](link) - Goal.com (4hr ago)
-4. [Olympic preparations underway for Paris 2028](link) - Olympic.org (5hr ago)
-5. [Tennis championship final set for this weekend](link) - ATP Tour (6hr ago)
+🏆 SPORTS NEWS:
+1. Bangladesh football team qualifies for Asian Cup semifinals - ESPN (1hr ago)
+2. Premier League transfer window sees record-breaking deals - BBC Sport (2hr ago)
+3. Tennis Australian Open produces stunning upset in men's quarter-finals - Sky Sports (3hr ago)
+4. Olympic preparations intensify as Paris 2024 approaches - Yahoo Sports (4hr ago)
+5. Cricket World Cup schedule announced for next year's tournament - Cricbuzz (5hr ago)
 
-*🪙 FINANCE & CRYPTO NEWS:*
-1. [Bitcoin reaches new all-time high above $110,000](link) - CoinDesk (1hr ago)
-2. [Ethereum network upgrade improves transaction speed](link) - Decrypt (2hr ago)
-3. [Central banks explore digital currency adoption](link) - Bloomberg (3hr ago)
-4. [DeFi protocols see record trading volume surge](link) - The Block (4hr ago)
-5. [Cryptocurrency regulation framework finalized](link) - CoinTelegraph (5hr ago)
+🪙 FINANCE & CRYPTO NEWS:
+1. Bitcoin surges past $105,000 on institutional adoption news - CoinTelegraph (1hr ago)
+2. Ethereum upgrade successfully implemented, reducing transaction fees - CoinDesk (2hr ago)
+3. Major bank announces cryptocurrency trading platform launch - U.Today (3hr ago)
+4. DeFi protocols show resilience amid market fluctuations - Decrypt (4hr ago)
+5. Central bank digital currency pilot program expands globally - The Block (5hr ago)
 
-*💰 CRYPTOCURRENCY MARKET:*
-📊 Market Cap: $3.48T ↗️ (+2.42%)
-💹 Volume (24h): $156.8B ↗️ (+8.1%)
-😨 Fear & Greed Index: 72/100 (Greed) 🟢 BUY
+🌐 GLOBAL MARKET INDEX
+SPX500 (USA): 6,127.45 (+0.85%) ▲
+NIFTY (India): 25,234.67 (+1.23%) ▲
+DSEX (Dhaka): 5,456.78 (+0.67%) ▲
+USDX (Forex): 101.23 (-0.12%) ▼
 
-📈 Crypto Top 5 Gainers:
-• SOL: +12.4% ↗️ • ADA: +8.9% ↗️ • DOT: +7.2% ↗️
-• MATIC: +6.8% ↗️ • AVAX: +5.3% ↗️
+💰 CRYPTO MARKET STATUS
+Market Cap: $3.78T (+2.34%) ▲
+Volume: $156.89B (+8.45%) ▲
+Fear/Greed Index: 78/100 = � GREED
 
-📉 Top 5 Losers:
-• DOGE: -3.1% ↘️ • LTC: -2.8% ↘️ • BCH: -2.4% ↘️
-• XRP: -1.9% ↘️ • ADA: -1.2% ↘️
-
-🤖 AI Market Analysis:
-Crypto markets demonstrate robust bullish momentum with substantial institutional inflows propelling BTC beyond the $110k resistance threshold. Altcoins are significantly outperforming with the DeFi sector spearheading gains across the board. Technical indicators suggest a continuation pattern forming with strong volume confirmation.
-
-📈 24h Prediction: 🟢 BULLISH with 78% confidence
-🎯 Key Levels: BTC Support $108k | Resistance $115k
-
-━━━━━━━━━━━━━━━
-🤖 Developed by [Shanchoy Noor](https://github.com/shanchoynoor)
+Type /help for more detailed information about what I can do!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🤖 Developed by Shanchoy Noor
 ```
 
 ## ⚡ Quick Start

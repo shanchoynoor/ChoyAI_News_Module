@@ -72,3 +72,20 @@ coverage.xml
 
 # News digest sent links
 sent_news.json
+
+# Test files and debugging scripts
+test_*.py
+debug_*.py
+final_*.py
+*_test.py
+*_debug.py
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
