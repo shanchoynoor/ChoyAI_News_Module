@@ -736,8 +736,8 @@ def get_individual_crypto_stats(symbol):
         
         # Build the formatted message
         stats_message = f"""{symbol.upper()} ({name})
-🪙 Price: {price_str} ({price_change_24h:+.1f}% {price_arrow})
-📊 24h Volume: {vol_str} ({volume_change:+.1f}% {volume_arrow})
+🪙 Price: {price_str} ({price_change_24h:+.1f}%) {price_arrow}
+📊 24h Volume: {vol_str} ({volume_change:+.1f}%) {volume_arrow}
 💰 Market Cap: {mcap_str} {rank_str}
 
 📈 Range (52W): {low_52w_str} - {high_52w_str}"""
