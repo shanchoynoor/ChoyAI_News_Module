@@ -226,8 +226,9 @@ def handle_help_command(chat_id):
 📊 /cryptostats - Get AI summary of crypto market
 🪙 /coin <symbol> - Get price and 24h change for any coin
    Examples: /coin btc, /btc, /eth, /pepe, /shib
-📈 /coinstats <symbol> - Get price, 24h change, and AI summary
-   Examples: /coinstats btc, /btcstats, /pepestats
+📈 /<symbol>stats - Get detailed analysis with technicals, RSI, support/resistance
+   Examples: /btcstats, /ethstats, /pepestats, /shibstats
+📋 /coinstats <symbol> - Same as above, alternative format
 
 *⚙️ Settings & Subscriptions:*
 🕒 /timezone <zone> - Set your timezone for news digest times
@@ -241,10 +242,11 @@ def handle_help_command(chat_id):
 🆘 /support - Contact the developer for support
 
 *Popular Crypto Commands:*
-• /btc, /eth, /doge, /ada, /sol, /xrp, /pepe, /shib
-• /btcstats, /ethstats, /dogestats, /pepestats
+• /btc, /eth, /doge, /ada, /sol, /xrp, /pepe, /shib - Quick price
+• /btcstats, /ethstats, /dogestats, /pepestats - Detailed analysis with technicals, RSI, forecasts
 
 🪙 *Supports 17,500+ coins from CoinGecko!* Try any coin symbol like /pepe, /shib, /link, /uni, etc.
+📊 *Add 'stats' for detailed analysis:* /pepestats, /shibstats, /linkstats, etc.
 
 All times are shown in your local timezone. Use /timezone to set yours!
     """
@@ -463,25 +465,22 @@ def handle_coin_command(chat_id, user_id, coin_symbol):
         send_telegram(f"Sorry, I couldn't get price data for {coin_symbol.upper()}.", chat_id)
 
 def handle_coinstats_command(chat_id, user_id, coin_symbol):
-    """Handle coin stats commands like /btcstats, /ethstats, etc."""
+    """Handle coin stats commands like /btcstats, /ethstats, /pepestats, etc."""
     from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_individual_crypto_stats_with_ai
+    from choynews.core.news_fetcher import fetch_coin_detailed_stats
     
     try:
-        send_telegram(f"🔄 Analyzing {coin_symbol.upper()} with AI...", chat_id)
+        send_telegram(f"🔄 Analyzing {coin_symbol.upper()} with advanced analytics...", chat_id)
         
-        # Use a different function for AI analysis
-        coin_data = get_individual_crypto_stats_with_ai(coin_symbol)
-        if coin_data:
-            send_telegram(coin_data, chat_id)
-        else:
-            send_telegram(f"Sorry, I couldn't find '{coin_symbol.upper()}' on CoinGecko or generate AI analysis. Please check the symbol and try again. Example: `/pepestats` for PEPE analysis.", chat_id)
+        # Use the new detailed analysis function
+        coin_analysis = fetch_coin_detailed_stats(coin_symbol)
+        send_telegram(coin_analysis, chat_id)
         
-        logger.info(f"Sent {coin_symbol} stats to user {user_id}")
+        logger.info(f"Sent {coin_symbol} detailed stats to user {user_id}")
         
     except Exception as e:
-        logger.error(f"Error getting {coin_symbol} stats for user {user_id}: {e}")
-        send_telegram(f"Sorry, I couldn't get stats for {coin_symbol.upper()}.", chat_id)
+        logger.error(f"Error getting {coin_symbol} detailed stats for user {user_id}: {e}")
+        send_telegram(f"Sorry, I couldn't get detailed stats for {coin_symbol.upper()}. Please try again later.", chat_id)
 
 def handle_subscribe_command(chat_id, user_id, username, first_name, last_name):
     """Handle the /subscribe command."""

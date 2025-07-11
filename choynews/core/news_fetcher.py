@@ -502,3 +502,289 @@ def get_bd_holidays():
     except Exception as e:
         logger.debug(f"Error fetching holidays: {e}")
         return ""
+
+# ===================== ADVANCED CRYPTO ANALYSIS =====================
+
+def calculate_rsi(prices, period=14):
+    """Calculate RSI (Relative Strength Index) from price data."""
+    if len(prices) < period + 1:
+        return 50  # Default neutral RSI if not enough data
+    
+    gains = []
+    losses = []
+    
+    for i in range(1, len(prices)):
+        change = prices[i] - prices[i-1]
+        if change > 0:
+            gains.append(change)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(change))
+    
+    if len(gains) < period:
+        return 50
+        
+    avg_gain = sum(gains[-period:]) / period
+    avg_loss = sum(losses[-period:]) / period
+    
+    if avg_loss == 0:
+        return 100
+    
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return round(rsi, 1)
+
+def calculate_support_resistance(prices):
+    """Calculate basic support and resistance levels."""
+    if len(prices) < 5:
+        return None, None
+    
+    # Simple method: recent low/high over last period
+    recent_prices = prices[-20:] if len(prices) >= 20 else prices
+    support = min(recent_prices)
+    resistance = max(recent_prices)
+    
+    return support, resistance
+
+def get_sentiment_signal(price_change, volume_24h, rsi, ma_signal):
+    """Generate trading sentiment and signal based on multiple factors."""
+    score = 0
+    
+    # Price change factor
+    if price_change > 10:
+        score += 3
+    elif price_change > 5:
+        score += 2
+    elif price_change > 0:
+        score += 1
+    elif price_change > -5:
+        score -= 1
+    else:
+        score -= 2
+    
+    # Volume factor (simplified)
+    if volume_24h > 1e9:  # >$1B volume
+        score += 1
+    
+    # RSI factor
+    if rsi > 70:
+        score -= 1  # Overbought
+    elif rsi < 30:
+        score += 1  # Oversold
+    
+    # MA signal factor
+    if ma_signal == "bullish":
+        score += 1
+    elif ma_signal == "bearish":
+        score -= 1
+    
+    # Generate signal
+    if score >= 4:
+        return "🟢 BUY", "Strong bullish momentum across all indicators"
+    elif score >= 2:
+        return "🟠 HOLD", "Bullish trend intact, but some caution advised"
+    elif score >= 0:
+        return "🟡 WATCH", "Mixed signals, wait for clearer direction"
+    elif score >= -2:
+        return "🟠 HOLD", "Bearish pressure building, consider reducing exposure"
+    else:
+        return "🔴 SELL", "Strong bearish signals across multiple indicators"
+
+def get_rsi_interpretation(rsi):
+    """Get RSI interpretation with trading advice."""
+    if rsi >= 70:
+        return f"Overbought → caution advised"
+    elif rsi <= 30:
+        return f"Oversold → potential buying opportunity"
+    elif rsi >= 50:
+        return f"Bullish momentum"
+    else:
+        return f"Bearish momentum"
+
+def fetch_coin_detailed_stats(coin_symbol):
+    """
+    Fetch comprehensive cryptocurrency statistics and analysis.
+    
+    Args:
+        coin_symbol (str): Cryptocurrency symbol (e.g., 'pepe', 'bitcoin', 'ethereum')
+        
+    Returns:
+        str: Formatted detailed analysis message
+    """
+    try:
+        # First get coin ID from symbol
+        search_url = "https://api.coingecko.com/api/v3/search"
+        search_params = {"query": coin_symbol}
+        search_response = requests.get(search_url, params=search_params, timeout=10)
+        
+        if search_response.status_code != 200:
+            return f"❌ Unable to find coin: {coin_symbol.upper()}"
+        
+        search_data = search_response.json()
+        
+        # Find the best match
+        coin_id = None
+        coin_name = None
+        
+        for coin in search_data.get('coins', []):
+            if (coin.get('symbol', '').lower() == coin_symbol.lower() or 
+                coin.get('id', '').lower() == coin_symbol.lower() or
+                coin.get('name', '').lower() == coin_symbol.lower()):
+                coin_id = coin.get('id')
+                coin_name = coin.get('name')
+                break
+        
+        if not coin_id:
+            return f"❌ Coin not found: {coin_symbol.upper()}"
+        
+        # Get detailed market data
+        market_url = "https://api.coingecko.com/api/v3/coins/markets"
+        market_params = {
+            "vs_currency": "usd",
+            "ids": coin_id,
+            "order": "market_cap_desc",
+            "per_page": 1,
+            "page": 1,
+            "sparkline": False,
+            "price_change_percentage": "1h,24h,7d,30d"
+        }
+        
+        market_response = requests.get(market_url, params=market_params, timeout=10)
+        market_response.raise_for_status()
+        market_data = market_response.json()
+        
+        if not market_data:
+            return f"❌ No market data available for {coin_symbol.upper()}"
+        
+        coin = market_data[0]
+        
+        # Get historical price data for technical analysis
+        history_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+        history_params = {
+            "vs_currency": "usd",
+            "days": "30",
+            "interval": "daily"
+        }
+        
+        try:
+            history_response = requests.get(history_url, params=history_params, timeout=10)
+            history_data = history_response.json()
+            prices = [price[1] for price in history_data.get('prices', [])]
+        except:
+            prices = [coin.get('current_price', 0)] * 30  # Fallback
+        
+        # Extract data
+        symbol = coin.get('symbol', '').upper()
+        name = coin.get('name', 'Unknown')
+        current_price = coin.get('current_price', 0)
+        price_change_24h = coin.get('price_change_percentage_24h', 0)
+        price_change_1h = coin.get('price_change_percentage_1h', 0)
+        price_change_7d = coin.get('price_change_percentage_7d', 0)
+        price_change_30d = coin.get('price_change_percentage_30d', 0)
+        market_cap = coin.get('market_cap', 0)
+        volume_24h = coin.get('total_volume', 0)
+        market_cap_rank = coin.get('market_cap_rank', 'N/A')
+        
+        # Format price based on value
+        if current_price >= 1:
+            price_str = f"${current_price:.2f}"
+        elif current_price >= 0.01:
+            price_str = f"${current_price:.4f}"
+        elif current_price >= 0.000001:
+            price_str = f"${current_price:.6f}"
+        else:
+            price_str = f"${current_price:.8f}"
+        
+        # Direction indicator
+        direction = "▲" if price_change_24h > 0 else "▼" if price_change_24h < 0 else "→"
+        
+        # Technical analysis
+        rsi = calculate_rsi(prices)
+        support, resistance = calculate_support_resistance(prices)
+        
+        # Support/Resistance formatting
+        if support and resistance:
+            if support >= 1:
+                support_str = f"${support:.2f}"
+            elif support >= 0.01:
+                support_str = f"${support:.4f}"
+            else:
+                support_str = f"${support:.6f}"
+                
+            if resistance >= 1:
+                resistance_str = f"${resistance:.2f}"
+            elif resistance >= 0.01:
+                resistance_str = f"${resistance:.4f}"
+            else:
+                resistance_str = f"${resistance:.6f}"
+        else:
+            support_str = "N/A"
+            resistance_str = "N/A"
+        
+        # Moving Average Signal (simplified)
+        if len(prices) >= 30:
+            ma_30 = sum(prices[-30:]) / 30
+            ma_signal = "bullish" if current_price > ma_30 else "bearish"
+            ma_signal_text = "Price above MA → bullish signal" if ma_signal == "bullish" else "Price below MA → bearish signal"
+        else:
+            ma_signal = "neutral"
+            ma_signal_text = "Insufficient data for MA analysis"
+        
+        # Volume analysis
+        if volume_24h > 1e9:
+            volume_analysis = "High → strong liquidity"
+        elif volume_24h > 1e8:
+            volume_analysis = "Moderate → decent liquidity"
+        elif volume_24h > 1e7:
+            volume_analysis = "Low → limited liquidity"
+        else:
+            volume_analysis = "Very Low → poor liquidity"
+        
+        # Generate sentiment and forecast
+        signal, signal_reason = get_sentiment_signal(price_change_24h, volume_24h, rsi, ma_signal)
+        
+        # Create forecast based on multiple factors
+        if price_change_24h > 5 and rsi > 70:
+            forecast = f"{name} shows strong upward momentum, but RSI in overbought territory suggests a possible short-term pullback. A retest of support is likely before another push toward resistance. Volume confirms continued interest, but profit-taking could trigger volatility."
+        elif price_change_24h > 0 and rsi < 70:
+            forecast = f"{name} maintains positive momentum with healthy technical indicators. Current levels suggest room for further upside, though normal market volatility should be expected. Volume and momentum support continued bullish bias."
+        elif price_change_24h < -5 and rsi < 30:
+            forecast = f"{name} is experiencing significant selling pressure but may be approaching oversold levels. A potential bounce could occur if support holds, though further downside remains possible if key levels break."
+        else:
+            forecast = f"{name} is in a consolidation phase with mixed signals. Price action suggests uncertainty, with direction likely to be determined by broader market sentiment and volume patterns."
+        
+        # Build the response message
+        response = f"""*Price: {symbol} {price_str} ({price_change_24h:+.2f}%) {direction}*
+
+*Market Summary:* {name} is trading at {price_str}, {'up' if price_change_24h > 0 else 'down'} {abs(price_change_24h):.2f}% in the last 24 hours. With a daily volume of {human_readable_number(volume_24h)} and a {human_readable_number(market_cap)} market cap (Rank #{market_cap_rank}), the {'crypto' if symbol not in ['BTC', 'ETH'] else 'cryptocurrency'} {'is seeing renewed momentum and heightened trading activity' if volume_24h > 1e8 else 'shows moderate trading interest'}.
+
+*Technicals:*
+- Support: {support_str}
+- Resistance: {resistance_str}
+- RSI ({rsi}): {get_rsi_interpretation(rsi)}
+- 30D MA: {ma_signal_text}
+- Volume ({human_readable_number(volume_24h)}): {volume_analysis}
+- Sentiment: {'Bullish' if price_change_24h > 0 else 'Bearish'} → fueled by {'price spike + volume surge' if price_change_24h > 5 and volume_24h > 1e8 else 'current market dynamics'}
+
+*Price Performance:*
+- 1h: {price_change_1h:+.2f}%
+- 24h: {price_change_24h:+.2f}%
+- 7d: {price_change_7d:+.2f}%
+- 30d: {price_change_30d:+.2f}%
+
+*Forecast (24h Outlook):*
+{forecast}
+
+*Bot Signal (Next 24h): {signal} → {signal_reason}*"""
+
+        return response
+        
+    except requests.RequestException as e:
+        logger.error(f"Error fetching detailed stats for {coin_symbol}: {e}")
+        return f"❌ Unable to fetch data for {coin_symbol.upper()}. Please try again later."
+    except Exception as e:
+        logger.error(f"Unexpected error in detailed stats for {coin_symbol}: {e}")
+        return f"❌ Error analyzing {coin_symbol.upper()}. Please check the symbol and try again."
+
+# ===================== EXISTING CRYPTO DATA =====================
