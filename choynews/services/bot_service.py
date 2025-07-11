@@ -16,7 +16,29 @@ def handle_updates(updates):
     Process Telegram update objects and handle messages/commands.
     
     Args:
-        updates (list): List of Telegram update objects
+def handle_cryptosta    from choynews.api.telegram import send_telegram
+    from choynews.core.advanced_news_fetcher import get_crypto_stats_digest
+    
+    try:
+        send_telegram("🔍 Fetching latest crypto market data with AI analysis...", chat_id)mmand(chat_id, user_id):
+    """Handle the /cryptostats command."""
+    from choynews.api.telegram import send_telegram
+    from choynews.core.advanced_news_fetcher import get_crypto_stats_digest
+    
+    try:
+        send_telegram("🔍 Fetching latest crypto market data with AI analysis...", chat_id)
+        
+        crypto_section = get_crypto_stats_digest()
+        if crypto_section:
+            send_telegram(crypto_section, chat_id)
+        else:
+            send_telegram("Sorry, cryptocurrency market data is temporarily unavailable.", chat_id)
+        
+        logger.info(f"Sent crypto stats to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting crypto stats for user {user_id}: {e}")
+        send_telegram("Sorry, cryptocurrency market data is temporarily unavailable.", chat_id)st): List of Telegram update objects
         
     Returns:
         int: ID of the last processed update o👨‍💻 *Developer:* Shanchoy Noor
@@ -382,12 +404,12 @@ def handle_weather_command(chat_id, user_id):
 def handle_cryptostats_command(chat_id, user_id):
     """Handle the /cryptostats command."""
     from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import fetch_crypto_market_with_ai
+    from choynews.core.advanced_news_fetcher import get_crypto_stats_digest
     
     try:
         send_telegram("� Fetching latest crypto market data with AI analysis...", chat_id)
         
-        crypto_section = fetch_crypto_market_with_ai()
+        crypto_section = get_crypto_stats_digest()
         if crypto_section:
             send_telegram(crypto_section, chat_id)
         else:

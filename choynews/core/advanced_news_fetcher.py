@@ -764,22 +764,18 @@ Market Cap: ${coin_data['market_cap']/1e9:.2f}B
 24h High: ${coin_data['high_24h']:.4f}
 24h Low: ${coin_data['low_24h']:.4f}
 
-Provide analysis in this exact format:
-"[Sentiment assessment]. 
+Provide analysis in EXACTLY this format (no extra text, no markdown headers):
 
-Technicals:
-- Support: $[support_level]
-- Resistance: $[resistance_level] 
-- RSI ([value]): [Neutral/Overbought/Oversold], [interpretation]
-- 30D MA ($[value]): [Position vs MA], [momentum assessment]
-- Volume: [High/Medium/Low] ($[volume]), [liquidity comment]
-- Sentiment: [Brief sentiment analysis]
+[One sentence market sentiment opening]
 
-Forecast (Next 24h): [Brief prediction]
+**Technicals:**
+Support: $[realistic_price] | Resistance: $[realistic_price] | RSI ([number]): [status] indicating [interpretation] | 30D MA ($[price]): Price [above/below] moving average, [momentum assessment] | Volume: [High/Medium/Low] ($[volume format like 1.5B]), showing [liquidity comment] | Sentiment: [brief market sentiment]
 
-Prediction (Next 24hr): 🟢 BUY / 🟠 HOLD / 🔴 SELL"
+**Forecast (Next 24h):** [Single paragraph prediction with specific price targets and reasoning]
 
-Keep technical values realistic based on the data provided.
+**Prediction (Next 24hr):** 🟢 BUY / 🟠 HOLD / 🔴 SELL
+
+Use realistic technical levels based on current price. Format all prices consistently. Keep it concise and professional."
 """
 
         headers = {
@@ -888,9 +884,10 @@ def get_individual_crypto_stats_with_ai(symbol):
             "low_24h": low_24h
         })
         
-        # Build the formatted message without quotes
+        # Build the formatted message to match the exact format
         stats_message = f"""Price: {symbol.upper()} {price_str} ({price_change_24h:+.2f}%) {arrow}
-Market Summary: {name} is currently trading at {price_str} with a 24h change of ({price_change_24h:+.2f}%) {arrow}. 24h Market Cap: {mcap_str}. 24h Volume: {vol_str}.
+
+Market Summary: {name} is currently trading at {price_str} with a 24h change of ({price_change_24h:+.2f}%) {arrow} 24h Market Cap {mcap_str}. 24h Volume: {vol_str}.
 
 {ai_analysis}"""
         
@@ -1269,11 +1266,11 @@ def get_crypto_stats_digest():
         if fear_index != "N/A":
             fear_value = int(fear_index)
             if fear_value >= 75:
-                fear_greed_text = f"{fear_index}/100 = 🟢 BUY"
+                fear_greed_text = f"{fear_index}/100 (🟢 BUY)"
             elif fear_value >= 50:
-                fear_greed_text = f"{fear_index}/100 = 🟠 HOLD"
+                fear_greed_text = f"{fear_index}/100 (🟠 HOLD)"
             else:
-                fear_greed_text = f"{fear_index}/100 = 🔴 SELL"
+                fear_greed_text = f"{fear_index}/100 (🔴 SELL)"
         else:
             fear_greed_text = f"{fear_index}/100"
         
@@ -1317,8 +1314,8 @@ Fear/Greed Index: {fear_greed_text}
         
         # Top 5 gainers (highest positive changes)
         gainers = sorted_cryptos[-5:][::-1]  # Reverse to get highest first
-        crypto_section += "\n📈 Crypto Top 5 Gainers:\n\n"
-        for crypto in gainers:
+        crypto_section += "\n📈 Crypto Top 5 Gainers:\n"
+        for i, crypto in enumerate(gainers, 1):
             symbol = crypto['symbol'].upper()  # Use symbol instead of name
             price = crypto['current_price']
             change = crypto['price_change_percentage_24h']
@@ -1327,12 +1324,12 @@ Fear/Greed Index: {fear_greed_text}
             # Format price appropriately using helper function
             price_str = format_crypto_price(price)
             
-            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+            crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
         # Top 5 losers (lowest negative changes)
         losers = sorted_cryptos[:5]
-        crypto_section += "\n📉 Crypto Top 5 Losers:\n\n"
-        for crypto in losers:
+        crypto_section += "\n📉 Crypto Top 5 Losers:\n"
+        for i, crypto in enumerate(losers, 1):
             symbol = crypto['symbol'].upper()  # Use symbol instead of name
             price = crypto['current_price']
             change = crypto['price_change_percentage_24h']
@@ -1341,7 +1338,7 @@ Fear/Greed Index: {fear_greed_text}
             # Format price appropriately using helper function
             price_str = format_crypto_price(price)
             
-            crypto_section += f"{symbol} {price_str} ({change:+.2f}%) {arrow}\n"
+            crypto_section += f"{i}. {symbol} {price_str} ({change:+.2f}%) {arrow}\n"
         
         return crypto_section
         
