@@ -421,7 +421,7 @@ def get_weather_data(city="Dhaka"):
     try:
         api_key = Config.WEATHERAPI_KEY
         if not api_key:
-            return "*🌤️ WEATHER:*\nWeather API key not configured.\n\n"
+            return "☀️ WEATHER NOW\nWeather API key not configured.\n\n"
             
         url = f"http://api.weatherapi.com/v1/current.json"
         params = {
@@ -444,29 +444,76 @@ def get_weather_data(city="Dhaka"):
         wind_kph = current.get('wind_kph', 'N/A')
         wind_dir = current.get('wind_dir', 'N/A')
         uv = current.get('uv', 'N/A')
+        visibility_km = current.get('vis_km', 'N/A')
         
-        # Air quality
+        # Get additional weather data
+        feels_like = current.get('feelslike_c', temp_c)
+        
+        # Format UV Index properly
+        if uv != 'N/A':
+            try:
+                uv_value = float(uv)
+                if uv_value == 0:
+                    uv_display = f"Minimal ({uv_value})"
+                elif uv_value <= 2:
+                    uv_display = f"Low ({uv_value})"
+                elif uv_value <= 5:
+                    uv_display = f"Moderate ({uv_value})"
+                elif uv_value <= 7:
+                    uv_display = f"High ({uv_value})"
+                elif uv_value <= 10:
+                    uv_display = f"Very High ({uv_value})"
+                else:
+                    uv_display = f"Extreme ({uv_value})"
+            except:
+                uv_display = str(uv)
+        else:
+            uv_display = "N/A"
+        
+        # Air quality with value
         aqi = current.get('air_quality', {})
         us_epa_index = aqi.get('us-epa-index', 'N/A')
         
         aqi_levels = {1: "Good", 2: "Moderate", 3: "Unhealthy for Sensitive", 4: "Unhealthy", 5: "Very Unhealthy", 6: "Hazardous"}
         aqi_text = aqi_levels.get(us_epa_index, "N/A")
+        if us_epa_index != 'N/A':
+            aqi_display = f"{aqi_text} ({us_epa_index})"
+        else:
+            aqi_display = "N/A"
+        
+        # Visibility with description for driving conditions
+        if visibility_km != 'N/A':
+            try:
+                vis_value = float(visibility_km)
+                # Based on real-world driving visibility standards:
+                # - 5km+ is generally safe for normal driving
+                # - Below 5km requires caution and reduced speed
+                if vis_value >= 5:
+                    vis_description = "clear"
+                else:
+                    vis_description = "unclear"
+                vis_display = f"{visibility_km} km ({vis_description})"
+            except:
+                vis_display = f"{visibility_km} km"
+        else:
+            vis_display = "N/A"
         
         weather_msg = (
-            f"*🌤️ WEATHER - {location.get('name', city)}:*\n"
-            f"🌡️ Temperature: {temp_c}°C\n"
+            f"☀️ WEATHER\n"
+            f"🌡️ Temperature: {temp_c}°C - {feels_like}°C\n"
             f"☁️ Condition: {condition}\n"
             f"💧 Humidity: {humidity}%\n"
             f"💨 Wind: {wind_kph} km/h {wind_dir}\n"
-            f"☀️ UV Index: {uv}\n"
-            f"🌬️ Air Quality: {aqi_text}\n\n"
+            f"👁️ Visibility: {vis_display}\n"
+            f"🌬️ Air Quality: {aqi_display}\n"
+            f"☀️ UV Index: {uv_display}"
         )
         
         return weather_msg
         
     except Exception as e:
         logger.error(f"Error fetching weather data: {e}")
-        return "*🌤️ WEATHER:*\nWeather data temporarily unavailable.\n\n"
+        return "☀️ WEATHER NOW\nWeather data temporarily unavailable."
 
 # ===================== HOLIDAYS DATA =====================
 
