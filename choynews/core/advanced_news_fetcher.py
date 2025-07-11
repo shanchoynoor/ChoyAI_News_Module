@@ -1168,12 +1168,25 @@ def fetch_global_market_indices():
             idx = data.get(symbol, {})
             price = idx.get('close', 'N/A')
             change = idx.get('percent_change', 'N/A')
-            arrow = "▲" if isinstance(change, str) and change.startswith('+') else ("▼" if isinstance(change, str) and change.startswith('-') else "→")
-            section += f"{symbol} ({country}): {price} ({change}%) {arrow}\n"
+            
+            # Format change properly and determine arrow
+            if change != 'N/A':
+                try:
+                    change_num = float(change)
+                    arrow = "▲" if change_num > 0 else "▼" if change_num < 0 else "→"
+                    change_str = f"({change_num:+.2f}%)"
+                except:
+                    arrow = "→"
+                    change_str = f"({change}%)"
+            else:
+                arrow = "→"
+                change_str = "(N/A%)"
+            
+            section += f"{symbol} ({country}): {price} {change_str} {arrow}\n"
         return section + "\n"
     except Exception as e:
         logger.error(f"Error fetching global market indices: {e}")
-        return "[🌐] GLOBAL MARKET INDEX\nData unavailable.\n\n"
+        return "🌐 GLOBAL MARKET INDEX\nData unavailable.\n\n"
 
 # ===================== NEWS DIGEST ASSEMBLER =====================
 def get_full_news_digest():
@@ -1189,15 +1202,15 @@ def get_full_news_digest():
         header += f"\n{holiday}"
 
     # 3. Weather
-    weather = get_dhaka_weather().replace('*', '').replace(':*', ':').strip()
+    weather = get_dhaka_weather().strip()
     header += f"\n\n{weather}"
 
     # 4. News sections
-    local = get_breaking_local_news().replace('*', '').replace(':*', ':').strip()
-    globaln = get_breaking_global_news().replace('*', '').replace(':*', ':').strip()
-    tech = get_breaking_tech_news().replace('*', '').replace(':*', ':').strip()
-    sports = get_breaking_sports_news().replace('*', '').replace(':*', ':').strip()
-    crypto = get_breaking_crypto_news().replace('*', '').replace(':*', ':').strip()
+    local = get_breaking_local_news().strip()
+    globaln = get_breaking_global_news().strip()
+    tech = get_breaking_tech_news().strip()
+    sports = get_breaking_sports_news().strip()
+    crypto = get_breaking_crypto_news().strip()
 
     # 5. Global Market Index
     market_index = fetch_global_market_indices().strip()

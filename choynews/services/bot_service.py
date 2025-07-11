@@ -273,21 +273,14 @@ All systems operational! 🚀
 def handle_news_command(chat_id, user_id, args):
     """Handle the /news command."""
     from choynews.api.telegram import send_telegram
-    from choynews.core.digest_builder import build_news_digest
+    from choynews.core.advanced_news_fetcher import get_full_news_digest
     
     try:
-        # Create a basic user object for digest building
-        user = {
-            "user_id": user_id,
-            "chat_id": chat_id,
-            "preferences": {}  # Default preferences
-        }
-        
         # Send loading message like in the example
         send_telegram("📰 Loading latest news...", chat_id)
         
-        # Build and send news digest
-        digest = build_news_digest(user)
+        # Build and send news digest using the full digest function
+        digest = get_full_news_digest()
         
         # Double-check for any extra content after footer (plain text, not markdown)
         footer_marker = "🤖 Developed by Shanchoy Noor"
@@ -297,7 +290,7 @@ def handle_news_command(chat_id, user_id, args):
             digest = digest[:footer_index + len(footer_marker)]
         
         # Split the message at crypto market section for better readability
-        crypto_market_marker = "💰 CRYPTO MARKET:"
+        crypto_market_marker = "💰 CRYPTO MARKET STATUS"
         if crypto_market_marker in digest:
             split_index = digest.find(crypto_market_marker)
             

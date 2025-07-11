@@ -63,7 +63,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
                 logger.debug(f"Manual holiday check failed: {e}")
         
         # Build header with proper formatting
-        header = f"📢 *DAILY NEWS DIGEST*\n{time_str}\n"
+        header = f"📢 *TOP NEWS HEADLINES*\n{time_str}\n"
         if holidays_info.strip():
             header += holidays_info
         header += "━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -74,8 +74,8 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         if include_weather:
             weather_section = get_dhaka_weather()
             if weather_section:
-                # Always show weather with all details, and with a section header
-                sections.append(f"☀️ WEATHER\n{weather_section.strip()}\n")
+                # Weather section already has its own header, don't duplicate
+                sections.append(weather_section.strip())
         
         # Add news sections with better error handling
         try:
