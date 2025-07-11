@@ -29,6 +29,125 @@ import feedparser
 
 logger = get_logger(__name__)
 
+# Rate limiting and caching globals
+_last_request_times = {}
+_cache = {}
+_cache_duration = 300  # 5 minutes cache for most data
+_coingecko_cache_duration = 120  # 2 minutes for crypto data
+_rss_cache_duration = 180  # 3 minutes for RSS feeds
+
+def _cleanup_cache():
+    """Clean up expired cache entries to prevent memory buildup."""
+    current_time = time.time()
+    expired_keys = []
+    
+    for key, (_, cached_time) in _cache.items():
+        if current_time - cached_time > _cache_duration * 2:  # Clean up items older than 2x cache duration
+            expired_keys.append(key)
+    
+    for key in expired_keys:
+        del _cache[key]
+    
+    if expired_keys:
+        logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
+
+def _rate_limited_post(url, min_interval=1.0, timeout=10, **kwargs):
+    """Make a rate-limited HTTP POST request."""
+    current_time = time.time()
+    
+    # Rate limiting
+    domain = url.split('/')[2]  # Extract domain for per-domain rate limiting
+    last_request = _last_request_times.get(domain, 0)
+    time_since_last = current_time - last_request
+    
+    if time_since_last < min_interval:
+        sleep_time = min_interval - time_since_last
+        logger.debug(f"Rate limiting POST: sleeping {sleep_time:.2f}s for {domain}")
+        time.sleep(sleep_time)
+    
+    try:
+        # Update last request time
+        _last_request_times[domain] = time.time()
+        
+        # Make POST request with proper headers
+        headers = kwargs.get('headers', {})
+        headers.update({
+            'User-Agent': 'ChoyNewsBot/2.0 (Telegram Bot)',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        })
+        kwargs['headers'] = headers
+        
+        response = requests.post(url, timeout=timeout, **kwargs)
+        return response
+        
+    except Exception as e:
+        logger.error(f"Rate limited POST request failed for {url}: {e}")
+        raise
+
+def _rate_limited_request(url, min_interval=1.0, timeout=10, **kwargs):
+    """Make a rate-limited HTTP request with caching."""
+    current_time = time.time()
+    
+    # Periodic cache cleanup
+    if len(_cache) > 100:  # Clean up when cache gets large
+        _cleanup_cache()
+    
+    # Check cache first
+    cache_key = f"{url}_{hash(str(sorted(kwargs.items())))}"
+    if cache_key in _cache:
+        cached_data, cached_time = _cache[cache_key]
+        cache_duration = _coingecko_cache_duration if 'coingecko.com' in url else _cache_duration
+        if current_time - cached_time < cache_duration:
+            logger.debug(f"Using cached data for {url}")
+            return cached_data
+    
+    # Rate limiting
+    domain = url.split('/')[2]  # Extract domain for per-domain rate limiting
+    last_request = _last_request_times.get(domain, 0)
+    time_since_last = current_time - last_request
+    
+    if time_since_last < min_interval:
+        sleep_time = min_interval - time_since_last
+        logger.debug(f"Rate limiting: sleeping {sleep_time:.2f}s for {domain}")
+        time.sleep(sleep_time)
+    
+    try:
+        # Update last request time
+        _last_request_times[domain] = time.time()
+        
+        # Make request with proper headers to reduce 429 errors
+        headers = kwargs.get('headers', {})
+        headers.update({
+            'User-Agent': 'ChoyNewsBot/2.0 (Telegram Bot)',
+            'Accept': 'application/json, application/rss+xml, text/xml, */*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+        })
+        kwargs['headers'] = headers
+        
+        response = requests.get(url, timeout=timeout, **kwargs)
+        
+        # Handle rate limiting responses specifically
+        if response.status_code == 429:
+            logger.warning(f"Rate limited by {domain}, waiting 10 seconds...")
+            time.sleep(10)
+            # Update rate limit for this domain
+            _last_request_times[domain] = time.time()
+            # Try one more time with longer interval
+            time.sleep(min_interval * 2)
+            response = requests.get(url, timeout=timeout, **kwargs)
+        
+        # Cache successful responses
+        if response.status_code == 200:
+            _cache[cache_key] = (response, current_time)
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Rate limited request failed for {url}: {e}")
+        raise
+
 # Database for tracking sent news
 NEWS_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "news_history.db")
 
@@ -221,10 +340,12 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
     for source_name, rss_url in sources.items():
         try:
             logger.debug(f"Fetching breaking news from {source_name}")
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            response = requests.get(rss_url, headers=headers, timeout=10)
+            # Use rate-limited request with longer interval for RSS feeds
+            response = _rate_limited_request(
+                rss_url, 
+                min_interval=2.0,  # 2 second interval between RSS requests
+                timeout=15
+            )
             response.raise_for_status()
             feed = feedparser.parse(response.content)
             if not feed.entries:
@@ -451,9 +572,9 @@ def get_breaking_crypto_news():
 def fetch_crypto_market_with_ai():
     """Fetch crypto market data with comprehensive formatting for the news digest."""
     try:
-        # Fetch market overview
+        # Fetch market overview with rate limiting
         url = "https://api.coingecko.com/api/v3/global"
-        response = requests.get(url, timeout=10)
+        response = _rate_limited_request(url, min_interval=1.5, timeout=15)
         response.raise_for_status()
         
         data = response.json()["data"]
@@ -472,9 +593,9 @@ def fetch_crypto_market_with_ai():
         market_arrow = "▲" if market_change > 0 else "▼" if market_change < 0 else "→"
         volume_arrow = "▲" if volume_change > 0 else "▼" if volume_change < 0 else "→"
         
-        # Fetch Fear & Greed Index
+        # Fetch Fear & Greed Index with rate limiting
         try:
-            fear_response = requests.get("https://api.alternative.me/fng/?limit=1", timeout=5)
+            fear_response = _rate_limited_request("https://api.alternative.me/fng/?limit=1", min_interval=1.0, timeout=10)
             fear_index = fear_response.json()["data"][0]["value"]
             fear_text = fear_response.json()["data"][0]["value_classification"]
         except:
@@ -556,11 +677,12 @@ Keep it under 250 characters and end with prediction like: "Prediction (Next 24h
             "temperature": 0.7
         }
         
-        response = requests.post(
+        response = _rate_limited_post(
             "https://api.deepseek.com/chat/completions",
+            min_interval=2.0,
             headers=headers,
             json=payload,
-            timeout=10
+            timeout=15
         )
         
         if response.status_code == 200:
@@ -578,11 +700,11 @@ Keep it under 250 characters and end with prediction like: "Prediction (Next 24h
 def get_coingecko_coin_id(symbol):
     """Get CoinGecko coin ID from symbol using their search API."""
     try:
-        # First try direct symbol lookup
+        # First try direct symbol lookup with rate limiting
         search_url = f"https://api.coingecko.com/api/v3/search"
         params = {"query": symbol.lower()}
         
-        response = requests.get(search_url, params=params, timeout=10)
+        response = _rate_limited_request(search_url, min_interval=1.0, timeout=15, params=params)
         response.raise_for_status()
         
         data = response.json()
@@ -661,7 +783,7 @@ def get_individual_crypto_stats(symbol):
         
         coin_emoji = get_coin_emoji(coin_symbol or symbol)
         
-        # Fetch detailed coin data
+        # Fetch detailed coin data with rate limiting
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
         params = {
             "localization": "false",
@@ -671,7 +793,7 @@ def get_individual_crypto_stats(symbol):
             "developer_data": "false"
         }
         
-        response = requests.get(url, params=params, timeout=10)
+        response = _rate_limited_request(url, min_interval=1.5, timeout=15, params=params)
         response.raise_for_status()
         
         data = response.json()
@@ -797,8 +919,9 @@ Use realistic technical levels based on current price. Format all prices consist
             "temperature": 0.7
         }
         
-        response = requests.post(
+        response = _rate_limited_post(
             "https://api.deepseek.com/chat/completions",
+            min_interval=2.0,
             headers=headers,
             json=payload,
             timeout=15
@@ -827,7 +950,7 @@ def get_individual_crypto_stats_with_ai(symbol):
         
         coin_emoji = get_coin_emoji(coin_symbol or symbol)
         
-        # Fetch detailed coin data
+        # Fetch detailed coin data with rate limiting
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
         params = {
             "localization": "false",
@@ -837,7 +960,7 @@ def get_individual_crypto_stats_with_ai(symbol):
             "developer_data": "false"
         }
         
-        response = requests.get(url, params=params, timeout=10)
+        response = _rate_limited_request(url, min_interval=1.5, timeout=15, params=params)
         response.raise_for_status()
         
         data = response.json()
@@ -936,7 +1059,7 @@ def get_dhaka_weather():
             "aqi": "yes"
         }
         
-        response = requests.get(url, params=params, timeout=10)
+        response = _rate_limited_request(url, min_interval=2.0, timeout=15, params=params)
         response.raise_for_status()
         
         data = response.json()
@@ -1088,7 +1211,7 @@ def get_bd_holidays():
         
         logger.debug(f"Checking holidays for date: {today.year}-{today.month:02d}-{today.day:02d}")
         
-        response = requests.get(url, params=params, timeout=10)
+        response = _rate_limited_request(url, min_interval=3.0, timeout=15, params=params)
         response.raise_for_status()
         
         data = response.json()
@@ -1195,7 +1318,7 @@ def fetch_global_market_indices():
         }
         symbols = ','.join(indices.keys())
         url = f"https://api.twelvedata.com/quote?symbol={symbols}&apikey={api_key}"
-        response = requests.get(url, timeout=10)
+        response = _rate_limited_request(url, min_interval=2.0, timeout=15)
         response.raise_for_status()
         data = response.json()
 
@@ -1262,9 +1385,9 @@ def get_full_news_digest():
 def get_crypto_stats_digest():
     """Return only the crypto market section for /cryptostats command."""
     try:
-        # Fetch market overview
+        # Fetch market overview with rate limiting
         url = "https://api.coingecko.com/api/v3/global"
-        response = requests.get(url, timeout=10)
+        response = _rate_limited_request(url, min_interval=1.5, timeout=15)
         response.raise_for_status()
         
         data = response.json()["data"]
@@ -1275,7 +1398,7 @@ def get_crypto_stats_digest():
         # Get volume change (if available, otherwise estimate as same as market cap change)
         volume_change = market_change  # API doesn't provide volume change, use market change as approximation
         
-        # Fetch top 50 cryptos for comprehensive data
+        # Fetch top 50 cryptos for comprehensive data with rate limiting
         crypto_url = "https://api.coingecko.com/api/v3/coins/markets"
         crypto_params = {
             "vs_currency": "usd",
@@ -1286,12 +1409,12 @@ def get_crypto_stats_digest():
             "price_change_percentage": "24h"
         }
         
-        crypto_response = requests.get(crypto_url, params=crypto_params, timeout=10)
+        crypto_response = _rate_limited_request(crypto_url, min_interval=2.0, timeout=15, params=crypto_params)
         crypto_data = crypto_response.json()
         
-        # Fetch Fear & Greed Index
+        # Fetch Fear & Greed Index with rate limiting
         try:
-            fear_response = requests.get("https://api.alternative.me/fng/?limit=1", timeout=5)
+            fear_response = _rate_limited_request("https://api.alternative.me/fng/?limit=1", min_interval=1.0, timeout=10)
             fear_index = fear_response.json()["data"][0]["value"]
             fear_text = fear_response.json()["data"][0]["value_classification"]
         except:
