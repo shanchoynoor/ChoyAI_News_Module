@@ -755,28 +755,21 @@ def fetch_coin_detailed_stats(coin_symbol):
             forecast = f"{name} is in a consolidation phase with mixed signals. Price action suggests uncertainty, with direction likely to be determined by broader market sentiment and volume patterns."
         
         # Build the response message
-        response = f"""*Price: {symbol} {price_str} ({price_change_24h:+.2f}%) {direction}*
+        response = f"""Price: {symbol} {price_str} ({price_change_24h:+.2f}%) {direction}
+Market Summary: {name} is trading at {price_str}, {'up' if price_change_24h > 0 else 'down'} {abs(price_change_24h):.2f}% in the last 24 hours. With a {'massive ' if volume_24h > 5e9 else ''}daily volume of {human_readable_number(volume_24h)} and a {human_readable_number(market_cap)} market cap, the {'memecoin' if symbol in ['PEPE', 'SHIB', 'DOGE', 'FLOKI'] else 'cryptocurrency'} is seeing {'renewed momentum and heightened trading activity' if volume_24h > 1e9 else 'moderate trading interest'}.
 
-*Market Summary:* {name} is trading at {price_str}, {'up' if price_change_24h > 0 else 'down'} {abs(price_change_24h):.2f}% in the last 24 hours. With a daily volume of {human_readable_number(volume_24h)} and a {human_readable_number(market_cap)} market cap (Rank #{market_cap_rank}), the {'crypto' if symbol not in ['BTC', 'ETH'] else 'cryptocurrency'} {'is seeing renewed momentum and heightened trading activity' if volume_24h > 1e8 else 'shows moderate trading interest'}.
-
-*Technicals:*
+Technicals:
 - Support: {support_str}
 - Resistance: {resistance_str}
 - RSI ({rsi}): {get_rsi_interpretation(rsi)}
 - 30D MA: {ma_signal_text}
 - Volume ({human_readable_number(volume_24h)}): {volume_analysis}
-- Sentiment: {'Bullish' if price_change_24h > 0 else 'Bearish'} → fueled by {'price spike + volume surge' if price_change_24h > 5 and volume_24h > 1e8 else 'current market dynamics'}
+- Sentiment: {'Bullish' if price_change_24h > 0 else 'Bearish'} → fueled by {'price spike + volume surge' if price_change_24h > 5 and volume_24h > 1e9 else 'current market dynamics'}
 
-*Price Performance:*
-- 1h: {price_change_1h:+.2f}%
-- 24h: {price_change_24h:+.2f}%
-- 7d: {price_change_7d:+.2f}%
-- 30d: {price_change_30d:+.2f}%
-
-*Forecast (24h Outlook):*
+Forecast (Next 24h):
 {forecast}
 
-*Bot Signal (Next 24h): {signal} → {signal_reason}*"""
+Bot Signal (Next 24h): {signal} → {signal_reason}"""
 
         return response
         
