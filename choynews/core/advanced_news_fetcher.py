@@ -331,9 +331,9 @@ def format_news_section(section_title, entries, limit=5):
         # Escape markdown characters in title
         title_escaped = title.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
         count += 1
-        # Numbered format, as in your sample
+        # Numbered format with clickable links
         if link:
-            formatted += f"{count}. {title_escaped} - {source} ({time_ago})\n"
+            formatted += f"{count}. [{title_escaped}]({link}) - {source} ({time_ago})\n"
         else:
             formatted += f"{count}. {title_escaped} - {source} ({time_ago})\n"
         try:
@@ -1005,12 +1005,9 @@ def get_dhaka_weather():
         temp_min = temp_c - 2  # Approximate daily range
         temp_max = temp_c + 5
         
-        weather_section = f"""☀️ WEATHER
+        weather_section = f"""☀️ WEATHER NOW
 🌡️ Temperature: {temp_min:.1f}°C - {temp_max:.1f}°C
-🌤️ Condition: {condition}
-💨 Wind: {wind_kph:.1f} km/h {wind_dir}
-💧 Humidity: {humidity}%
-👁️ Visibility: {vis_km:.1f} km
+️ Condition: {condition}
 🫧 Air Quality: {aqi_text} (AQI {aqi_value})
 🔆 UV Index: {uv_str}
 """
@@ -1020,12 +1017,9 @@ def get_dhaka_weather():
     except Exception as e:
         logger.error(f"Error fetching weather data: {e}")
         # Return a fallback weather section matching the sample format
-        return """☀️ WEATHER
+        return """☀️ WEATHER NOW
 🌡️ Temperature: 29.1°C - 36.1°C
-🌤️ Condition: Light rain shower  
-💨 Wind: 28.4 km/h SSE
-💧 Humidity: 68%
-👁️ Visibility: 10.0 km
+️ Condition: Light rain shower  
 🫧 Air Quality: Moderate (AQI 70)
 🔆 UV Index: High (5.8/11)
 """
@@ -1212,17 +1206,14 @@ def get_full_news_digest():
     sports = get_breaking_sports_news().strip()
     crypto = get_breaking_crypto_news().strip()
 
-    # 5. Global Market Index
-    market_index = fetch_global_market_indices().strip()
-
-    # 6. Crypto Market Status
+    # 5. Crypto Market Status
     crypto_market = fetch_crypto_market_with_ai().strip()
 
-    # 7. Footer
-    footer = "Type /help for more detailed information about what I can do!\n━━━━━━━━━━━━━━-\n🤖 Developed by Shanchoy Noor"
+    # 6. Footer
+    footer = "Type /help for more detailed information.\n━━━━━━━━━━━━━━\n🤖 Developed by Shanchoy Noor"
 
     # Assemble all
-    digest = f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{sports}\n\n{crypto}\n\n{market_index}\n\n{crypto_market}\n\n{footer}"
+    digest = f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{sports}\n\n{crypto}\n\n{crypto_market}\n\n{footer}"
     return digest
 
 # ===================== CRYPTOSTATS ONLY =====================

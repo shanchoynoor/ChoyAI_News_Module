@@ -1,6 +1,13 @@
 # 🤖 ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
 
-**The most advanced Telegram news bot with real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.**
+**The most advanced Telegram💰 CRYPTO MARKET STATUS
+Market Cap: $3.78T (+2.34%) ▲
+Volume: $156.89B (+8.45%) ▲
+Fear/Greed Index: 78/100 = 🟢 GREED
+
+Type /help for more detailed information.
+━━━━━━━━━━━━━━
+🤖 Developed by Shanchoy Noor real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://core.telegram.org/bots)
@@ -52,49 +59,46 @@
 Jan 14, 2025 8:00AM BDT (UTC +6)
 🎉 Today's Holiday: Makar Sankranti
 
-☀️ DHAKA WEATHER:
+☀️ WEATHER NOW
 🌡️ Temperature: 18.2°C - 26.1°C
 🌤️ Condition: Partly cloudy
-💨 Wind: 8 km/h NW
-💧 Humidity: 65%
-👁️ Visibility: 10.0 km
 🫧 Air Quality: Moderate (AQI 72)
 🔆 UV Index: Moderate (4/11)
 
 🇧🇩 LOCAL NEWS:
-1. Winter grips Bangladesh as temperature drops to 8°C in northern districts - The Daily Star (2hr ago)
-2. Dhaka Stock Exchange shows strong recovery with 2.3% gain - Bangladesh Pratidin (1hr ago)
-3. Government announces new digital payment system for public services - Prothom Alo (3hr ago)
-4. Bangladesh cricket team prepares for upcoming series against Sri Lanka - BDNews24 (4hr ago)
-5. Dhaka Metro Rail expansion project receives final approval - The Daily Star (5hr ago)
+1. [Winter grips Bangladesh as temperature drops to 8°C in northern districts](https://example.com/news1) - The Daily Star (2hr ago)
+2. [Dhaka Stock Exchange shows strong recovery with 2.3% gain](https://example.com/news2) - Bangladesh Pratidin (1hr ago)
+3. [Government announces new digital payment system for public services](https://example.com/news3) - Prothom Alo (3hr ago)
+4. [Bangladesh cricket team prepares for upcoming series against Sri Lanka](https://example.com/news4) - BDNews24 (4hr ago)
+5. [Dhaka Metro Rail expansion project receives final approval](https://example.com/news5) - The Daily Star (5hr ago)
 
 🌍 GLOBAL NEWS:
-1. Global climate summit reaches historic agreement on carbon reduction - BBC News (1hr ago)
-2. Tech giants report record quarterly earnings amid market volatility - Reuters (2hr ago)
-3. International trade talks resume after months of deadlock - CNN (3hr ago)
-4. Scientists discover breakthrough in renewable energy storage - The Guardian (4hr ago)
-5. World leaders gather for emergency economic forum in Switzerland - Al Jazeera (5hr ago)
+1. [Global climate summit reaches historic agreement on carbon reduction](https://example.com/global1) - BBC News (1hr ago)
+2. [Tech giants report record quarterly earnings amid market volatility](https://example.com/global2) - Reuters (2hr ago)
+3. [International trade talks resume after months of deadlock](https://example.com/global3) - CNN (3hr ago)
+4. [Scientists discover breakthrough in renewable energy storage](https://example.com/global4) - The Guardian (4hr ago)
+5. [World leaders gather for emergency economic forum in Switzerland](https://example.com/global5) - Al Jazeera (5hr ago)
 
 🚀 TECH NEWS:
-1. Apple announces new AI chip breakthrough for next-generation devices - TechCrunch (1hr ago)
-2. Google's quantum computing milestone promises faster problem solving - The Verge (2hr ago)
-3. Microsoft launches advanced cloud security platform for enterprises - Ars Technica (3hr ago)
-4. Tesla's autonomous driving software receives major safety update - Wired (4hr ago)
-5. Meta unveils new VR headset with improved display technology - Engadget (5hr ago)
+1. [Apple announces new AI chip breakthrough for next-generation devices](https://example.com/tech1) - TechCrunch (1hr ago)
+2. [Google's quantum computing milestone promises faster problem solving](https://example.com/tech2) - The Verge (2hr ago)
+3. [Microsoft launches advanced cloud security platform for enterprises](https://example.com/tech3) - Ars Technica (3hr ago)
+4. [Tesla's autonomous driving software receives major safety update](https://example.com/tech4) - Wired (4hr ago)
+5. [Meta unveils new VR headset with improved display technology](https://example.com/tech5) - Engadget (5hr ago)
 
 🏆 SPORTS NEWS:
-1. Bangladesh football team qualifies for Asian Cup semifinals - ESPN (1hr ago)
-2. Premier League transfer window sees record-breaking deals - BBC Sport (2hr ago)
-3. Tennis Australian Open produces stunning upset in men's quarter-finals - Sky Sports (3hr ago)
-4. Olympic preparations intensify as Paris 2024 approaches - Yahoo Sports (4hr ago)
-5. Cricket World Cup schedule announced for next year's tournament - Cricbuzz (5hr ago)
+1. [Bangladesh football team qualifies for Asian Cup semifinals](https://example.com/sports1) - ESPN (1hr ago)
+2. [Premier League transfer window sees record-breaking deals](https://example.com/sports2) - BBC Sport (2hr ago)
+3. [Tennis Australian Open produces stunning upset in men's quarter-finals](https://example.com/sports3) - Sky Sports (3hr ago)
+4. [Olympic preparations intensify as Paris 2024 approaches](https://example.com/sports4) - Yahoo Sports (4hr ago)
+5. [Cricket World Cup schedule announced for next year's tournament](https://example.com/sports5) - Cricbuzz (5hr ago)
 
 🪙 FINANCE & CRYPTO NEWS:
-1. Bitcoin surges past $105,000 on institutional adoption news - CoinTelegraph (1hr ago)
-2. Ethereum upgrade successfully implemented, reducing transaction fees - CoinDesk (2hr ago)
-3. Major bank announces cryptocurrency trading platform launch - U.Today (3hr ago)
-4. DeFi protocols show resilience amid market fluctuations - Decrypt (4hr ago)
-5. Central bank digital currency pilot program expands globally - The Block (5hr ago)
+1. [Bitcoin surges past $105,000 on institutional adoption news](https://example.com/crypto1) - CoinTelegraph (1hr ago)
+2. [Ethereum upgrade successfully implemented, reducing transaction fees](https://example.com/crypto2) - CoinDesk (2hr ago)
+3. [Major bank announces cryptocurrency trading platform launch](https://example.com/crypto3) - U.Today (3hr ago)
+4. [DeFi protocols show resilience amid market fluctuations](https://example.com/crypto4) - Decrypt (4hr ago)
+5. [Central bank digital currency pilot program expands globally](https://example.com/crypto5) - The Block (5hr ago)
 
 🌐 GLOBAL MARKET INDEX
 SPX500 (USA): 6,127.45 (+0.85%) ▲
