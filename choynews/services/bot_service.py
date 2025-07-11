@@ -404,12 +404,12 @@ def handle_callback_query(callback_query):
 def handle_weather_command(chat_id, user_id):
     """Handle the /weather command."""
     from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_dhaka_weather_detailed
+    from choynews.core.advanced_news_fetcher import get_dhaka_weather
     
     try:
         send_telegram("🌤️ Getting latest weather data for Dhaka...", chat_id)
         
-        weather_section = get_dhaka_weather_detailed()
+        weather_section = get_dhaka_weather()
         if weather_section:
             weather_message = f"{weather_section}"
             send_telegram(weather_message, chat_id)

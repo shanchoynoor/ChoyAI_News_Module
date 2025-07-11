@@ -998,13 +998,35 @@ def get_dhaka_weather():
             }
             aqi_text, aqi_value = aqi_levels.get(us_epa, ("Moderate", 65))
         
+        # Get weather emoji based on condition
+        def get_weather_emoji(condition_text):
+            condition_lower = condition_text.lower()
+            if any(word in condition_lower for word in ['rain', 'drizzle', 'shower']):
+                return "🌧️"
+            elif any(word in condition_lower for word in ['snow', 'blizzard']):
+                return "❄️"
+            elif any(word in condition_lower for word in ['thunder', 'storm']):
+                return "⛈️"
+            elif any(word in condition_lower for word in ['cloud', 'overcast']):
+                return "☁️"
+            elif any(word in condition_lower for word in ['fog', 'mist', 'haze']):
+                return "🌫️"
+            elif any(word in condition_lower for word in ['clear', 'sunny']):
+                return "☀️"
+            elif any(word in condition_lower for word in ['partly']):
+                return "⛅"
+            else:
+                return "🌤️"  # Default partly cloudy
+        
+        weather_emoji = get_weather_emoji(condition)
+        
         # Create temperature range (current feels like range)
         temp_min = temp_c - 2  # Approximate daily range
         temp_max = temp_c + 5
         
         weather_section = f"""☀️ WEATHER NOW
 🌡️ Temperature: {temp_min:.1f}°C - {temp_max:.1f}°C
-️ Condition: {condition}
+{weather_emoji} Condition: {condition}
 🫧 Air Quality: {aqi_text} (AQI {aqi_value})
 🔆 UV Index: {uv_str}
 """
@@ -1016,7 +1038,7 @@ def get_dhaka_weather():
         # Return a fallback weather section matching the sample format
         return """☀️ WEATHER NOW
 🌡️ Temperature: 29.1°C - 36.1°C
-️ Condition: Light rain shower  
+🌧️ Condition: Light rain shower  
 🫧 Air Quality: Moderate (AQI 70)
 🔆 UV Index: High (5.8/11)
 """
