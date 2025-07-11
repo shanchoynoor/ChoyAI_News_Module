@@ -16,34 +16,10 @@ def handle_updates(updates):
     Process Telegram update objects and handle messages/commands.
     
     Args:
-def handle_cryptosta    from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_crypto_stats_digest
-    
-    try:
-        send_telegram("🔍 Fetching latest crypto market data with AI analysis...", chat_id)mmand(chat_id, user_id):
-    """Handle the /cryptostats command."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_crypto_stats_digest
-    
-    try:
-        send_telegram("🔍 Fetching latest crypto market data with AI analysis...", chat_id)
-        
-        crypto_section = get_crypto_stats_digest()
-        if crypto_section:
-            send_telegram(crypto_section, chat_id)
-        else:
-            send_telegram("Sorry, cryptocurrency market data is temporarily unavailable.", chat_id)
-        
-        logger.info(f"Sent crypto stats to user {user_id}")
-        
-    except Exception as e:
-        logger.error(f"Error getting crypto stats for user {user_id}: {e}")
-        send_telegram("Sorry, cryptocurrency market data is temporarily unavailable.", chat_id)st): List of Telegram update objects
+        updates (list): List of Telegram update objects
         
     Returns:
-        int: ID of the last processed update o👨‍💻 *Developer:* Shanchoy Noor
-💬 *Message:* @shanchoynoor
-📧 *Email:* shanchoyzone@gmail.com
+        int: ID of the last processed update or None if no updates
     """
     if not updates:
         return None
@@ -153,7 +129,9 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
     elif command == '/help':
         handle_help_command(chat_id)
     elif command == '/status':
-        handle_status_command(chat_id)
+        handle_status_command(chat_id, user_id)
+    elif command == '/server':
+        handle_server_command(chat_id)
     elif command == '/news':
         handle_news_command(chat_id, user_id, args)
     elif command == '/weather':
@@ -241,7 +219,8 @@ def handle_help_command(chat_id):
 🚀 /start - Initialize the bot and get a welcome message
 📰 /news - Get the full daily news digest
 🌤️ /weather - Get Dhaka weather information
-⚡ /status - Check your subscription status and timezone
+👤 /status - Check your subscription status and timezone
+🤖 /server - Check bot server status and uptime
 
 *💰 Cryptocurrency:*
 📊 /cryptostats - Get AI summary of crypto market
@@ -273,24 +252,66 @@ All times are shown in your local timezone. Use /timezone to set yours!
     send_telegram(help_message, chat_id)
     logger.info(f"Sent help message to chat {chat_id}")
 
-def handle_status_command(chat_id):
-    """Handle the /status command."""
+def handle_status_command(chat_id, user_id):
+    """Handle the /status command - show user subscription status and timezone."""
+    from choynews.api.telegram import send_telegram
+    
+    try:
+        # For now, we'll show placeholder info since subscription DB is not fully implemented
+        # TODO: Integrate with actual subscription database when implemented
+        
+        status_message = f"""
+👤 *Your Account Status*
+
+📬 **Subscription Status:** Active (Demo)
+🕒 **Your Timezone:** Asia/Dhaka (UTC+6) 
+📅 **Auto Digest Schedule:**
+   • Morning: 8:00 AM
+   • Midday: 1:00 PM  
+   • Evening: 7:00 PM
+   • Night: 11:00 PM
+
+🔧 **Available Commands:**
+   • `/news` - Get latest news digest
+   • `/weather` - Current weather in Dhaka
+   • `/cryptostats` - Crypto market overview
+   • `/timezone <zone>` - Change your timezone
+   • `/unsubscribe` - Stop auto digests
+
+Type `/help` for more commands.
+        """
+        
+        send_telegram(status_message, chat_id)
+        logger.info(f"Sent status message to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting user status for user {user_id}: {e}")
+        send_telegram("Sorry, there was an error retrieving your status. Please try again later.", chat_id)
+
+def handle_server_command(chat_id):
+    """Handle the /server command - show server/bot status."""
     from choynews.api.telegram import send_telegram
     import datetime
     
-    status_message = f"""
-🤖 *Bot Status*
-
+    try:
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        status_message = f"""
+🤖 **BOT STATUS**
+🕒 Current time: {current_time}
 ✅ Bot is online and running
-🕒 Current time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 📡 API connection: Active
 🔧 Services: Bot + Auto News
 
 All systems operational! 🚀
-    """
-    
-    send_telegram(status_message, chat_id)
-    logger.info(f"Sent status message to chat {chat_id}")
+        """
+        
+        send_telegram(status_message, chat_id)
+        logger.info(f"Sent server status message to chat {chat_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting server status: {e}")
+        send_telegram("Sorry, there was an error retrieving server status. Please try again later.", chat_id)
 
 def handle_news_command(chat_id, user_id, args):
     """Handle the /news command."""
