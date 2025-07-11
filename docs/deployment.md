@@ -1,3 +1,107 @@
+# ChoyNewsBot Server Deployment Troubleshooting Guide
+
+## Problem: "python3: No such file or directory" when running bin/choynews
+
+This error typically occurs when the virtual environment is not properly set up or the Python executable is missing from the venv.
+
+## Quick Diagnosis
+
+Run the diagnostic script first:
+```bash
+chmod +x tools/server_diagnostic.sh
+./tools/server_diagnostic.sh
+```
+
+## Common Solutions
+
+### Solution 1: Fix Virtual Environment (Recommended)
+```bash
+# Run the automated fix script
+chmod +x tools/deploy/setup_server_fix.sh
+./tools/deploy/setup_server_fix.sh
+```
+
+### Solution 2: Manual Virtual Environment Recreation
+```bash
+# Remove corrupted venv
+rm -rf venv
+
+# Create new virtual environment
+python3 -m venv venv
+
+# Activate it
+source venv/bin/activate
+
+# Install dependencies
+pip install --upgrade pip
+pip install -e .
+
+# Test the bot
+python3 -m choynews.core.bot
+```
+
+### Solution 3: Direct Python Execution
+If the shebang script still fails, run directly:
+```bash
+# Activate venv first
+source venv/bin/activate
+
+# Run directly with python
+python3 bin/choynews
+```
+
+### Solution 4: Alternative Module Execution
+```bash
+# Activate venv
+source venv/bin/activate
+
+# Run as module
+python3 -m choynews.core.bot
+```
+
+## Environment Variables
+
+Make sure your `.env` file contains:
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+WEATHER_API_KEY=your_weather_api_key_here
+NEWS_API_KEY=your_news_api_key_here
+```
+
+## Troubleshooting Checklist
+
+- [ ] Python3 is installed on the server
+- [ ] Virtual environment is created and activated
+- [ ] Dependencies are installed (`pip install -e .`)
+- [ ] Environment variables are set
+- [ ] choynews script has execute permissions
+- [ ] Bot token is valid and active
+
+## Testing Commands
+
+```bash
+# Test Python module import
+python3 -c "import choynews; print('Success')"
+
+# Test bot startup (should show help message or error details)
+python3 -m choynews.core.bot --help
+
+# Test with verbose logging
+python3 -m choynews.core.bot --verbose
+```
+
+## Common Error Messages
+
+| Error | Solution |
+|-------|----------|
+| `python3: No such file or directory` | Fix virtual environment or use Solution 2 |
+| `ModuleNotFoundError: No module named 'choynews'` | Run `pip install -e .` |
+| `ImportError: cannot import name` | Update dependencies |
+| `telegram.error.InvalidToken` | Check TELEGRAM_BOT_TOKEN |
+| `requests.exceptions.ConnectionError` | Check internet connection and API keys |
+
+---
+
 # Deployment Guide
 
 This guide provides instructions for deploying the Choy News Telegram Bot to a production environment.
