@@ -235,30 +235,58 @@ def cleanup_old_news_history(days_back=7):
 
 def get_hours_ago(published_time_str):
     """Calculate accurate hours ago from published time string."""
-    if not published_time_str:
-        return "Unknown"
+    if not published_time_str or published_time_str.strip() == "":
+        return "recent"  # Changed from "Unknown" to "recent"
     
     try:
-        # Parse various date formats
+        # Parse various date formats commonly found in RSS feeds
         if "GMT" in published_time_str or "UTC" in published_time_str:
             # Handle RFC 822 format: "Mon, 25 Nov 2024 14:30:00 GMT"
-            pub_time = datetime.strptime(published_time_str.replace("GMT", "").replace("UTC", "").strip(), "%a, %d %b %Y %H:%M:%S")
+            clean_time = published_time_str.replace("GMT", "").replace("UTC", "").strip()
+            pub_time = datetime.strptime(clean_time, "%a, %d %b %Y %H:%M:%S")
+        elif published_time_str.count(',') == 1 and any(month in published_time_str for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']):
+            # Handle RFC 822 format without timezone: "Mon, 25 Nov 2024 14:30:00"
+            pub_time = datetime.strptime(published_time_str.strip(), "%a, %d %b %Y %H:%M:%S")
         elif "T" in published_time_str:
             # Handle ISO format: "2024-11-25T14:30:00Z" or "2024-11-25T14:30:00"
             if published_time_str.endswith('Z'):
                 pub_time = datetime.strptime(published_time_str[:-1], "%Y-%m-%dT%H:%M:%S")
-            elif '+' in published_time_str:
-                # Handle timezone offset
-                pub_time = datetime.strptime(published_time_str.split('+')[0], "%Y-%m-%dT%H:%M:%S")
+            elif '+' in published_time_str or '-' in published_time_str[-6:]:
+                # Handle timezone offset like +05:30 or -0800
+                if '+' in published_time_str:
+                    pub_time = datetime.strptime(published_time_str.split('+')[0], "%Y-%m-%dT%H:%M:%S")
+                else:
+                    # Find the last dash that's part of timezone
+                    parts = published_time_str.rsplit('-', 1)
+                    if len(parts) == 2 and len(parts[1]) in [4, 5]:  # timezone like -0800 or -08:00
+                        pub_time = datetime.strptime(parts[0], "%Y-%m-%dT%H:%M:%S")
+                    else:
+                        pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%dT%H:%M:%S")
             else:
                 pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%dT%H:%M:%S")
+        elif published_time_str.count('-') == 2 and published_time_str.count(':') == 2:
+            # Handle format like "2024-11-25 14:30:00"
+            pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%d %H:%M:%S")
         else:
-            # Try other common formats
-            try:
-                pub_time = datetime.strptime(published_time_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                # If all else fails, try parsing just the first 19 characters
-                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%d %H:%M:%S")
+            # Try to parse other common formats
+            formats_to_try = [
+                "%Y-%m-%d %H:%M:%S",
+                "%d %b %Y %H:%M:%S",
+                "%d/%m/%Y %H:%M:%S",
+                "%m/%d/%Y %H:%M:%S",
+                "%Y/%m/%d %H:%M:%S"
+            ]
+            pub_time = None
+            for fmt in formats_to_try:
+                try:
+                    pub_time = datetime.strptime(published_time_str.strip()[:19], fmt)
+                    break
+                except ValueError:
+                    continue
+            
+            if pub_time is None:
+                logger.debug(f"Could not parse time format: '{published_time_str}'")
+                return "recent"  # Changed from "Unknown" to "recent"
         
         # Calculate time difference
         now = datetime.now()
@@ -267,7 +295,13 @@ def get_hours_ago(published_time_str):
         # Convert to hours
         hours_diff = time_diff.total_seconds() / 3600
         
-        if hours_diff < 1:
+        if hours_diff < -1:
+            # Future time (more than 1 hour), probably timezone issue
+            return "recent"
+        elif hours_diff < 0:
+            # Slightly future time, probably minor clock differences
+            return "now"
+        elif hours_diff < 1:
             minutes_diff = int(time_diff.total_seconds() / 60)
             if minutes_diff < 1:
                 return "now"
@@ -277,11 +311,20 @@ def get_hours_ago(published_time_str):
             return f"{int(hours_diff)}hr ago"
         else:
             days_diff = int(hours_diff / 24)
-            return f"{days_diff}d ago"
+            if days_diff > 365:
+                # Very old news (more than a year), show years
+                years_diff = int(days_diff / 365)
+                return f"{years_diff}yr ago"
+            elif days_diff > 30:
+                # Old news (more than a month), show months
+                months_diff = int(days_diff / 30)
+                return f"{months_diff}mo ago"
+            else:
+                return f"{days_diff}d ago"
             
     except Exception as e:
         logger.debug(f"Error parsing time '{published_time_str}': {e}")
-        return "Unknown"
+        return "recent"  # Changed from "Unknown" to "recent"
 
 def calculate_news_importance_score(entry, source_name, feed_position):
     """Calculate importance score for news entry based on multiple factors."""
@@ -383,10 +426,39 @@ def fetch_breaking_news_rss(sources, limit=25, category="news", target_count=5):
                     if len(title) < 5:
                         continue
                     link = entry.get('link', '')
-                    pub_time = entry.get('published', entry.get('updated', ''))
+                    
+                    # Get the published time - try parsed version first, then string
+                    pub_time = ""
+                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                        # Convert from time.struct_time to string
+                        pub_time = time.strftime("%a, %d %b %Y %H:%M:%S GMT", entry.published_parsed)
+                        logger.debug(f"Using published_parsed: {pub_time}")
+                    elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
+                        pub_time = time.strftime("%a, %d %b %Y %H:%M:%S GMT", entry.updated_parsed)
+                        logger.debug(f"Using updated_parsed: {pub_time}")
+                    elif hasattr(entry, 'published') and entry.published:
+                        pub_time = entry.published
+                        logger.debug(f"Using published string: {pub_time}")
+                    elif hasattr(entry, 'updated') and entry.updated:
+                        pub_time = entry.updated
+                        logger.debug(f"Using updated string: {pub_time}")
+                    else:
+                        pub_time = ""
+                        logger.debug(f"No time found for entry: {title}")
+                    
                     # Accept all times for debug (no time filter)
                     parsed_time = datetime.now()
                     time_ago = get_hours_ago(pub_time)
+                    
+                    # If time parsing failed and we get "Unknown", try to use a fallback
+                    if time_ago == "Unknown" and pub_time:
+                        logger.debug(f"Time parsing failed for: {pub_time}, using fallback")
+                        time_ago = "recent"
+                    elif time_ago == "Unknown":
+                        logger.debug(f"No time available for entry: {title[:30]}...")
+                        time_ago = "recent"
+                    
+                    logger.debug(f"Final time result: '{time_ago}' for '{title[:30]}...'")
                     news_hash = get_news_hash(title, source_name)
                     # Accept all duplicates for debug (no duplicate filter)
                     importance_score = calculate_news_importance_score(entry, source_name, position)
@@ -466,7 +538,7 @@ def format_news_section(section_title, entries, limit=5):
         # Escape markdown characters in title
         title_escaped = title.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
         count += 1
-        # Numbered format with clickable links
+        # Numbered format with clickable links (compact)
         if link:
             formatted += f"{count}. [{title_escaped}]({link}) - {source} ({time_ago})\n"
         else:
@@ -496,7 +568,7 @@ def get_breaking_local_news():
     
     entries = fetch_breaking_news_rss(bd_sources, limit=30, category="local", target_count=5)
     logger.info(f"Local news: fetched {len(entries)} entries")
-    return format_news_section("🇧🇩 LOCAL NEWS", entries, limit=5)
+    return format_news_section("🇧🇩 LOCAL", entries, limit=5)
 
 def get_breaking_global_news():
     """Get breaking global news from working international sources."""
@@ -517,7 +589,7 @@ def get_breaking_global_news():
     
     entries = fetch_breaking_news_rss(global_sources, limit=30, category="global", target_count=5)
     logger.info(f"Global news: fetched {len(entries)} entries")
-    return format_news_section("🌍 GLOBAL NEWS", entries, limit=5)
+    return format_news_section("🌍 GLOBAL", entries, limit=5)
 
 def get_breaking_tech_news():
     """Get breaking technology news from working tech sources."""
@@ -538,7 +610,7 @@ def get_breaking_tech_news():
     
     entries = fetch_breaking_news_rss(tech_sources, limit=25, category="tech", target_count=5)
     logger.info(f"Tech news: fetched {len(entries)} entries")
-    return format_news_section("🚀 TECH NEWS", entries, limit=5)
+    return format_news_section("🚀 TECH", entries, limit=5)
 
 def get_breaking_sports_news():
     """Get breaking sports news from working sports sources."""
@@ -559,7 +631,7 @@ def get_breaking_sports_news():
     
     entries = fetch_breaking_news_rss(sports_sources, limit=25, category="sports", target_count=5)
     logger.info(f"Sports news: fetched {len(entries)} entries")
-    return format_news_section("🏆 SPORTS NEWS", entries, limit=5)
+    return format_news_section("🏆 SPORTS", entries, limit=5)
 
 def get_breaking_crypto_news():
     """Get breaking cryptocurrency news from working crypto sources."""
@@ -579,7 +651,7 @@ def get_breaking_crypto_news():
     
     entries = fetch_breaking_news_rss(crypto_sources, limit=25, category="crypto", target_count=5)
     logger.info(f"Crypto news: fetched {len(entries)} entries")
-    return format_news_section("🪙 FINANCE & CRYPTO NEWS", entries, limit=5)
+    return format_news_section("🪙 CRYPTO", entries, limit=5)
 
 # ===================== CRYPTO DATA WITH AI =====================
 
@@ -630,10 +702,10 @@ def fetch_crypto_market_with_ai():
             fear_greed_text = f"{fear_index}/100"
         
         # Build crypto section for news digest (simpler format)
-        crypto_section = f"""💰 CRYPTO MARKET STATUS
+        crypto_section = f"""💰 CRYPTO MARKET
 Market Cap: {market_cap_str} ({market_change:+.2f}%) {market_arrow}
 Volume: {volume_str} ({volume_change:+.2f}%) {volume_arrow}
-Fear/Greed Index: {fear_greed_text}
+Fear/Greed: {fear_greed_text}
 """
         
         return crypto_section
@@ -1184,11 +1256,9 @@ def get_dhaka_weather():
         temp_min = temp_c - 2  # Approximate daily range
         temp_max = temp_c + 5
         
-        weather_section = f"""☀️ WEATHER NOW
-🌡️ Temperature: {temp_min:.1f}°C - {temp_max:.1f}°C
-{weather_emoji} Condition: {condition}
-🫧 Air Quality: {aqi_text} (AQI {aqi_value})
-🔆 UV Index: {uv_str}
+        weather_section = f"""☀️ WEATHER
+🌡️ {temp_min:.1f}°C - {temp_max:.1f}°C | {weather_emoji} {condition}
+🫧 Air: {aqi_text} (AQI {aqi_value}) | 🔆 UV: {uv_str}
 """
         
         return weather_section
@@ -1385,14 +1455,25 @@ def get_full_news_digest():
     sports = get_breaking_sports_news().strip()
     crypto = get_breaking_crypto_news().strip()
 
-    # 5. Crypto Market Status
+    # 5. Crypto Market Status (compact version)
     crypto_market = fetch_crypto_market_with_ai().strip()
 
-    # 6. Footer
-    footer = "Type /help for more detailed information.\n━━━━━━━━━━━━━━\n🤖 Developed by Shanchoy Noor"
+    # 6. Footer (shortened)
+    footer = "Type /help for more info.\n━━━━━━━━━━━━━━\n🤖 By Shanchoy Noor"
 
-    # Assemble all
+    # Assemble all with proper spacing
     digest = f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{sports}\n\n{crypto}\n\n{crypto_market}\n\n{footer}"
+    
+    # Check length and truncate if needed
+    if len(digest) > 4090:  # Leave some buffer
+        logger.warning(f"News digest too long ({len(digest)} chars), truncating...")
+        # Try to fit within limit by removing some crypto news if needed
+        if len(f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{sports}\n\n{crypto_market}\n\n{footer}") <= 4090:
+            digest = f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{sports}\n\n{crypto_market}\n\n{footer}"
+        else:
+            # Further truncation if still too long
+            digest = f"{header}\n\n{local}\n\n{globaln}\n\n{tech}\n\n{crypto_market}\n\n{footer}"
+    
     return digest
 
 # ===================== CRYPTOSTATS ONLY =====================
