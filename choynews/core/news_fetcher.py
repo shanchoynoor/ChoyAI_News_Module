@@ -937,14 +937,15 @@ def get_compact_crypto_market():
         logger.error(f"Error creating compact crypto market: {e}")
         return "💰 CRYPTO MARKET: [SEE MORE]\nData temporarily unavailable"
 
-def get_compact_news_section(section_title, entries, limit=4):
+def get_compact_news_section(section_title, entries, limit=4, category_command=""):
     """
-    Format news entries into compact format with SEE MORE button.
+    Format news entries into compact format with [SEE MORE] text.
     
     Args:
         section_title (str): Title of the section
         entries (list): List of news entries
         limit (int): Maximum number of entries to include
+        category_command (str): The command for the SEE MORE functionality (not used in text format)
         
     Returns:
         str: Formatted compact section
@@ -958,13 +959,17 @@ def get_compact_news_section(section_title, entries, limit=4):
         title = entry.get('title', 'No title')
         source = entry.get('source', 'Unknown')
         time_ago = entry.get('time_ago', 'Unknown')
+        link = entry.get('link', '')
         
         # Truncate title if too long
         if len(title) > 80:
             title = title[:77] + "..."
         
-        # No markdown formatting for compact version
-        formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
+        # Make title clickable if link exists
+        if link:
+            formatted += f"{i}. [{title}]({link}) - {source} ({time_ago})\n"
+        else:
+            formatted += f"{i}. {title} - {source} ({time_ago})\n"
     
     return formatted
 
@@ -990,14 +995,19 @@ def get_compact_news_digest():
         # Compact weather
         digest += get_compact_weather() + "\n\n"
         
-        # News sections with limited items
-        local_entries = fetch_rss_entries({
-            "Prothom Alo": "https://www.prothomalo.com/feed",
-            "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
-            "BDNews24": "https://bdnews24.com/feed",
-            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss"
-        }, limit=6)
+        # News sections with limited items - ONLY BANGLA SOURCES FOR LOCAL
+        bangla_local_sources = {
+            "প্রথম আলো": "https://www.prothomalo.com/feed",
+            "কালের কণ্ঠ": "https://www.kalerkantho.com/rss.xml",
+            "জাগো নিউজ": "https://www.jagonews24.com/rss.xml",
+            "সমকাল": "https://samakal.com/rss.xml",
+            "যুগান্তর": "https://www.jugantor.com/rss.xml",
+            "ইত্তেফাক": "https://www.ittefaq.com.bd/rss.xml"
+        }
         
+        local_entries = fetch_rss_entries(bangla_local_sources, limit=6)
+        
+        # Global news from international sources
         global_entries = fetch_rss_entries({
             "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
             "CNN": "http://rss.cnn.com/rss/edition.rss",
@@ -1005,6 +1015,7 @@ def get_compact_news_digest():
             "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml"
         }, limit=6)
         
+        # Tech news from tech sources
         tech_entries = fetch_rss_entries({
             "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
             "The Verge": "https://www.theverge.com/rss/index.xml",
@@ -1012,12 +1023,26 @@ def get_compact_news_digest():
             "CNET": "https://www.cnet.com/rss/news/"
         }, limit=6)
         
-        sports_entries = fetch_rss_entries({
-            "ESPN": "https://www.espn.com/espn/rss/news",
-            "Sky Sports": "https://www.skysports.com/rss/12040",
-            "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk"
-        }, limit=6)
+        # Sports - Try Bangla sources first, then international
+        bangla_sports_sources = {
+            "সমকাল স্পোর্টস": "https://samakal.com/sports/rss.xml",
+            "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed",
+            "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml"
+        }
         
+        # Try Bangla sports first
+        sports_entries = fetch_rss_entries(bangla_sports_sources, limit=4)
+        
+        # If not enough Bangla sports news, add international
+        if len(sports_entries) < 4:
+            international_sports = fetch_rss_entries({
+                "ESPN": "https://www.espn.com/espn/rss/news",
+                "Sky Sports": "https://www.skysports.com/rss/12040",
+                "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk"
+            }, limit=6)
+            sports_entries.extend(international_sports)
+        
+        # Finance news
         finance_entries = fetch_rss_entries({
             "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
             "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
@@ -1025,18 +1050,23 @@ def get_compact_news_digest():
             "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/"
         }, limit=6)
         
-        # Add sections
-        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries) + "\n\n"
-        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries) + "\n\n"
-        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries) + "\n\n"
-        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries) + "\n\n"
-        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries) + "\n\n"
+        # Add sections with clickable [SEE MORE] buttons
+        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, category_command="local") + "\n\n"
+        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, category_command="global") + "\n\n"
+        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, category_command="tech") + "\n\n"
+        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, category_command="sports") + "\n\n"
+        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, category_command="finance") + "\n\n"
         
-        # Compact crypto market
-        digest += get_compact_crypto_market() + "\n\n"
+        # Compact crypto market with [SEE MORE] for /cryptostats
+        crypto_market = get_compact_crypto_market()
+        # Replace the [SEE MORE] text to indicate it opens /cryptostats
+        crypto_market_with_note = crypto_market.replace("[SEE MORE]", "[SEE MORE] → /cryptostats")
+        digest += crypto_market_with_note + "\n\n"
         
         # Footer
-        digest += "Type /help for more info.\n"
+        digest += "📌 *Quick Navigation:*\n"
+        digest += "• [SEE MORE] buttons: Type the command shown (e.g., /local, /global, /cryptostats)\n"
+        digest += "• Type /help for complete command list\n\n"
         digest += "━━━━━━━━━━━━━━\n"
         digest += "🤖 By Shanchoy Noor"
         
