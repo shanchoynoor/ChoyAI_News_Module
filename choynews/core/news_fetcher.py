@@ -827,4 +827,432 @@ Bot Signal (Next 24h): {signal} → {signal_reason}"""
         logger.error(f"Unexpected error in detailed stats for {coin_symbol}: {e}")
         return f"❌ Error analyzing {coin_symbol.upper()}. Please check the symbol and try again."
 
+# ===================== COMPACT NEWS FORMAT =====================
+
+def get_compact_weather():
+    """Get compact weather format for news digest."""
+    try:
+        weather_data = get_weather_data("Dhaka")
+        
+        # Extract key data from weather response
+        if "☀️ WEATHER" not in weather_data:
+            return "☀️ WEATHER\n🌡️ Data unavailable"
+        
+        lines = weather_data.split('\n')
+        temp_line = ""
+        condition_line = ""
+        aqi_line = ""
+        uv_line = ""
+        
+        for line in lines:
+            if line.startswith('🌡️ Temperature:'):
+                # Extract temperature: "25.1°C - 30.1°C" -> "24.8°C"
+                temp_part = line.split(': ')[1].split(' - ')[0] if ': ' in line else "N/A"
+                temp_line = temp_part
+            elif line.startswith('☁️ Condition:'):
+                condition_line = line.split(': ')[1] if ': ' in line else "N/A"
+            elif line.startswith('🌬️ Air Quality:'):
+                # Extract AQI: "Moderate (2)" -> "(98)"
+                aqi_part = line.split(': ')[1] if ': ' in line else "N/A"
+                aqi_line = aqi_part
+            elif line.startswith('☀️ UV Index:'):
+                # Extract UV: "Low (1.2)" -> "Low (0.0/11)"
+                uv_part = line.split(': ')[1] if ': ' in line else "N/A"
+                if uv_part != "N/A" and "(" in uv_part:
+                    uv_value = uv_part.split('(')[1].split(')')[0]
+                    uv_level = uv_part.split('(')[0].strip()
+                    uv_line = f"{uv_level} ({uv_value}/11)"
+                else:
+                    uv_line = uv_part
+        
+        compact_weather = (
+            f"☀️ WEATHER\n"
+            f"🌡️ {temp_line} | ☁️ {condition_line}\n"
+            f"🫧 Air: {aqi_line}\n"
+            f"🔆 UV: {uv_line}"
+        )
+        
+        return compact_weather
+        
+    except Exception as e:
+        logger.error(f"Error creating compact weather: {e}")
+        return "☀️ WEATHER\n🌡️ Data unavailable"
+
+def get_compact_crypto_market():
+    """Get compact crypto market format for news digest."""
+    try:
+        crypto_data = fetch_crypto_market()
+        
+        # Parse the crypto data to extract key values
+        lines = crypto_data.split('\n')
+        market_cap = "N/A"
+        volume = "N/A"
+        fear_greed = "N/A"
+        
+        for line in lines:
+            if "Market Cap" in line and "24h" in line:
+                # Extract: "Market Cap (24h): $3.75T (+0.35%)" -> "$3.75T (+0.35%)"
+                parts = line.split(': ')
+                if len(parts) > 1:
+                    market_cap = parts[1]
+            elif "Volume" in line and "24h" in line:
+                # Extract: "Volume (24h): $275.19B (+0.35%)" -> "$275.19B (+0.35%)"
+                parts = line.split(': ')
+                if len(parts) > 1:
+                    volume = parts[1]
+            elif "Fear/Greed Index" in line:
+                # Extract: "Fear/Greed Index: 71/100" -> "71/100"
+                parts = line.split(': ')
+                if len(parts) > 1:
+                    fear_greed = parts[1]
+        
+        # Determine trend symbol and sentiment
+        market_symbol = "▲" if "(+" in market_cap else "▼" if "(-" in market_cap else "→"
+        volume_symbol = "▲" if "(+" in volume else "▼" if "(-" in volume else "→"
+        
+        # Determine sentiment from Fear/Greed index
+        try:
+            fg_value = int(fear_greed.split('/')[0]) if '/' in fear_greed else 50
+            if fg_value >= 75:
+                sentiment = "🟢 BUY"
+            elif fg_value >= 55:
+                sentiment = "🟠 HOLD"
+            elif fg_value >= 25:
+                sentiment = "🟡 WATCH"
+            else:
+                sentiment = "🔴 SELL"
+        except:
+            sentiment = "🟡 WATCH"
+        
+        compact_crypto = (
+            f"💰 CRYPTO MARKET: [SEE MORE]\n"
+            f"Market Cap: {market_cap} {market_symbol}\n"
+            f"Volume: {volume} {volume_symbol}\n"
+            f"Fear/Greed: {fear_greed} = {sentiment}"
+        )
+        
+        return compact_crypto
+        
+    except Exception as e:
+        logger.error(f"Error creating compact crypto market: {e}")
+        return "💰 CRYPTO MARKET: [SEE MORE]\nData temporarily unavailable"
+
+def get_compact_news_section(section_title, entries, limit=4):
+    """
+    Format news entries into compact format with SEE MORE button.
+    
+    Args:
+        section_title (str): Title of the section
+        entries (list): List of news entries
+        limit (int): Maximum number of entries to include
+        
+    Returns:
+        str: Formatted compact section
+    """
+    if not entries:
+        return f"{section_title}: [SEE MORE]\nNo news available at the moment."
+    
+    formatted = f"{section_title}: [SEE MORE]\n"
+    
+    for i, entry in enumerate(entries[:limit], 1):
+        title = entry.get('title', 'No title')
+        source = entry.get('source', 'Unknown')
+        time_ago = entry.get('time_ago', 'Unknown')
+        
+        # Truncate title if too long
+        if len(title) > 80:
+            title = title[:77] + "..."
+        
+        # No markdown formatting for compact version
+        formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
+    
+    return formatted
+
+def get_compact_news_digest():
+    """
+    Generate a compact news digest for the /news command.
+    
+    Returns:
+        str: Compact formatted news digest
+    """
+    try:
+        from datetime import datetime
+        
+        # Get current time in Bangladesh timezone (UTC+6)
+        now = datetime.now()
+        # Add 6 hours to get Bangladesh time
+        bd_time = now.replace(hour=(now.hour + 6) % 24)
+        timestamp = bd_time.strftime("%b %d, %Y %I:%M%p BDT (UTC +6)")
+        
+        # Header
+        digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n\n"
+        
+        # Compact weather
+        digest += get_compact_weather() + "\n\n"
+        
+        # News sections with limited items
+        local_entries = fetch_rss_entries({
+            "Prothom Alo": "https://www.prothomalo.com/feed",
+            "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
+            "BDNews24": "https://bdnews24.com/feed",
+            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss"
+        }, limit=6)
+        
+        global_entries = fetch_rss_entries({
+            "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
+            "CNN": "http://rss.cnn.com/rss/edition.rss",
+            "Reuters": "http://feeds.reuters.com/reuters/topNews",
+            "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml"
+        }, limit=6)
+        
+        tech_entries = fetch_rss_entries({
+            "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
+            "The Verge": "https://www.theverge.com/rss/index.xml",
+            "Wired": "https://www.wired.com/feed/rss",
+            "CNET": "https://www.cnet.com/rss/news/"
+        }, limit=6)
+        
+        sports_entries = fetch_rss_entries({
+            "ESPN": "https://www.espn.com/espn/rss/news",
+            "Sky Sports": "https://www.skysports.com/rss/12040",
+            "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk"
+        }, limit=6)
+        
+        finance_entries = fetch_rss_entries({
+            "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
+            "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
+            "Financial Times": "https://www.ft.com/rss/home",
+            "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/"
+        }, limit=6)
+        
+        # Add sections
+        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries) + "\n\n"
+        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries) + "\n\n"
+        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries) + "\n\n"
+        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries) + "\n\n"
+        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries) + "\n\n"
+        
+        # Compact crypto market
+        digest += get_compact_crypto_market() + "\n\n"
+        
+        # Footer
+        digest += "Type /help for more info.\n"
+        digest += "━━━━━━━━━━━━━━\n"
+        digest += "🤖 By Shanchoy Noor"
+        
+        return digest
+        
+    except Exception as e:
+        logger.error(f"Error generating compact news digest: {e}")
+        return "📢 NEWS DIGEST\nTemporarily unavailable. Please try again later."
+
+# ===================== EXISTING CRYPTO DATA =====================
+
+def get_category_news(category, limit=10):
+    """
+    Get detailed news for a specific category.
+    
+    Args:
+        category (str): Category type ('local', 'global', 'tech', 'sports', 'finance')
+        limit (int): Number of news items to return
+        
+    Returns:
+        str: Formatted news list for the category
+    """
+    try:
+        if category == 'local':
+            sources = {
+                "Prothom Alo": "https://www.prothomalo.com/feed",
+                "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
+                "BDNews24": "https://bdnews24.com/feed",
+                "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
+                "Jugantor": "https://www.jugantor.com/rss.xml",
+                "Samakal": "https://samakal.com/rss.xml"
+            }
+            title = "🇧🇩 LOCAL NEWS"
+            
+        elif category == 'global':
+            sources = {
+                "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
+                "CNN": "http://rss.cnn.com/rss/edition.rss",
+                "Reuters": "http://feeds.reuters.com/reuters/topNews",
+                "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+                "The Guardian": "https://www.theguardian.com/world/rss",
+                "New York Post": "https://nypost.com/feed/"
+            }
+            title = "🌍 GLOBAL NEWS"
+            
+        elif category == 'tech':
+            sources = {
+                "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
+                "The Verge": "https://www.theverge.com/rss/index.xml",
+                "Wired": "https://www.wired.com/feed/rss",
+                "CNET": "https://www.cnet.com/rss/news/",
+                "Ars Technica": "http://feeds.arstechnica.com/arstechnica/index/",
+                "Engadget": "https://www.engadget.com/rss.xml"
+            }
+            title = "🚀 TECH NEWS"
+            
+        elif category == 'sports':
+            sources = {
+                "ESPN": "https://www.espn.com/espn/rss/news",
+                "Sky Sports": "https://www.skysports.com/rss/12040",
+                "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
+                "NBC Sports": "https://scores.nbcsports.com/rss/headlines.asp",
+                "Yahoo Sports": "https://sports.yahoo.com/rss/",
+                "The Guardian Sport": "https://www.theguardian.com/sport/rss"
+            }
+            title = "🏆 SPORTS NEWS"
+            
+        elif category == 'finance':
+            sources = {
+                "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
+                "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
+                "Financial Times": "https://www.ft.com/rss/home",
+                "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/",
+                "Yahoo Finance": "https://feeds.finance.yahoo.com/rss/2.0/headline",
+                "CNBC": "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+            }
+            title = "💼 FINANCE NEWS"
+            
+        else:
+            return f"❌ Unknown category: {category}"
+        
+        # Fetch entries
+        entries = fetch_rss_entries(sources, limit=15)  # Get more to ensure we have enough
+        
+        if not entries:
+            return f"{title}\nNo news available at the moment."
+        
+        # Format the response
+        response = f"{title}\n"
+        response += "━━━━━━━━━━━━━━\n"
+        
+        for i, entry in enumerate(entries[:limit], 1):
+            title_text = entry.get('title', 'No title')
+            source = entry.get('source', 'Unknown')
+            time_ago = entry.get('time_ago', 'Unknown')
+            
+            # Truncate title if too long
+            if len(title_text) > 100:
+                title_text = title_text[:97] + "..."
+            
+            response += f"{i}. {title_text} - {source} ({time_ago})\n"
+        
+        response += "\nType /news to go back to main digest."
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error fetching {category} news: {e}")
+        return f"❌ Error fetching {category} news. Please try again later."
+
+def analyze_news_item(title, summary="", source=""):
+    """
+    Generate AI analysis for a specific news item.
+    
+    Args:
+        title (str): News headline
+        summary (str): News summary/content
+        source (str): News source
+        
+    Returns:
+        str: AI analysis of the news item
+    """
+    try:
+        # Simple AI analysis based on keywords and content
+        analysis = f"📰 NEWS ANALYSIS\n"
+        analysis += f"━━━━━━━━━━━━━━\n"
+        analysis += f"Headline: {title[:150]}{'...' if len(title) > 150 else ''}\n\n"
+        
+        # Determine category and impact
+        title_lower = title.lower()
+        summary_lower = summary.lower()
+        combined_text = f"{title_lower} {summary_lower}"
+        
+        # Category detection
+        if any(word in combined_text for word in ['crypto', 'bitcoin', 'ethereum', 'blockchain', 'defi']):
+            category = "💰 Cryptocurrency/Finance"
+            impact = "Could affect crypto markets and digital asset prices"
+        elif any(word in combined_text for word in ['war', 'conflict', 'military', 'attack', 'bomb']):
+            category = "⚔️ Conflict/Security"
+            impact = "May have geopolitical implications and market volatility"
+        elif any(word in combined_text for word in ['economy', 'inflation', 'gdp', 'market', 'stock']):
+            category = "📈 Economic"
+            impact = "Likely to influence financial markets and economic indicators"
+        elif any(word in combined_text for word in ['tech', 'ai', 'artificial intelligence', 'technology', 'startup']):
+            category = "🚀 Technology"
+            impact = "Could impact tech sector and innovation trends"
+        elif any(word in combined_text for word in ['health', 'medical', 'vaccine', 'disease', 'hospital']):
+            category = "🏥 Healthcare"
+            impact = "May affect public health policies and medical sector"
+        elif any(word in combined_text for word in ['election', 'political', 'government', 'policy', 'minister']):
+            category = "🏛️ Political"
+            impact = "Could influence political landscape and policy decisions"
+        elif any(word in combined_text for word in ['sports', 'football', 'cricket', 'olympic', 'championship']):
+            category = "🏆 Sports"
+            impact = "Relevant for sports enthusiasts and related industries"
+        else:
+            category = "📰 General News"
+            impact = "General interest with potential local/regional impact"
+        
+        # Sentiment analysis (basic)
+        positive_words = ['success', 'win', 'growth', 'improve', 'positive', 'gain', 'boost', 'rise']
+        negative_words = ['fail', 'loss', 'decline', 'crash', 'fall', 'crisis', 'problem', 'concern']
+        
+        pos_count = sum(1 for word in positive_words if word in combined_text)
+        neg_count = sum(1 for word in negative_words if word in combined_text)
+        
+        if pos_count > neg_count:
+            sentiment = "🟢 Positive"
+        elif neg_count > pos_count:
+            sentiment = "🔴 Negative"
+        else:
+            sentiment = "🟡 Neutral"
+        
+        # Urgency level
+        urgent_words = ['breaking', 'urgent', 'emergency', 'crisis', 'immediate', 'alert']
+        if any(word in combined_text for word in urgent_words):
+            urgency = "🚨 High - Breaking news requiring immediate attention"
+        elif any(word in combined_text for word in ['today', 'now', 'just', 'latest']):
+            urgency = "⚡ Medium - Recent development worth monitoring"
+        else:
+            urgency = "📅 Normal - Regular news update"
+        
+        # Build analysis
+        analysis += f"Category: {category}\n"
+        analysis += f"Sentiment: {sentiment}\n"
+        analysis += f"Urgency: {urgency}\n\n"
+        analysis += f"📊 IMPACT ASSESSMENT:\n{impact}\n\n"
+        
+        # Key insights
+        analysis += f"🔍 KEY INSIGHTS:\n"
+        if len(summary) > 50:
+            analysis += f"• This story appears to be developing with multiple angles\n"
+        if source in ['BBC', 'CNN', 'Reuters', 'Al Jazeera']:
+            analysis += f"• Reported by major international outlet ({source})\n"
+        elif source in ['Prothom Alo', 'The Daily Star', 'BDNews24']:
+            analysis += f"• Local Bangladesh coverage from {source}\n"
+        
+        if 'government' in combined_text or 'minister' in combined_text:
+            analysis += f"• Involves government/official entities\n"
+        if any(word in combined_text for word in ['billion', 'million', 'trillion']):
+            analysis += f"• Significant financial figures mentioned\n"
+        
+        analysis += f"\n💡 RECOMMENDATION:\n"
+        if sentiment == "🔴 Negative":
+            analysis += f"Monitor for potential impacts and follow-up developments"
+        elif sentiment == "🟢 Positive":
+            analysis += f"Positive development worth sharing and celebrating"
+        else:
+            analysis += f"Stay informed as story develops - neutral impact expected"
+        
+        analysis += f"\n\nSource: {source}\nGenerated: {datetime.now().strftime('%H:%M %Z')}"
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Error analyzing news item: {e}")
+        return f"📰 NEWS ANALYSIS\n━━━━━━━━━━━━━━\nSorry, unable to analyze this news item at the moment."
+
 # ===================== EXISTING CRYPTO DATA =====================

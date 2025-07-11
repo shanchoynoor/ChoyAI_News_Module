@@ -138,6 +138,16 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
         handle_weather_command(chat_id, user_id)
     elif command == '/cryptostats':
         handle_cryptostats_command(chat_id, user_id)
+    elif command == '/local':
+        handle_category_news_command(chat_id, user_id, 'local')
+    elif command == '/global':
+        handle_category_news_command(chat_id, user_id, 'global')
+    elif command == '/tech':
+        handle_category_news_command(chat_id, user_id, 'tech')
+    elif command == '/sports':
+        handle_category_news_command(chat_id, user_id, 'sports')
+    elif command == '/finance':
+        handle_category_news_command(chat_id, user_id, 'finance')
     elif command == '/subscribe':
         handle_subscribe_command(chat_id, user_id, username, first_name, last_name)
     elif command == '/unsubscribe':
@@ -217,10 +227,17 @@ def handle_help_command(chat_id):
 
 *📰 News & Information:*
 🚀 /start - Initialize the bot and get a welcome message
-📰 /news - Get the full daily news digest
+📰 /news - Get the compact daily news digest
 🌤️ /weather - Get Dhaka weather information
 👤 /status - Check your subscription status and timezone
 🤖 /server - Check bot server status and uptime
+
+*📰 Category News (10 items each):*
+🇧🇩 /local - Bangladesh local news
+🌍 /global - International global news
+🚀 /tech - Technology and innovation news
+🏆 /sports - Sports news and updates
+💼 /finance - Financial markets and business news
 
 *💰 Cryptocurrency:*
 📊 /cryptostats - Get AI summary of crypto market
@@ -316,52 +333,24 @@ All systems operational! 🚀
         send_telegram("Sorry, there was an error retrieving server status. Please try again later.", chat_id)
 
 def handle_news_command(chat_id, user_id, args):
-    """Handle the /news command."""
+    """Handle the /news command with compact format."""
     from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_full_news_digest
+    from choynews.core.news_fetcher import get_compact_news_digest
     
     try:
-        # Send loading message like in the example
+        # Send loading message
         send_telegram("📰 Loading latest news...", chat_id)
         
-        # Build and send news digest using the full digest function
-        digest = get_full_news_digest()
+        # Build and send compact news digest
+        digest = get_compact_news_digest()
         
-        # Double-check for any extra content after footer (plain text, not markdown)
-        footer_marker = "🤖 Developed by Shanchoy Noor"
-        if footer_marker in digest:
-            footer_index = digest.find(footer_marker)
-            # If there is any content after the footer, trim it (footer should be last)
-            digest = digest[:footer_index + len(footer_marker)]
+        # Send the compact digest
+        send_telegram(digest, chat_id)
         
-        # Split the message at crypto market section for better readability
-        crypto_market_marker = "💰 CRYPTO MARKET STATUS"
-        if crypto_market_marker in digest:
-            split_index = digest.find(crypto_market_marker)
-            
-            # First part: News sections
-            first_part = digest[:split_index].rstrip()
-            
-            # Second part: Crypto market + footer
-            second_part = digest[split_index:]
-            
-            # Send first part (news)
-            send_telegram(first_part, chat_id)
-            
-            # Add proper spacing to second part
-            if not second_part.startswith('\n'):
-                second_part = '\n' + second_part
-            
-            # Send second part (crypto market)
-            send_telegram(second_part, chat_id)
-        else:
-            # Fallback: send as one message if no crypto section found
-            send_telegram(digest, chat_id)
-        
-        logger.info(f"Sent news digest to user {user_id}")
+        logger.info(f"Sent compact news digest to user {user_id}")
         
     except Exception as e:
-        logger.error(f"Error generating news digest for user {user_id}: {e}")
+        logger.error(f"Error generating compact news digest for user {user_id}: {e}")
         send_telegram(
             "Sorry, I encountered an error while generating your news digest. Please try again later.",
             chat_id
@@ -691,3 +680,33 @@ Type /help to explore all my features!
 *Contact:* @shanchoynoor
         """
         send_telegram(fallback_message, chat_id)
+
+def handle_category_news_command(chat_id, user_id, category):
+    """Handle category-specific news commands (/local, /global, /tech, /sports, /finance)."""
+    from choynews.api.telegram import send_telegram
+    from choynews.core.news_fetcher import get_category_news
+    
+    try:
+        # Send loading message
+        category_names = {
+            'local': 'local Bangladesh',
+            'global': 'global',
+            'tech': 'technology',
+            'sports': 'sports',
+            'finance': 'finance'
+        }
+        category_name = category_names.get(category, category)
+        send_telegram(f"📰 Loading {category_name} news...", chat_id)
+        
+        # Get category news
+        news_message = get_category_news(category, limit=10)
+        send_telegram(news_message, chat_id)
+        
+        logger.info(f"Sent {category} news to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error getting {category} news for user {user_id}: {e}")
+        send_telegram(
+            f"Sorry, I encountered an error while fetching {category} news. Please try again later.",
+            chat_id
+        )
