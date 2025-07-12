@@ -665,7 +665,7 @@ def get_weather_data(city="Dhaka"):
         aqi = current.get('air_quality', {})
         us_epa_index = aqi.get('us-epa-index', 'N/A')
         
-        aqi_levels = {1: "Good", 2: "Moderate", 3: "Unhealthy for Sensitive", 4: "Unhealthy", 5: "Very Unhealthy", 6: "Hazardous"}
+        aqi_levels = {1: "Good", 2: "Moderate", 3: "Unhealthy", 4: "Unhealthy", 5: "Very Unhealthy", 6: "Hazardous"}
         aqi_text = aqi_levels.get(us_epa_index, "N/A")
         if us_epa_index != 'N/A':
             aqi_display = f"{aqi_text} ({us_epa_index})"
@@ -1149,13 +1149,17 @@ def get_compact_news_section(section_title, entries, limit=4):
         title = entry.get('title', 'No title')
         source = entry.get('source', 'Unknown')
         time_ago = entry.get('time_ago', 'Unknown')
+        link = entry.get('link', '')
         
         # Truncate title if too long
         if len(title) > 80:
             title = title[:77] + "..."
         
-        # No markdown formatting for compact version
-        formatted += f"{i}. {title} - {source} ({time_ago})\n"
+        # Make title clickable if link available and add [Details]
+        if link:
+            formatted += f"{i}. [{title}]({link}) - {source} ({time_ago}) [Details]\n"
+        else:
+            formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
     
     return formatted
 
@@ -1176,7 +1180,14 @@ def get_compact_news_digest():
         timestamp = bd_time.strftime("%b %d, %Y %I:%M%p BDT (UTC +6)")
         
         # Header
-        digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n\n"
+        digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n"
+        
+        # Add holiday information if available
+        holiday_info = get_bd_holidays().strip()
+        if holiday_info:
+            digest += holiday_info + "\n"
+        
+        digest += "\n"
         
         # Fetch news entries first
         local_entries = fetch_rss_entries({
@@ -1239,13 +1250,13 @@ def get_compact_news_digest():
                 except:
                     pass
         
-        # Add breaking news alert
-        if breaking_count > 0:
-            digest += f"🚨 BREAKING: {breaking_count} stories within 20 minutes\n"
-        if recent_count > 0:
-            digest += f"⚡ RECENT: {recent_count} stories within 1 hour\n"
-        if breaking_count > 0 or recent_count > 0:
-            digest += "\n"
+        # Add breaking news alert - REMOVED per user request
+        # if breaking_count > 0:
+        #     digest += f"🚨 BREAKING: {breaking_count} stories within 20 minutes\n"
+        # if recent_count > 0:
+        #     digest += f"⚡ RECENT: {recent_count} stories within 1 hour\n"
+        # if breaking_count > 0 or recent_count > 0:
+        #     digest += "\n"
         
         # Compact weather
         digest += get_compact_weather() + "\n\n"
@@ -1262,7 +1273,7 @@ def get_compact_news_digest():
         digest += crypto_market + "\n"
         
         # Footer with proper spacing
-        digest += "📌 Quick Navigation:\n"
+        digest += "\n📌 Quick Navigation:\n"
         digest += "Type /help for complete command list or the commands (e.g., /local, /global, /tech, /sports, /finance, /weather, /cryptostats, /btc, btcstats etc.)\n\n"
         digest += "━━━━━━━━━━━━━━\n"
         digest += "🤖 By Shanchoy Noor"
