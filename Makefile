@@ -1,7 +1,7 @@
 # ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
 # =============================================================
 
-.PHONY: help install install-dev test lint format run clean docker-build logs status config-check docker-update docker-clean clear-cache quick-deploy server-status server-logs docker-restart docker-rebuild
+.PHONY: help install install-dev test lint format run clean docker-build logs status config-check docker-update docker-clean clear-cache quick-deploy server-status server-logs docker-restart docker-rebuild docker-clean-minimal docker-fix-nginx docker-update-minimal quick-deploy-safe
 .DEFAULT_GOAL := help
 
 help: ## Show this help message
@@ -195,20 +195,46 @@ docker-update: ## Pull latest code and restart containers with cache clear
 	@echo "🔄 Updating from Git and restarting containers..."
 	git pull origin main
 	@$(MAKE) clear-cache
-	docker-compose down
+	@$(MAKE) docker-fix-nginx
+	docker-compose down || true
 	docker-compose build --no-cache choynews-bot
 	docker-compose up -d
 	@echo "✅ Update complete!"
 
+docker-update-minimal: ## Quick update with only essential services
+	@echo "⚡ Quick update (essential services only)..."
+	git pull origin main
+	@$(MAKE) clear-cache
+	docker-compose down || true
+	docker-compose build --no-cache choynews-bot
+	docker-compose up -d choynews-bot redis postgres
+	@echo "✅ Minimal update complete!"
+
 docker-clean: ## Clean Docker system and restart fresh
 	@echo "🧹 Cleaning Docker system..."
-	docker-compose down
-	docker container prune -f
-	docker image prune -f
-	docker volume prune -f
+	docker-compose down || true
+	docker container prune -f || true
+	docker image prune -f || true
+	docker volume prune -f || true
 	docker rmi $$(docker images -q --filter "reference=*choynews*") 2>/dev/null || true
 	docker-compose build --no-cache
 	docker-compose up -d
+
+docker-clean-minimal: ## Clean and restart only essential services (no nginx/monitoring)
+	@echo "🧹 Cleaning Docker system (minimal services)..."
+	docker-compose down || true
+	docker container prune -f || true
+	docker image prune -f || true
+	docker rmi $$(docker images -q --filter "reference=*choynews*") 2>/dev/null || true
+	docker-compose build --no-cache choynews-bot
+	docker-compose up -d choynews-bot redis postgres
+
+docker-fix-nginx: ## Fix nginx configuration issues
+	@echo "🔧 Fixing nginx configuration..."
+	@mkdir -p data/ssl config/grafana/datasources
+	@touch data/ssl/.gitkeep
+	@if [ ! -f config/nginx.conf ]; then echo "Creating nginx.conf..."; touch config/nginx.conf; fi
+	@if [ ! -f config/prometheus.yml ]; then echo "Creating prometheus.yml..."; touch config/prometheus.yml; fi
 
 clear-cache: ## Clear all application caches
 	@echo "🗑️  Clearing application caches..."
@@ -220,8 +246,19 @@ quick-deploy: ## Quick git pull + Docker restart with cache clear
 	@echo "⚡ Quick deployment with cache clear..."
 	git pull origin main
 	@$(MAKE) clear-cache
-	docker-compose restart choynews-bot
+	docker-compose restart choynews-bot || docker-compose up -d choynews-bot
 	@echo "✅ Quick deploy complete!"
+
+quick-deploy-safe: ## Quick deploy with fallback to minimal services
+	@echo "⚡ Safe quick deployment..."
+	git pull origin main
+	@$(MAKE) clear-cache
+	@if docker-compose restart choynews-bot; then \
+		echo "✅ Quick restart successful!"; \
+	else \
+		echo "🔄 Fallback to minimal startup..."; \
+		docker-compose up -d choynews-bot redis postgres; \
+	fi
 
 server-status: ## Check server status (Docker version)
 	@echo "📊 Checking server status..."
