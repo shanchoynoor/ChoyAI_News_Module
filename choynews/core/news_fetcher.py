@@ -1023,50 +1023,43 @@ def get_compact_news_digest():
             "CNET": "https://www.cnet.com/rss/news/"
         }, limit=6)
         
-        # Sports - Try Bangla sources first, then international
+        # Sports - Only Bangla sources for authentic local sports news
         bangla_sports_sources = {
-            "সমকাল স্পোর্টস": "https://samakal.com/sports/rss.xml",
+            "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml",
             "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed",
-            "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml"
+            "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
+            "যুগান্তর খেলা": "https://www.jugantor.com/sports/rss.xml"
         }
         
-        # Try Bangla sports first
-        sports_entries = fetch_rss_entries(bangla_sports_sources, limit=4)
+        # Get only Bangla sports news for authentic local content
+        sports_entries = fetch_rss_entries(bangla_sports_sources, limit=6)
         
-        # If not enough Bangla sports news, add international
-        if len(sports_entries) < 4:
-            international_sports = fetch_rss_entries({
-                "ESPN": "https://www.espn.com/espn/rss/news",
-                "Sky Sports": "https://www.skysports.com/rss/12040",
-                "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk"
-            }, limit=6)
-            sports_entries.extend(international_sports)
+        # Finance news - Only Bangla sources for authentic local finance news
+        bangla_finance_sources = {
+            "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
+            "কালের কণ্ঠ অর্থনীতি": "https://www.kalerkantho.com/economics/rss.xml",
+            "বণিক বার্তা": "https://www.bonikbarta.net/feed",
+            "ফিন্যান্সিয়াল এক্সপ্রেস": "https://thefinancialexpress.com.bd/feed"
+        }
         
-        # Finance news
-        finance_entries = fetch_rss_entries({
-            "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
-            "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
-            "Financial Times": "https://www.ft.com/rss/home",
-            "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/"
-        }, limit=6)
+        # Get only Bangla finance news for authentic local content
+        finance_entries = fetch_rss_entries(bangla_finance_sources, limit=6)
         
         # Add sections with clickable [SEE MORE] buttons
-        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, category_command="local") + "\n\n"
-        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, category_command="global") + "\n\n"
-        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, category_command="tech") + "\n\n"
-        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, category_command="sports") + "\n\n"
-        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, category_command="finance") + "\n\n"
+        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, category_command="local") + "\n"
+        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, category_command="global") + "\n"
+        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, category_command="tech") + "\n"
+        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, category_command="sports") + "\n"
+        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, category_command="finance") + "\n"
         
         # Compact crypto market with [SEE MORE] for /cryptostats
         crypto_market = get_compact_crypto_market()
         # Replace the [SEE MORE] text to indicate it opens /cryptostats
         crypto_market_with_note = crypto_market.replace("[SEE MORE]", "[SEE MORE] → /cryptostats")
-        digest += crypto_market_with_note + "\n\n"
+        digest += crypto_market_with_note + "\n"
         
         # Footer
-        digest += "📌 *Quick Navigation:*\n"
-        digest += "• [SEE MORE] buttons: Type the command shown (e.g., /local, /global, /cryptostats)\n"
-        digest += "• Type /help for complete command list\n\n"
+        digest += "\n📌 SEE MORE: Type /local, /global, /tech, /sports, /finance, /cryptostats\n"
         digest += "━━━━━━━━━━━━━━\n"
         digest += "🤖 By Shanchoy Noor"
         
@@ -1135,13 +1128,13 @@ def get_category_news(category, limit=10):
             title = "🏆 SPORTS NEWS"
             
         elif category == 'finance':
+            # Use Bangla finance sources for local market focus
             sources = {
-                "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
-                "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
-                "Financial Times": "https://www.ft.com/rss/home",
-                "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/",
-                "Yahoo Finance": "https://feeds.finance.yahoo.com/rss/2.0/headline",
-                "CNBC": "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+                "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
+                "কালের কণ্ঠ অর্থনীতি": "https://www.kalerkantho.com/economics/rss.xml",
+                "বণিক বার্তা": "https://www.bonikbarta.net/feed",
+                "ফিন্যান্সিয়াল এক্সপ্রেস": "https://thefinancialexpress.com.bd/feed",
+                "সমকাল অর্থনীতি": "https://samakal.com/economics/rss.xml"
             }
             title = "💼 FINANCE NEWS"
             
