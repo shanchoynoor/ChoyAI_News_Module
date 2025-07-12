@@ -1,7 +1,7 @@
 # ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
 # =============================================================
 
-.PHONY: help install install-dev test lint format run clean docker-build
+.PHONY: help install install-dev test lint format run clean docker-build logs status config-check
 .DEFAULT_GOAL := help
 
 help: ## Show this help message
@@ -140,7 +140,7 @@ status: ## Check bot status
 
 logs: ## View live logs
 	@echo "📝 Viewing live logs..."
-	tail -f logs/choynews.log
+	@tail -f logs/choynews.log
 
 dev: ## Quick development check
 	@echo "🔧 Running development checks..."

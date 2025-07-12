@@ -1,13 +1,6 @@
 # 🤖 ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
 
-**The most advanced Telegram💰 CRYPTO MARKET STATUS
-Market Cap: $3.78T (+2.34%) ▲
-Volume: $156.89B (+8.45%) ▲
-Fear/Greed Index: 78/100 = 🟢 GREED
-
-Type /help for more detailed information.
-━━━━━━━━━━━━━━
-🤖 Developed by Shanchoy Noor real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.**
+**The most advanced Telegram bot with real-time AI analysis, smart deduplication, and zero-repeat news delivery across multiple daily digests.**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://core.telegram.org/bots)
