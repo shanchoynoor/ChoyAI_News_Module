@@ -36,6 +36,10 @@ fi
 echo "📁 Creating directories..."
 mkdir -p data logs data/cache data/static
 
+# Initialize databases
+echo "🗄️  Initializing databases..."
+python3 init_db.py
+
 # Stop existing containers (if any)
 echo "🛑 Stopping existing containers..."
 docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
