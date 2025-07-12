@@ -20,35 +20,100 @@ def get_hours_ago(published_time_str):
         return "Unknown"
     
     try:
-        # Parse various date formats
-        if "GMT" in published_time_str or "UTC" in published_time_str:
-            # Handle RFC 822 format: "Mon, 25 Nov 2024 14:30:00 GMT"
-            pub_time = datetime.strptime(published_time_str.replace("GMT", "").replace("UTC", "").strip(), "%a, %d %b %Y %H:%M:%S")
-        elif "T" in published_time_str:
-            # Handle ISO format: "2024-11-25T14:30:00Z" or "2024-11-25T14:30:00"
-            if published_time_str.endswith('Z'):
-                pub_time = datetime.strptime(published_time_str[:-1], "%Y-%m-%dT%H:%M:%S")
-            elif '+' in published_time_str:
-                # Handle timezone offset
-                pub_time = datetime.strptime(published_time_str.split('+')[0], "%Y-%m-%dT%H:%M:%S")
-            else:
-                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%dT%H:%M:%S")
-        else:
-            # Try other common formats
-            try:
-                pub_time = datetime.strptime(published_time_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                # If all else fails, try parsing just the first 19 characters
-                pub_time = datetime.strptime(published_time_str[:19], "%Y-%m-%d %H:%M:%S")
+        pub_time = None
         
-        # Calculate time difference
+        # Clean the input string
+        time_str = published_time_str.strip()
+        
+        # Handle different date formats
+        try:
+            # RFC 822 format: "Mon, 25 Nov 2024 14:30:00 GMT" or "Thu, 12 Jul 2025 01:31:44 +0000"
+            if "GMT" in time_str or "UTC" in time_str:
+                clean_str = time_str.replace("GMT", "").replace("UTC", "").strip()
+                pub_time = datetime.strptime(clean_str, "%a, %d %b %Y %H:%M:%S")
+            elif "+0000" in time_str or "+0600" in time_str or "-" in time_str.split()[-1]:
+                # Handle timezone offsets like "+0000", "+0600", etc.
+                # Remove timezone offset
+                parts = time_str.rsplit(' ', 1)
+                if len(parts) == 2 and ('+' in parts[1] or '-' in parts[1]):
+                    clean_str = parts[0]
+                    pub_time = datetime.strptime(clean_str, "%a, %d %b %Y %H:%M:%S")
+                else:
+                    # Try full string
+                    pub_time = datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
+            # ISO format: "2024-11-25T14:30:00Z" or "2024-11-25T14:30:00"
+            elif "T" in time_str:
+                if time_str.endswith('Z'):
+                    pub_time = datetime.strptime(time_str[:-1], "%Y-%m-%dT%H:%M:%S")
+                elif '+' in time_str:
+                    # Handle timezone offset in ISO format
+                    pub_time = datetime.strptime(time_str.split('+')[0], "%Y-%m-%dT%H:%M:%S")
+                elif '-' in time_str and time_str.count('-') > 2:
+                    # Handle negative timezone offset
+                    parts = time_str.split('-')
+                    if len(parts) >= 4:  # Year-Month-Day-timezone
+                        clean_str = '-'.join(parts[:-1])
+                        pub_time = datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S")
+                else:
+                    pub_time = datetime.strptime(time_str[:19], "%Y-%m-%dT%H:%M:%S")
+            # Standard format: "2024-11-25 14:30:00"
+            elif time_str.count('-') == 2 and ':' in time_str:
+                pub_time = datetime.strptime(time_str[:19], "%Y-%m-%d %H:%M:%S")
+            # RSS common format: "Thu, 12 Jul 2025 01:31:44"
+            elif ',' in time_str and len(time_str.split()) >= 5:
+                # Try without timezone first
+                try:
+                    pub_time = datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S")
+                except ValueError:
+                    # If that fails, try with just the date part
+                    parts = time_str.split()
+                    if len(parts) >= 5:
+                        date_part = ' '.join(parts[:5])
+                        pub_time = datetime.strptime(date_part, "%a, %d %b %Y %H:%M:%S")
+        except ValueError:
+            pass
+        
+        # If all specific formats fail, try common fallbacks
+        if pub_time is None:
+            fallback_formats = [
+                "%Y-%m-%d %H:%M:%S",
+                "%d %b %Y %H:%M:%S",
+                "%Y/%m/%d %H:%M:%S",
+                "%m/%d/%Y %H:%M:%S",
+                "%d-%m-%Y %H:%M:%S",
+                "%Y-%m-%d",
+                "%d %b %Y"
+            ]
+            
+            for fmt in fallback_formats:
+                try:
+                    pub_time = datetime.strptime(time_str[:len(fmt)], fmt)
+                    break
+                except ValueError:
+                    continue
+        
+        # If we still don't have a time, return Unknown
+        if pub_time is None:
+            logger.debug(f"Could not parse time format: '{published_time_str}'")
+            return "Unknown"
+        
+        # Calculate time difference (assume UTC if no timezone specified)
         now = datetime.now()
         time_diff = now - pub_time
         
         # Convert to hours
         hours_diff = time_diff.total_seconds() / 3600
         
-        if hours_diff < 1:
+        if hours_diff < 0:
+            # Future time, likely timezone issue
+            hours_diff = abs(hours_diff)
+            if hours_diff < 1:
+                return "now"
+            elif hours_diff < 24:
+                return f"{int(hours_diff)}hr ago"
+            else:
+                return f"{int(hours_diff/24)}d ago"
+        elif hours_diff < 1:
             minutes_diff = int(time_diff.total_seconds() / 60)
             if minutes_diff < 1:
                 return "now"
@@ -64,18 +129,21 @@ def get_hours_ago(published_time_str):
         logger.debug(f"Error parsing time '{published_time_str}': {e}")
         return "Unknown"
 
-def fetch_rss_entries(sources, limit=5):
+def fetch_rss_entries(sources, limit=5, max_age_hours=2):
     """
-    Fetch RSS entries from multiple sources.
+    Fetch RSS entries from multiple sources, prioritizing recent news.
     
     Args:
         sources (dict): Dictionary of source_name: rss_url
         limit (int): Maximum number of entries per source
+        max_age_hours (int): Maximum age of news in hours (default 2 hours)
         
     Returns:
-        list: List of news entries with metadata
+        list: List of recent news entries with metadata
     """
     all_entries = []
+    very_recent_entries = []  # Less than 20 minutes
+    recent_entries = []       # 20 minutes to 2 hours
     
     for source_name, rss_url in sources.items():
         try:
@@ -97,11 +165,80 @@ def fetch_rss_entries(sources, limit=5):
                 continue
                 
             # Process entries
-            for entry in feed.entries[:limit]:
+            for entry in feed.entries[:limit*2]:  # Get more entries to filter recent ones
                 try:
-                    # Extract publication time
-                    pub_time = entry.get('published', entry.get('updated', ''))
-                    time_ago = get_hours_ago(pub_time)
+                    # Extract publication time - try multiple fields
+                    pub_time = (entry.get('published') or 
+                              entry.get('updated') or 
+                              entry.get('pubDate') or 
+                              entry.get('date') or '')
+                    
+                    pub_time_dt = None
+                    time_ago = "Unknown"
+                    hours_diff = 999  # Default to very old
+                    
+                    # If we have a published_parsed field, use it for more accuracy
+                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                        try:
+                            import time
+                            # Convert struct_time to datetime
+                            pub_time_struct = entry.published_parsed
+                            pub_time_dt = datetime(*pub_time_struct[:6])
+                            
+                            # Calculate time difference
+                            now = datetime.now()
+                            time_diff = now - pub_time_dt
+                            hours_diff = time_diff.total_seconds() / 3600
+                            
+                            if hours_diff < 0:
+                                hours_diff = abs(hours_diff)  # Handle future times
+                            
+                            if hours_diff < 1/60:  # Less than 1 minute
+                                time_ago = "now"
+                            elif hours_diff < 1:
+                                minutes_diff = int(time_diff.total_seconds() / 60)
+                                time_ago = f"{minutes_diff}min ago"
+                            elif hours_diff < 24:
+                                time_ago = f"{int(hours_diff)}hr ago"
+                            else:
+                                days_diff = int(hours_diff / 24)
+                                time_ago = f"{days_diff}d ago"
+                        except:
+                            time_ago = get_hours_ago(pub_time)
+                            # Try to extract hours for filtering
+                            if "min ago" in time_ago:
+                                try:
+                                    hours_diff = int(time_ago.split("min")[0]) / 60
+                                except:
+                                    hours_diff = 0.5
+                            elif "hr ago" in time_ago:
+                                try:
+                                    hours_diff = int(time_ago.split("hr")[0])
+                                except:
+                                    hours_diff = 1
+                            elif "now" in time_ago:
+                                hours_diff = 0
+                    else:
+                        time_ago = get_hours_ago(pub_time)
+                        # Try to extract hours for filtering
+                        if "min ago" in time_ago:
+                            try:
+                                hours_diff = int(time_ago.split("min")[0]) / 60
+                            except:
+                                hours_diff = 0.5
+                        elif "hr ago" in time_ago:
+                            try:
+                                hours_diff = int(time_ago.split("hr")[0])
+                            except:
+                                hours_diff = 1
+                        elif "now" in time_ago:
+                            hours_diff = 0
+                        elif "d ago" in time_ago:
+                            hours_diff = 25  # Older than 24 hours
+                    
+                    # Skip very old news (older than max_age_hours)
+                    if hours_diff > max_age_hours:
+                        continue
                     
                     # Clean title
                     title = entry.get('title', 'No title').strip()
@@ -117,10 +254,15 @@ def fetch_rss_entries(sources, limit=5):
                         'source': source_name,
                         'published': pub_time,
                         'time_ago': time_ago,
+                        'hours_diff': hours_diff,
                         'summary': entry.get('summary', '')[:200] + "..." if entry.get('summary') else ''
                     }
                     
-                    all_entries.append(entry_data)
+                    # Categorize by recency
+                    if hours_diff <= 1/3:  # 20 minutes or less
+                        very_recent_entries.append(entry_data)
+                    else:
+                        recent_entries.append(entry_data)
                     
                 except Exception as e:
                     logger.warning(f"Error processing entry from {source_name}: {e}")
@@ -133,13 +275,58 @@ def fetch_rss_entries(sources, limit=5):
             logger.error(f"Unexpected error with {source_name}: {e}")
             continue
     
-    # Sort by time (newest first) and return
+    # Prioritize very recent news
+    if very_recent_entries:
+        logger.info(f"Found {len(very_recent_entries)} very recent entries (≤20min)")
+        all_entries = very_recent_entries
+        # If we have enough very recent news, just add a few recent ones for context
+        if len(very_recent_entries) >= limit:
+            all_entries = very_recent_entries[:limit]
+        else:
+            # Add some recent entries to fill up
+            remaining_slots = limit - len(very_recent_entries)
+            all_entries.extend(recent_entries[:remaining_slots])
+    else:
+        logger.info(f"No very recent news found, using recent entries (≤{max_age_hours}hr)")
+        all_entries = recent_entries
+    
+    # Sort by time (newest first)
     try:
-        all_entries.sort(key=lambda x: x.get('published', ''), reverse=True)
+        all_entries.sort(key=lambda x: x.get('hours_diff', 999))
     except:
-        pass  # If sorting fails, return as is
+        # Fallback sorting
+        try:
+            def get_sort_time(entry):
+                time_str = entry.get('published', '')
+                if not time_str:
+                    return datetime.min
+                
+                try:
+                    if "GMT" in time_str or "UTC" in time_str:
+                        clean_str = time_str.replace("GMT", "").replace("UTC", "").strip()
+                        return datetime.strptime(clean_str, "%a, %d %b %Y %H:%M:%S")
+                    elif "+0000" in time_str or "+0600" in time_str:
+                        parts = time_str.rsplit(' ', 1)
+                        if len(parts) == 2:
+                            clean_str = parts[0]
+                            return datetime.strptime(clean_str, "%a, %d %b %Y %H:%M:%S")
+                    elif "T" in time_str:
+                        if time_str.endswith('Z'):
+                            return datetime.strptime(time_str[:-1], "%Y-%m-%dT%H:%M:%S")
+                        else:
+                            return datetime.strptime(time_str[:19], "%Y-%m-%dT%H:%M:%S")
+                    elif ',' in time_str:
+                        return datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S")
+                    else:
+                        return datetime.strptime(time_str[:19], "%Y-%m-%d %H:%M:%S")
+                except:
+                    return datetime.min
+            
+            all_entries.sort(key=get_sort_time, reverse=True)
+        except:
+            pass
         
-    return all_entries
+    return all_entries[:limit]
 
 def format_news(section_title, entries, limit=5):
     """
@@ -228,13 +415,13 @@ def get_tech_news():
 def get_sports_news():
     """Fetch sports news."""
     sports_sources = {
-        "ESPN": "https://www.espn.com/espn/rss/news",
-        "Sky Sports": "https://www.skysports.com/rss/12040",
-        "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
-        "NBC Sports": "https://scores.nbcsports.com/rss/headlines.asp",
-        "Yahoo Sports": "https://sports.yahoo.com/rss/",
-        "The Guardian Sport": "https://www.theguardian.com/sport/rss",
-        "Sporting News": "https://www.sportingnews.com/rss"
+        "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
+        "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed",
+        "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml",
+        "বণিক বার্তা খেলা": "https://www.bonikbarta.net/sports/feed",
+        "জুগান্তর খেলা": "https://www.jugantor.com/sports-news/rss.xml",
+        "ইত্তেফাক খেলা": "https://www.ittefaq.com.bd/sports/rss.xml",
+        "বাংলানিউজ খেলা": "https://www.banglanews24.com/sports/rss.xml"
     }
     return format_news("🏆 SPORTS NEWS", fetch_rss_entries(sports_sources))
 
@@ -950,7 +1137,7 @@ def get_compact_news_section(section_title, entries, limit=4):
         str: Formatted compact section
     """
     if not entries:
-        return f"{section_title}: [SEE MORE]\nNo news available at the moment."
+        return f"{section_title}: [SEE MORE]\nNo recent news available."
     
     formatted = f"{section_title}: [SEE MORE]\n"
     
@@ -964,7 +1151,7 @@ def get_compact_news_section(section_title, entries, limit=4):
             title = title[:77] + "..."
         
         # No markdown formatting for compact version
-        formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
+        formatted += f"{i}. {title} - {source} ({time_ago})\n"
     
     return formatted
 
@@ -987,75 +1174,96 @@ def get_compact_news_digest():
         # Header
         digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n\n"
         
+        # Check for breaking news across all entries
+        all_test_entries = (local_entries + global_entries + tech_entries + 
+                           sports_entries + finance_entries)
+        
+        breaking_count = 0
+        recent_count = 0
+        
+        for entry in all_test_entries:
+            time_ago = entry.get('time_ago', 'Unknown')
+            if "now" in time_ago or ("min ago" in time_ago and "min" in time_ago):
+                try:
+                    mins = int(time_ago.split("min")[0]) if "min ago" in time_ago else 0
+                    if mins <= 20 or "now" in time_ago:
+                        breaking_count += 1
+                    elif mins <= 60:
+                        recent_count += 1
+                except:
+                    pass
+        
+        # Add breaking news alert
+        if breaking_count > 0:
+            digest += f"🚨 BREAKING: {breaking_count} stories within 20 minutes\n"
+        if recent_count > 0:
+            digest += f"⚡ RECENT: {recent_count} stories within 1 hour\n"
+        if breaking_count > 0 or recent_count > 0:
+            digest += "\n"
+        
         # Compact weather
         digest += get_compact_weather() + "\n\n"
         
-        # News sections with limited items
+        # News sections with limited items - prioritize breaking news
         local_entries = fetch_rss_entries({
             "Prothom Alo": "https://www.prothomalo.com/feed",
             "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
             "BDNews24": "https://bdnews24.com/feed",
-            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss"
-        }, limit=6)
+            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
+            "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
+            "Samakal": "https://samakal.com/rss.xml"
+        }, limit=8, max_age_hours=1)  # Only 1 hour for breaking news
         
         global_entries = fetch_rss_entries({
             "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
             "CNN": "http://rss.cnn.com/rss/edition.rss",
             "Reuters": "http://feeds.reuters.com/reuters/topNews",
-            "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml"
-        }, limit=6)
+            "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+            "New York Post": "https://nypost.com/feed/"
+        }, limit=8, max_age_hours=1)  # Only 1 hour for breaking news
         
         tech_entries = fetch_rss_entries({
             "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
             "The Verge": "https://www.theverge.com/rss/index.xml",
             "Wired": "https://www.wired.com/feed/rss",
             "CNET": "https://www.cnet.com/rss/news/"
-        }, limit=6)
+        }, limit=8, max_age_hours=2)  # 2 hours for tech news
         
-        # Sports - Try Bangla sources first, then international
+        # Sports - Use only Bangla sources for local relevance
         bangla_sports_sources = {
-            "সমকাল স্পোর্টস": "https://samakal.com/sports/rss.xml",
+            "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
             "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed",
-            "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml"
+            "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml",
+            "বণিক বার্তা খেলা": "https://www.bonikbarta.net/sports/feed",
+            "জুগান্তর খেলা": "https://www.jugantor.com/sports-news/rss.xml",
+            "ইত্তেফাক খেলা": "https://www.ittefaq.com.bd/sports/rss.xml"
         }
         
-        # Try Bangla sports first
-        sports_entries = fetch_rss_entries(bangla_sports_sources, limit=4)
+        # Get Bangla sports news only - prioritize recent sports news
+        sports_entries = fetch_rss_entries(bangla_sports_sources, limit=8, max_age_hours=3)  # 3 hours for sports
         
-        # If not enough Bangla sports news, add international
-        if len(sports_entries) < 4:
-            international_sports = fetch_rss_entries({
-                "ESPN": "https://www.espn.com/espn/rss/news",
-                "Sky Sports": "https://www.skysports.com/rss/12040",
-                "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk"
-            }, limit=6)
-            sports_entries.extend(international_sports)
-        
-        # Finance news
+        # Finance news - recent market news
         finance_entries = fetch_rss_entries({
             "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
             "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
             "Financial Times": "https://www.ft.com/rss/home",
             "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/"
-        }, limit=6)
+        }, limit=8, max_age_hours=2)  # 2 hours for finance news
         
         # Add sections with clickable [SEE MORE] buttons
-        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, category_command="local") + "\n\n"
-        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, category_command="global") + "\n\n"
-        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, category_command="tech") + "\n\n"
-        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, category_command="sports") + "\n\n"
-        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, category_command="finance") + "\n\n"
+        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries) + "\n"
+        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries) + "\n"
+        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries) + "\n"
+        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries) + "\n"
+        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries) + "\n"
         
         # Compact crypto market with [SEE MORE] for /cryptostats
         crypto_market = get_compact_crypto_market()
-        # Replace the [SEE MORE] text to indicate it opens /cryptostats
-        crypto_market_with_note = crypto_market.replace("[SEE MORE]", "[SEE MORE] → /cryptostats")
-        digest += crypto_market_with_note + "\n\n"
+        digest += crypto_market + "\n"
         
-        # Footer
-        digest += "📌 *Quick Navigation:*\n"
-        digest += "• [SEE MORE] buttons: Type the command shown (e.g., /local, /global, /cryptostats)\n"
-        digest += "• Type /help for complete command list\n\n"
+        # Footer with proper spacing
+        digest += "📌 Quick Navigation:\n"
+        digest += "Type /help for complete command list or the commands (e.g., /local, /global, /tech, /sports, /finance, /weather, /cryptostats, /btc, btcstats etc.)\n\n"
         digest += "━━━━━━━━━━━━━━\n"
         digest += "🤖 By Shanchoy Noor"
         
