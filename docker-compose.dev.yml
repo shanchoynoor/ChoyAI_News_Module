@@ -6,7 +6,7 @@ services:
   choynews-dev:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.production
       target: development
     container_name: choynews-dev
     restart: "no"
@@ -45,7 +45,7 @@ services:
   test-runner:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.production
       target: development
     container_name: choynews-tests
     restart: "no"

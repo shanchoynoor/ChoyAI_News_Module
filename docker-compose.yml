@@ -5,7 +5,7 @@ services:
   choynews-bot:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.production
       target: production
     container_name: choynews-bot
     restart: unless-stopped
