@@ -1157,9 +1157,9 @@ def get_compact_news_section(section_title, entries, limit=4):
         
         # Make title clickable if link available and add [Details]
         if link:
-            formatted += f"{i}. [{title}]({link}) - {source} ({time_ago}) [Details]\n"
+            formatted += f"[{title}]({link}) - {source} ({time_ago}) [Details]\n"
         else:
-            formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
+            formatted += f"{title} - {source} ({time_ago}) [Details]\n"
     
     return formatted
 
@@ -1173,11 +1173,11 @@ def get_compact_news_digest():
     try:
         from datetime import datetime
         
-        # Get current time in Bangladesh timezone (UTC+6)
-        now = datetime.now()
-        # Add 6 hours to get Bangladesh time
-        bd_time = now.replace(hour=(now.hour + 6) % 24)
-        timestamp = bd_time.strftime("%b %d, %Y %I:%M%p BDT (UTC +6)")
+        from utils.time_utils import get_bd_now, get_bd_time_str
+        
+        # Get current time in Bangladesh timezone (UTC+6) - FIXED
+        bd_now = get_bd_now()
+        timestamp = get_bd_time_str(bd_now)
         
         # Header
         digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n"
