@@ -17,6 +17,7 @@ show_help() {
     echo "  logs-7d      Show last 7 days user login logs"
     echo "  logs-30d     Show last 30 days user login logs"
     echo "  users        Show user subscriptions"
+    echo "  users-all    Show all unique users from logs (complete list)"
     echo "  news         Show news history"
     echo "  clean        Clean old data (interactive)"
     echo "  backup       Backup all databases"
@@ -241,6 +242,94 @@ show_users() {
     fi
 }
 
+show_all_users() {
+    if [ -f "$DB_DIR/user_logs.db" ]; then
+        echo "👥 All Unique Users (Complete List):"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        # Count total unique users
+        total_users=$(sqlite3 "$DB_DIR/user_logs.db" "SELECT COUNT(DISTINCT user_id) FROM user_logs;" 2>/dev/null || echo "0")
+        echo "📊 Total Unique Users: $total_users"
+        echo ""
+        
+        # Show all unique users with their statistics
+        sqlite3 -header -column "$DB_DIR/user_logs.db" "
+        SELECT 
+            user_id,
+            COALESCE(username, 'N/A') as username,
+            COALESCE(first_name, 'Unknown') as name,
+            COALESCE(last_name, '') as last_name,
+            COUNT(*) as total_interactions,
+            MIN(interaction_time) as first_seen,
+            MAX(interaction_time) as last_seen,
+            ROUND((julianday('now') - julianday(MAX(interaction_time))), 1) as days_since_last_activity,
+            GROUP_CONCAT(DISTINCT message_type) as used_commands,
+            COALESCE(location, 'N/A') as location
+        FROM user_logs 
+        GROUP BY user_id 
+        ORDER BY total_interactions DESC;" 2>/dev/null || echo "❌ No user data found"
+        
+        echo ""
+        echo "📈 User Activity Summary:"
+        sqlite3 -header -column "$DB_DIR/user_logs.db" "
+        SELECT 
+            'Active (last 7 days)' as status,
+            COUNT(DISTINCT user_id) as users
+        FROM user_logs 
+        WHERE DATE(interaction_time) >= DATE('now', '-7 days')
+        UNION ALL
+        SELECT 
+            'Inactive (7-30 days)' as status,
+            COUNT(DISTINCT user_id) as users
+        FROM user_logs 
+        WHERE DATE(interaction_time) < DATE('now', '-7 days') 
+        AND DATE(interaction_time) >= DATE('now', '-30 days')
+        UNION ALL
+        SELECT 
+            'Old users (30+ days)' as status,
+            COUNT(DISTINCT user_id) as users
+        FROM user_logs 
+        WHERE DATE(interaction_time) < DATE('now', '-30 days');" 2>/dev/null || echo "❌ No activity summary available"
+        
+        echo ""
+        echo "🔥 User Engagement Levels:"
+        sqlite3 -header -column "$DB_DIR/user_logs.db" "
+        SELECT 
+            CASE 
+                WHEN COUNT(*) >= 100 THEN 'Heavy User (100+)'
+                WHEN COUNT(*) >= 50 THEN 'Regular User (50-99)'
+                WHEN COUNT(*) >= 10 THEN 'Moderate User (10-49)'
+                WHEN COUNT(*) >= 5 THEN 'Light User (5-9)'
+                ELSE 'New User (1-4)'
+            END as engagement_level,
+            COUNT(DISTINCT user_id) as user_count,
+            ROUND(COUNT(DISTINCT user_id) * 100.0 / (SELECT COUNT(DISTINCT user_id) FROM user_logs), 1) as percentage
+        FROM user_logs 
+        GROUP BY user_id
+        ORDER BY MIN(CASE 
+            WHEN COUNT(*) >= 100 THEN 1
+            WHEN COUNT(*) >= 50 THEN 2
+            WHEN COUNT(*) >= 10 THEN 3
+            WHEN COUNT(*) >= 5 THEN 4
+            ELSE 5
+        END);" 2>/dev/null || echo "❌ No engagement data available"
+        
+        echo ""
+        echo "🌍 User Locations:"
+        sqlite3 -header -column "$DB_DIR/user_logs.db" "
+        SELECT 
+            COALESCE(location, 'Unknown') as location,
+            COUNT(DISTINCT user_id) as unique_users,
+            COUNT(*) as total_interactions
+        FROM user_logs 
+        GROUP BY COALESCE(location, 'Unknown')
+        ORDER BY unique_users DESC;" 2>/dev/null || echo "❌ No location data available"
+        
+    else
+        echo "❌ user_logs.db not found"
+    fi
+}
+
 show_news() {
     if [ -f "$DB_DIR/news_history.db" ]; then
         echo "📰 Recent News History:"
@@ -313,6 +402,9 @@ case "${1:-help}" in
         ;;
     users)
         show_users
+        ;;
+    users-all)
+        show_all_users
         ;;
     news)
         show_news
