@@ -1,7 +1,7 @@
 # ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence
 # =============================================================
 
-.PHONY: help install install-dev test lint format run clean docker-build logs status config-check
+.PHONY: help install install-dev test lint format run clean docker-build logs status config-check docker-update docker-clean clear-cache quick-deploy server-status server-logs docker-restart docker-rebuild
 .DEFAULT_GOAL := help
 
 help: ## Show this help message
@@ -91,11 +91,28 @@ stop: ## Stop the bot service
 	@echo "🛑 Stopping ChoyNewsBot..."
 	@pkill -f "choynews" || echo "No running instances found"
 
-restart: ## Restart the bot service
+restart: ## Restart the bot service (Docker-aware)
 	@echo "🔄 Restarting ChoyNewsBot..."
-	@$(MAKE) stop
-	@sleep 2
-	@$(MAKE) start
+	@if command -v docker-compose > /dev/null 2>&1; then \
+		echo "🐳 Using Docker restart..."; \
+		docker-compose restart choynews-bot; \
+	else \
+		echo "🖥️  Using local process restart..."; \
+		$(MAKE) stop; \
+		sleep 2; \
+		$(MAKE) start; \
+	fi
+
+docker-restart: ## Force restart Docker containers
+	@echo "🐳 Force restarting Docker containers..."
+	docker-compose down
+	docker-compose up -d
+
+docker-rebuild: ## Rebuild and restart with fresh image
+	@echo "🐳 Rebuilding Docker image and restarting..."
+	docker-compose down
+	docker-compose build --no-cache choynews-bot
+	docker-compose up -d
 
 daemon: ## Start bot as background daemon
 	@echo "🌙 Starting ChoyNewsBot as daemon..."
@@ -134,13 +151,28 @@ clean: ## Clean up temporary files
 
 status: ## Check bot status
 	@echo "📊 Checking bot status..."
-	@ps aux | grep choynews || echo "Bot not running"
-	@echo "Recent log entries:"
-	@tail -5 logs/choynews.log 2>/dev/null || echo "No logs found"
+	@if command -v docker-compose > /dev/null 2>&1; then \
+		echo "=== Docker Services ==="; \
+		docker-compose ps; \
+		echo ""; \
+		echo "=== Recent Docker Logs ==="; \
+		docker-compose logs --tail=5 choynews-bot 2>/dev/null || echo "No Docker logs found"; \
+	else \
+		echo "=== Local Process ==="; \
+		ps aux | grep choynews || echo "Bot not running"; \
+		echo "Recent log entries:"; \
+		tail -5 logs/choynews.log 2>/dev/null || echo "No logs found"; \
+	fi
 
 logs: ## View live logs
 	@echo "📝 Viewing live logs..."
-	@tail -f logs/choynews.log
+	@if command -v docker-compose > /dev/null 2>&1 && docker-compose ps choynews-bot > /dev/null 2>&1; then \
+		echo "🐳 Viewing Docker logs..."; \
+		docker-compose logs -f choynews-bot; \
+	else \
+		echo "🖥️  Viewing local logs..."; \
+		tail -f logs/choynews.log; \
+	fi
 
 dev: ## Quick development check
 	@echo "🔧 Running development checks..."
@@ -155,3 +187,50 @@ config-check: ## Validate configuration
 deploy: ## Deploy using setup script
 	@echo "🚀 Deploying..."
 	@if [ -f tools/deploy/setup_server_fix.sh ]; then chmod +x tools/deploy/setup_server_fix.sh; ./tools/deploy/setup_server_fix.sh; else echo "Deploy script not found"; fi
+
+# Docker Production Commands
+# ==========================
+
+docker-update: ## Pull latest code and restart containers with cache clear
+	@echo "🔄 Updating from Git and restarting containers..."
+	git pull origin main
+	@$(MAKE) clear-cache
+	docker-compose down
+	docker-compose build --no-cache choynews-bot
+	docker-compose up -d
+	@echo "✅ Update complete!"
+
+docker-clean: ## Clean Docker system and restart fresh
+	@echo "🧹 Cleaning Docker system..."
+	docker-compose down
+	docker container prune -f
+	docker image prune -f
+	docker volume prune -f
+	docker rmi $$(docker images -q --filter "reference=*choynews*") 2>/dev/null || true
+	docker-compose build --no-cache
+	docker-compose up -d
+
+clear-cache: ## Clear all application caches
+	@echo "🗑️  Clearing application caches..."
+	rm -rf data/cache/*.json || true
+	rm -rf data/memory.json || true
+	@echo "✅ Cache cleared!"
+
+quick-deploy: ## Quick git pull + Docker restart with cache clear
+	@echo "⚡ Quick deployment with cache clear..."
+	git pull origin main
+	@$(MAKE) clear-cache
+	docker-compose restart choynews-bot
+	@echo "✅ Quick deploy complete!"
+
+server-status: ## Check server status (Docker version)
+	@echo "📊 Checking server status..."
+	@echo "=== Docker Services ==="
+	docker-compose ps
+	@echo ""
+	@echo "=== Recent Logs ==="
+	docker-compose logs --tail=10 choynews-bot
+
+server-logs: ## View live Docker logs
+	@echo "📝 Viewing live Docker logs..."
+	docker-compose logs -f choynews-bot
