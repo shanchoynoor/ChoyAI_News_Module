@@ -1157,9 +1157,9 @@ def get_compact_news_section(section_title, entries, limit=4):
         
         # Make title clickable if link available and add [Details]
         if link:
-            formatted += f"[{title}]({link}) - {source} ({time_ago}) [Details]\n"
+            formatted += f"{i}. [{title}]({link}) - {source} ({time_ago}) [Details]\n"
         else:
-            formatted += f"{title} - {source} ({time_ago}) [Details]\n"
+            formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
     
     return formatted
 
