@@ -36,9 +36,9 @@ fi
 echo "📁 Creating directories..."
 mkdir -p data logs data/cache data/static
 
-# Initialize databases
+# Initialize databases using simple Python script (no dependencies)
 echo "🗄️  Initializing databases..."
-python3 init_db.py
+python3 init_db_simple.py
 
 # Stop existing containers (if any)
 echo "🛑 Stopping existing containers..."

@@ -22,7 +22,7 @@ show_help() {
 
 init_databases() {
     echo "🗄️  Initializing databases..."
-    python3 init_db.py
+    python3 init_db_simple.py
 }
 
 show_status() {
