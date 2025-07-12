@@ -9,9 +9,9 @@ import logging
 import os
 from datetime import datetime, timedelta
 import pytz
-from choynews.utils.logging import get_logger
-from choynews.utils.config import Config
-from choynews.utils.time_utils import time_in_range
+from utils.logging import get_logger
+from utils.config import Config
+from utils.time_utils import time_in_range
 
 logger = get_logger(__name__)
 

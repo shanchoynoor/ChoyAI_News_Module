@@ -16,9 +16,9 @@ from datetime import datetime
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from choynews.utils.logging import setup_logging
-from choynews.utils.config import Config
-from choynews.data.crypto_cache import save_coinlist
+from utils.logging import setup_logging
+from utils.config import Config
+from data_modules.crypto_cache import save_coinlist
 
 logger = setup_logging(__name__)
 

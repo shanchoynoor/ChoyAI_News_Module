@@ -11,8 +11,8 @@ import logging
 from datetime import datetime, timedelta
 import pytz
 
-from choynews.utils.logging import get_logger
-from choynews.utils.config import Config
+from utils.logging import get_logger
+from utils.config import Config
 
 # Get logger
 logger = get_logger(__name__)

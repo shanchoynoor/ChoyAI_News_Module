@@ -10,22 +10,14 @@ import feedparser
 import json
 import os
 import sqlite3
-from datetime import datetime, timedelta
+import time
+import re
 import hashlib
 import pytz
-from choynews.utils.logging import get_logger
-from choynews.utils.config import Config
-from choynews.utils.time_utils import get_bd_now
-import sys
-import os
-import requests
-import time
 from datetime import datetime, timedelta
-import hashlib
-import sqlite3
-import json
-import re
-import feedparser
+from utils.logging import get_logger
+from utils.config import Config
+from utils.time_utils import get_bd_now
 
 logger = get_logger(__name__)
 
@@ -812,31 +804,6 @@ def get_coingecko_coin_id(symbol):
         logger.debug(f"Error searching for coin {symbol}: {e}")
         return None, None, None
 
-def get_coin_emoji(symbol):
-    """Get emoji for specific coins."""
-    emoji_map = {
-        'btc': '₿', 'bitcoin': '₿',
-        'eth': 'Ⓔ', 'ethereum': 'Ⓔ', 
-        'doge': '🐕', 'dogecoin': '�',
-        'ada': '🔷', 'cardano': '🔷',
-        'sol': '☀️', 'solana': '☀️',
-        'xrp': '💧', 'ripple': '💧',
-        'matic': '�', 'polygon': '🟣',
-        'dot': '🔴', 'polkadot': '🔴',
-        'link': '🔗', 'chainlink': '🔗',
-        'uni': '🦄', 'uniswap': '🦄',
-        'pepe': '🐸', 
-        'shib': '🐕', 'shiba': '🐕',
-        'bnb': '🟡', 'binancecoin': '�',
-        'avax': '🔺', 'avalanche': '🔺',
-        'ltc': '⚡', 'litecoin': '⚡',
-        'bch': '💚', 'bitcoin-cash': '�',
-        'atom': '⚛️', 'cosmos': '⚛️',
-        'luna': '🌙', 'terra-luna': '🌙',
-        'near': '🔸', 'near-protocol': '🔸'
-    }
-    return emoji_map.get(symbol.lower(), '🪙')
-
 def format_crypto_price(price):
     """
     Format cryptocurrency price with appropriate decimal places.
@@ -866,8 +833,6 @@ def get_individual_crypto_stats(symbol):
         
         if not coin_id:
             return None
-        
-        coin_emoji = get_coin_emoji(coin_symbol or symbol)
         
         # Fetch detailed coin data with rate limiting
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
@@ -1033,8 +998,6 @@ def get_individual_crypto_stats_with_ai(symbol):
         
         if not coin_id:
             return None
-        
-        coin_emoji = get_coin_emoji(coin_symbol or symbol)
         
         # Fetch detailed coin data with rate limiting
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"

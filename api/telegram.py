@@ -6,8 +6,8 @@ This module provides functions for sending messages and retrieving updates from 
 
 import requests
 import logging
-from choynews.utils.config import Config
-from choynews.utils.logging import get_logger
+from utils.config import Config
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 

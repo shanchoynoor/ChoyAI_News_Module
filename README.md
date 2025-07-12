@@ -328,7 +328,7 @@ pip install -e .
 python -m pytest tests/ -v
 
 # Test specific components
-python -c "from choynews.core.digest_builder import build_news_digest; print(build_news_digest())"
+python -c "from core.digest_builder import build_news_digest; print(build_news_digest())"
 ```
 
 ### **🧪 Testing Suite**

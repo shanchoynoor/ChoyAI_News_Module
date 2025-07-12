@@ -7,8 +7,8 @@ News Digest Builder for Choy News Bot.        # Build the digest header with Ban
 
 import logging
 from datetime import datetime
-from choynews.utils.logging import get_logger
-from choynews.utils.time_utils import get_bd_now, get_bd_time_str
+from utils.logging import get_logger
+from utils.time_utils import get_bd_now, get_bd_time_str
 
 logger = get_logger(__name__)
 
@@ -28,7 +28,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
     """
     try:
         # Import advanced news fetcher functions
-        from choynews.core.advanced_news_fetcher import (
+        from core.advanced_news_fetcher import (
             get_breaking_local_news, get_breaking_global_news, get_breaking_tech_news, 
             get_breaking_sports_news, get_breaking_crypto_news, fetch_crypto_market_with_ai,
             get_dhaka_weather, get_bd_holidays
@@ -55,7 +55,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
         if not holidays_info.strip():
             # Fallback to manual check for today's holiday
             try:
-                from choynews.core.advanced_news_fetcher import check_manual_bd_holidays
+                from core.advanced_news_fetcher import check_manual_bd_holidays
                 manual_holiday = check_manual_bd_holidays(now)
                 if manual_holiday:
                     holidays_info = f"🎉 Today: {manual_holiday}\n"
@@ -181,7 +181,7 @@ def build_crypto_section():
         str: Formatted crypto section in Markdown
     """
     try:
-        from choynews.core.advanced_news_fetcher import fetch_crypto_market_with_ai
+        from core.advanced_news_fetcher import fetch_crypto_market_with_ai
         
         return fetch_crypto_market_with_ai()
     except Exception as e:
@@ -199,7 +199,7 @@ def build_weather_section(user=None):
         str: Formatted weather section in Markdown
     """
     try:
-        from choynews.core.advanced_news_fetcher import get_dhaka_weather
+        from core.advanced_news_fetcher import get_dhaka_weather
         
         # For now, we only support Dhaka weather
         # TODO: Add location-based weather support
@@ -216,7 +216,7 @@ def build_world_news_section():
         str: Formatted world news section in Markdown
     """
     try:
-        from choynews.core.advanced_news_fetcher import get_breaking_global_news
+        from core.advanced_news_fetcher import get_breaking_global_news
         return get_breaking_global_news()
     except Exception as e:
         logger.error(f"Error building world news section: {e}")
@@ -230,7 +230,7 @@ def build_tech_news_section():
         str: Formatted tech news section in Markdown
     """
     try:
-        from choynews.core.advanced_news_fetcher import get_breaking_tech_news
+        from core.advanced_news_fetcher import get_breaking_tech_news
         return get_breaking_tech_news()
     except Exception as e:
         logger.error(f"Error building tech news section: {e}")

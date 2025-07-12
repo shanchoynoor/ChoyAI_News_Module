@@ -6,8 +6,8 @@ This module handles Telegram bot messages and commands.
 
 import logging
 import json
-from choynews.utils.logging import get_logger
-from choynews.data.models import log_user_interaction
+from utils.logging import get_logger
+from data_modules.models import log_user_interaction
 
 logger = get_logger(__name__)
 
@@ -80,7 +80,7 @@ def handle_message(message):
 
 def handle_regular_message(chat_id, user_id, username, text):
     """Handle regular (non-command) messages."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     # Simple responses to common greetings and questions
     text_lower = text.lower().strip()
@@ -121,7 +121,7 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
     logger.info(f"Processing command: {command} with args: {args[:50]}")
     
     # Import here to avoid circular imports
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     # Handle different commands
     if command == '/start':
@@ -192,7 +192,7 @@ def handle_command(chat_id, user_id, username, first_name, last_name, text):
 
 def handle_start_command(chat_id, user_id, username, first_name, last_name):
     """Handle the /start command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     name = first_name or username or "there"
     welcome_message = f"""
@@ -220,7 +220,7 @@ Type /help for more detailed information about what I can do!
 
 def handle_help_command(chat_id):
     """Handle the /help command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     help_message = """
 📚 *ChoyNewsBot Commands*
@@ -273,7 +273,7 @@ All times are shown in your local timezone. Use /timezone to set yours!
 
 def handle_status_command(chat_id, user_id):
     """Handle the /status command - show user subscription status and timezone."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     try:
         # For now, we'll show placeholder info since subscription DB is not fully implemented
@@ -309,7 +309,7 @@ Type `/help` for more commands.
 
 def handle_server_command(chat_id):
     """Handle the /server command - show server/bot status."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     import datetime
     
     try:
@@ -334,8 +334,8 @@ All systems operational! 🚀
 
 def handle_news_command(chat_id, user_id, args):
     """Handle the /news command with compact format."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.news_fetcher import get_compact_news_digest
+    from api.telegram import send_telegram
+    from core.news_fetcher import get_compact_news_digest
     
     try:
         # Send loading message
@@ -394,8 +394,8 @@ def handle_callback_query(callback_query):
 
 def handle_weather_command(chat_id, user_id):
     """Handle the /weather command."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.news_fetcher import get_weather_data
+    from api.telegram import send_telegram
+    from core.news_fetcher import get_weather_data
     
     try:
         # Send loading message first
@@ -413,8 +413,8 @@ def handle_weather_command(chat_id, user_id):
 
 def handle_cryptostats_command(chat_id, user_id):
     """Handle the /cryptostats command."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_crypto_stats_digest
+    from api.telegram import send_telegram
+    from core.advanced_news_fetcher import get_crypto_stats_digest
     
     try:
         send_telegram("� Fetching latest crypto market data with AI analysis...", chat_id)
@@ -433,8 +433,8 @@ def handle_cryptostats_command(chat_id, user_id):
 
 def handle_coin_command(chat_id, user_id, coin_symbol):
     """Handle coin price commands like /btc, /eth, etc."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.advanced_news_fetcher import get_individual_crypto_stats
+    from api.telegram import send_telegram
+    from core.advanced_news_fetcher import get_individual_crypto_stats
     
     try:
         send_telegram(f"🔄 Fetching latest {coin_symbol.upper()} data...", chat_id)
@@ -453,8 +453,8 @@ def handle_coin_command(chat_id, user_id, coin_symbol):
 
 def handle_coinstats_command(chat_id, user_id, coin_symbol):
     """Handle coin stats commands like /btcstats, /ethstats, /pepestats, etc."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.news_fetcher import fetch_coin_detailed_stats
+    from api.telegram import send_telegram
+    from core.news_fetcher import fetch_coin_detailed_stats
     
     try:
         send_telegram(f"🔄 Analyzing {coin_symbol.upper()} with advanced analytics...", chat_id)
@@ -471,7 +471,7 @@ def handle_coinstats_command(chat_id, user_id, coin_symbol):
 
 def handle_subscribe_command(chat_id, user_id, username, first_name, last_name):
     """Handle the /subscribe command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     try:
         # This would integrate with the subscription database
@@ -500,7 +500,7 @@ Database integration coming soon!
 
 def handle_unsubscribe_command(chat_id, user_id):
     """Handle the /unsubscribe command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     try:
         unsubscribe_message = """
@@ -524,7 +524,7 @@ Database integration coming soon!
 
 def handle_timezone_command(chat_id, user_id, timezone_arg):
     """Handle the /timezone command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     try:
         if not timezone_arg:
@@ -568,7 +568,7 @@ Database integration coming soon!
 
 def handle_support_command(chat_id):
     """Handle the /support command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     
     support_message = """
 🆘 *Support & Contact*
@@ -596,7 +596,7 @@ Thank you for using ChoyNewsBot! 🚀
 
 def handle_about_command(chat_id):
     """Handle the /about command."""
-    from choynews.api.telegram import send_telegram
+    from api.telegram import send_telegram
     import json
     import os
     
@@ -683,8 +683,8 @@ Type /help to explore all my features!
 
 def handle_category_news_command(chat_id, user_id, category):
     """Handle category-specific news commands (/local, /global, /tech, /sports, /finance)."""
-    from choynews.api.telegram import send_telegram
-    from choynews.core.news_fetcher import get_category_news
+    from api.telegram import send_telegram
+    from core.news_fetcher import get_category_news
     
     try:
         # Send loading message

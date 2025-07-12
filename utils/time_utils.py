@@ -9,8 +9,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pytz import timezone as pytz_timezone, all_timezones
 from timezonefinder import TimezoneFinder
-from choynews.utils.config import Config
-from choynews.utils.logging import setup_logging
+from .config import Config
+from .logging import setup_logging
 
 logger = setup_logging(__name__)
 

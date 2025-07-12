@@ -10,8 +10,8 @@ import json
 import time
 from datetime import datetime, timedelta
 
-from choynews.utils.logging import get_logger
-from choynews.utils.config import Config
+from utils.logging import get_logger
+from utils.config import Config
 
 # Get logger
 logger = get_logger(__name__)

@@ -7,10 +7,10 @@ This module provides the ChoyNewsBot class that handles the bot's main operation
 import time
 import logging
 import threading
-from choynews.utils.logging import get_logger
-from choynews.utils.config import Config
-from choynews.api.telegram import get_updates, send_telegram
-from choynews.services.bot_service import handle_updates
+from utils.logging import get_logger
+from utils.config import Config
+from api.telegram import get_updates, send_telegram
+from services.bot_service import handle_updates
 
 logger = get_logger(__name__)
 

@@ -15,19 +15,19 @@ from dotenv import load_dotenv
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from choynews.utils.config import Config
-from choynews.utils.logging import setup_logging, get_logger
-from choynews.core.bot import ChoyNewsBot
-from choynews.core.digest_builder import build_news_digest
-from choynews.api.telegram import send_telegram
-from choynews.data.models import (
+from utils.config import Config
+from utils.logging import setup_logging, get_logger
+from core.bot import ChoyNewsBot
+from core.digest_builder import build_news_digest
+from api.telegram import send_telegram
+from data_modules.models import (
     get_users_for_scheduled_times,
     update_last_sent,
     get_all_subscribed_users,
     init_user_subscriptions_db,
     init_user_logs_db
 )
-from choynews.utils.time_utils import get_bd_now, should_send_news
+from utils.time_utils import get_bd_now, should_send_news
 
 def run_bot():
     """Run the interactive Telegram bot."""

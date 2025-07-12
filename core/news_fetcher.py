@@ -9,8 +9,8 @@ import feedparser
 import json
 import os
 from datetime import datetime, timedelta
-from choynews.utils.logging import get_logger
-from choynews.utils.config import Config
+from utils.logging import get_logger
+from utils.config import Config
 
 logger = get_logger(__name__)
 
@@ -147,14 +147,14 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
     
     for source_name, rss_url in sources.items():
         try:
-            logger.debug(f"Fetching RSS from {source_name}: {rss_url}")
+            logger.info(f"Fetching RSS from {source_name}: {rss_url}")
             
             # Set timeout and headers
             headers = {
                 'User-Agent': 'ChoyNewsBot/1.0 (+https://github.com/shanchoynoor/ChoyAI_News_Module)'
             }
             
-            response = requests.get(rss_url, headers=headers, timeout=10)
+            response = requests.get(rss_url, headers=headers, timeout=15)
             response.raise_for_status()
             
             # Parse RSS feed
@@ -163,6 +163,8 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
             if not feed.entries:
                 logger.warning(f"No entries found in RSS feed: {source_name}")
                 continue
+            
+            logger.info(f"Found {len(feed.entries)} entries from {source_name}")
                 
             # Process entries
             for entry in feed.entries[:limit*2]:  # Get more entries to filter recent ones
@@ -287,8 +289,10 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
             remaining_slots = limit - len(very_recent_entries)
             all_entries.extend(recent_entries[:remaining_slots])
     else:
-        logger.info(f"No very recent news found, using recent entries (≤{max_age_hours}hr)")
+        logger.info(f"No very recent news found, using recent entries (≤{max_age_hours}hr). Found {len(recent_entries)} recent entries")
         all_entries = recent_entries
+    
+    logger.info(f"Returning {len(all_entries)} total entries out of requested {limit}")
     
     # Sort by time (newest first)
     try:
@@ -1174,6 +1178,48 @@ def get_compact_news_digest():
         # Header
         digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n\n"
         
+        # Fetch news entries first
+        local_entries = fetch_rss_entries({
+            "Prothom Alo": "https://www.prothomalo.com/feed",
+            "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
+            "BDNews24": "https://bdnews24.com/feed",
+            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
+            "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
+            "Samakal": "https://samakal.com/rss.xml"
+        }, limit=8, max_age_hours=6)  # Increased to 6 hours for more content
+        
+        global_entries = fetch_rss_entries({
+            "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
+            "CNN": "http://rss.cnn.com/rss/edition.rss",
+            "Reuters": "http://feeds.reuters.com/reuters/topNews",
+            "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+            "New York Post": "https://nypost.com/feed/"
+        }, limit=8, max_age_hours=6)  # Increased to 6 hours for more content
+        
+        tech_entries = fetch_rss_entries({
+            "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
+            "The Verge": "https://www.theverge.com/rss/index.xml",
+            "Wired": "https://www.wired.com/feed/rss",
+            "CNET": "https://www.cnet.com/rss/news/"
+        }, limit=8, max_age_hours=8)  # 8 hours for tech news
+        
+        # Sports - Use both international and Bangla sources
+        sports_entries = fetch_rss_entries({
+            "ESPN": "https://www.espn.com/espn/rss/news",
+            "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
+            "Sky Sports": "https://www.skysports.com/rss/12040",
+            "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
+            "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed"
+        }, limit=8, max_age_hours=12)  # 12 hours for sports
+        
+        # Finance news - mix of international and local
+        finance_entries = fetch_rss_entries({
+            "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
+            "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/",
+            "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
+            "বণিক বার্তা": "https://www.bonikbarta.net/feed"
+        }, limit=8, max_age_hours=8)  # 8 hours for finance news
+        
         # Check for breaking news across all entries
         all_test_entries = (local_entries + global_entries + tech_entries + 
                            sports_entries + finance_entries)
@@ -1203,52 +1249,6 @@ def get_compact_news_digest():
         
         # Compact weather
         digest += get_compact_weather() + "\n\n"
-        
-        # News sections with limited items - prioritize breaking news
-        local_entries = fetch_rss_entries({
-            "Prothom Alo": "https://www.prothomalo.com/feed",
-            "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
-            "BDNews24": "https://bdnews24.com/feed",
-            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
-            "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
-            "Samakal": "https://samakal.com/rss.xml"
-        }, limit=8, max_age_hours=1)  # Only 1 hour for breaking news
-        
-        global_entries = fetch_rss_entries({
-            "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
-            "CNN": "http://rss.cnn.com/rss/edition.rss",
-            "Reuters": "http://feeds.reuters.com/reuters/topNews",
-            "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
-            "New York Post": "https://nypost.com/feed/"
-        }, limit=8, max_age_hours=1)  # Only 1 hour for breaking news
-        
-        tech_entries = fetch_rss_entries({
-            "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
-            "The Verge": "https://www.theverge.com/rss/index.xml",
-            "Wired": "https://www.wired.com/feed/rss",
-            "CNET": "https://www.cnet.com/rss/news/"
-        }, limit=8, max_age_hours=2)  # 2 hours for tech news
-        
-        # Sports - Use only Bangla sources for local relevance
-        bangla_sports_sources = {
-            "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
-            "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed",
-            "কালের কণ্ঠ খেলা": "https://www.kalerkantho.com/sports/rss.xml",
-            "বণিক বার্তা খেলা": "https://www.bonikbarta.net/sports/feed",
-            "জুগান্তর খেলা": "https://www.jugantor.com/sports-news/rss.xml",
-            "ইত্তেফাক খেলা": "https://www.ittefaq.com.bd/sports/rss.xml"
-        }
-        
-        # Get Bangla sports news only - prioritize recent sports news
-        sports_entries = fetch_rss_entries(bangla_sports_sources, limit=8, max_age_hours=3)  # 3 hours for sports
-        
-        # Finance news - recent market news
-        finance_entries = fetch_rss_entries({
-            "Bloomberg": "https://feeds.bloomberg.com/markets/news.rss",
-            "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
-            "Financial Times": "https://www.ft.com/rss/home",
-            "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/"
-        }, limit=8, max_age_hours=2)  # 2 hours for finance news
         
         # Add sections with clickable [SEE MORE] buttons
         digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries) + "\n"
@@ -1316,7 +1316,9 @@ def get_category_news(category, limit=10):
                 "Wired": "https://www.wired.com/feed/rss",
                 "CNET": "https://www.cnet.com/rss/news/",
                 "Ars Technica": "http://feeds.arstechnica.com/arstechnica/index/",
-                "Engadget": "https://www.engadget.com/rss.xml"
+                "Engadget": "https://www.engadget.com/rss.xml",
+                "TechRadar": "https://www.techradar.com/rss",
+                "ZDNet": "https://www.zdnet.com/news/rss.xml"
             }
             title = "🚀 TECH NEWS"
             
@@ -1325,28 +1327,41 @@ def get_category_news(category, limit=10):
                 "ESPN": "https://www.espn.com/espn/rss/news",
                 "Sky Sports": "https://www.skysports.com/rss/12040",
                 "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
-                "NBC Sports": "https://scores.nbcsports.com/rss/headlines.asp",
                 "Yahoo Sports": "https://sports.yahoo.com/rss/",
-                "The Guardian Sport": "https://www.theguardian.com/sport/rss"
+                "The Guardian Sport": "https://www.theguardian.com/sport/rss",
+                "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
+                "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed"
             }
             title = "🏆 SPORTS NEWS"
             
         elif category == 'finance':
-            # Use Bangla finance sources for local market focus
+            # Mix of international and local sources
             sources = {
+                "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
+                "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/",
+                "Yahoo Finance": "https://feeds.finance.yahoo.com/rss/2.0/headline",
                 "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
-                "কালের কণ্ঠ অর্থনীতি": "https://www.kalerkantho.com/economics/rss.xml",
                 "বণিক বার্তা": "https://www.bonikbarta.net/feed",
-                "ফিন্যান্সিয়াল এক্সপ্রেস": "https://thefinancialexpress.com.bd/feed",
-                "সমকাল অর্থনীতি": "https://samakal.com/economics/rss.xml"
+                "ফিন্যান্সিয়াল এক্সপ্রেস": "https://thefinancialexpress.com.bd/feed"
             }
             title = "💼 FINANCE NEWS"
             
         else:
             return f"❌ Unknown category: {category}"
         
-        # Fetch entries
-        entries = fetch_rss_entries(sources, limit=15)  # Get more to ensure we have enough
+        # Fetch entries with more reasonable age limits
+        if category in ['local', 'global']:
+            max_age = 12  # 12 hours for local/global news
+        elif category == 'tech':
+            max_age = 24  # 24 hours for tech news
+        elif category == 'sports':
+            max_age = 48  # 48 hours for sports news
+        elif category == 'finance':
+            max_age = 24  # 24 hours for finance news
+        else:
+            max_age = 12
+            
+        entries = fetch_rss_entries(sources, limit=15, max_age_hours=max_age)  # Get more to ensure we have enough
         
         if not entries:
             return f"{title}\nNo news available at the moment."

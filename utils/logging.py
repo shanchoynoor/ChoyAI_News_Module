@@ -7,7 +7,7 @@ This module provides standardized logging setup for all components.
 import logging
 import os
 from logging.handlers import RotatingFileHandler
-from choynews.utils.config import Config
+from .config import Config
 
 def setup_logging(name, log_file=None):
     """
