@@ -204,30 +204,15 @@ I'm your personal news assistant. I can provide you with:
 • 💰 Cryptocurrency market data
 • ⏰ Scheduled news delivery
 
-*Main Commands:*
-🚀 /start - Show this welcome message
-📰 /news - Get latest news digest
-❓ /help - Get help and see all commands
-🌤️ /weather - Get Dhaka weather information
-👤 /status - Check your subscription status and timezone
-🤖 /server - Check bot server status and uptime
+*Available Commands:*
+/start - Show this welcome message
+/news - Get latest news digest
+/help - Get help and see all commands
+/status - Check bot status
+/about - Learn about ChoyNewsBot features
 
-*📰 Category News (10 items each):*
-🇧🇩 /local - Bangladesh local news
-🌍 /global - International global news
-🚀 /tech - Technology and innovation news
-🏆 /sports - Sports news and updates
-💼 /finance - Financial markets and business news
 
-*💰 Cryptocurrency:*
-📊 /cryptostats - Get AI summary of crypto market
-🪙 /coin <symbol> - Get price and 24h change for any coin
-   Examples: /coin btc, /btc, /eth, /pepe, /shib
-📈 /<symbol>stats - Get detailed analysis with technicals, RSI, support/resistance
-   Examples: /btcstats, /ethstats, /pepestats, /shibstats
-📋 /coinstats <symbol> - Same as above, alternative format but in short
-
-Type /help for complete command list and examples!
+Type /help for more detailed information about what I can do!
     """
     
     send_telegram(welcome_message, chat_id)
