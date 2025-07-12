@@ -1,0 +1,69 @@
+# Development docker-compose configuration
+version: '3.8'
+
+services:
+  # Development version of ChoyNewsBot
+  choynews-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: choynews-dev
+    restart: "no"
+    env_file:
+      - .env.dev
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    volumes:
+      - .:/app
+      - choynews_dev_cache:/app/data/cache
+    ports:
+      - "8080:8080"  # For development web interface
+      - "5678:5678"  # For debugger
+    networks:
+      - choynews-dev-network
+    depends_on:
+      - redis-dev
+    command: ["python", "/app/bin/choynews", "--service", "both", "--debug"]
+
+  # Redis for development
+  redis-dev:
+    image: redis:7-alpine
+    container_name: choynews-redis-dev
+    restart: "no"
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - choynews-dev-network
+
+  # Test runner service
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: choynews-tests
+    restart: "no"
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=testing
+    volumes:
+      - .:/app
+    networks:
+      - choynews-dev-network
+    command: ["python", "-m", "pytest", "tests/", "-v", "--cov=./"]
+
+networks:
+  choynews-dev-network:
+    driver: bridge
+
+volumes:
+  redis_dev_data:
+    driver: local
+  choynews_dev_cache:
+    driver: local

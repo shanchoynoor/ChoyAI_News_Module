@@ -361,69 +361,61 @@ sqlite3 data/news_history.db "SELECT COUNT(*) FROM news_history;"
 ## 🏗️ Architecture & Code Structure
 
 ```
-choynews/                         # 🏠 Main application package
+ChoyNewsBot/                      # 🏠 Root project directory
 ├── api/                          # 🌐 External API integrations
 │   └── telegram.py               # Telegram Bot API wrapper
 ├── core/                         # 🧠 Core business logic
 │   ├── advanced_news_fetcher.py  # AI-powered news aggregation with smart filtering
 │   ├── digest_builder.py         # News digest compilation with content cleaning
+│   ├── news_fetcher.py           # Basic news fetching and processing
 │   └── bot.py                    # Main bot controller
-├── data/                         # 💾 Data models & persistence
+├── data_modules/                 # 💾 Data models & persistence
 │   ├── models.py                 # User data models
 │   ├── subscriptions.py          # Subscription management
 │   ├── user_logs.py              # User interaction logging
 │   └── crypto_cache.py           # Price data caching
 ├── services/                     # 🚀 High-level services
-│   └── bot_service.py            # Command handling service with /about support
-└── utils/                        # 🛠️ Utility functions
-    ├── config.py                 # Configuration management
-    ├── logging.py                # Logging setup
-    └── time_utils.py             # Timezone handling
-
-bin/                              # 📦 Executable scripts
-├── choynews                      # Main application entry point
-└── utils/                        # Additional utilities
-    └── update_coinlist.py        # Cryptocurrency list updater
-
-config/                           # ⚙️ Configuration files
-├── requirements.txt              # Python dependencies
-└── .env.example                  # Environment template
-
-data/                             # 📊 Data storage
-├── cache/                        # API response cache
-│   ├── crypto_bigcap_cache.json  # Large cap crypto cache
-│   ├── crypto_market_cache.json  # Market data cache
-│   └── crypto_movers_cache.json  # Price movement cache
-├── static/                       # Static data files
-│   ├── coinlist.json             # Supported cryptocurrency list
-│   └── user_timezones.json       # Timezone mappings
-├── memory.json                   # Bot information for /about command
-└── *.db                          # SQLite databases (news_history.db)
-
-docs/                             # 📚 Documentation
-├── api-docs.md                   # API documentation
-├── developer-guide.md            # Development guide
-├── deployment.md                 # Deployment instructions
-├── installation.md               # Installation guide
-├── user-guide.md                 # User manual
-├── README.md                     # Documentation overview
-└── user/                         # User-focused documentation
-    └── getting_started.md        # Quick start guide
-
-tools/                            # 🔧 Development tools
-├── deploy/                       # Deployment scripts
-│   ├── migrate.sh                # Database migration
-│   ├── pm2_config.json           # PM2 configuration
-│   └── setup_server.sh           # Server setup script
-└── dev/                          # Development utilities
-    ├── cleanup.sh                # Development cleanup
-    ├── final_cleanup.sh          # Final project cleanup
-    ├── migrate.sh                # Development migration
-    └── run.sh                    # Development runner
-
-logs/                             # 📝 Application logs
-build/                            # 🔨 Build artifacts
-choynews.egg-info/                # 📦 Package metadata
+│   └── bot_service.py            # Command handling service
+├── utils/                        # 🛠️ Utility functions
+│   ├── config.py                 # Configuration management
+│   ├── logging.py                # Logging setup
+│   └── time_utils.py             # Timezone handling
+├── tests/                        # 🧪 Comprehensive test suite
+│   ├── unit/                     # Unit tests for individual components
+│   ├── integration/              # Integration tests for cross-module functionality
+│   ├── fixtures/                 # Test data and mock objects
+│   └── conftest.py               # Pytest configuration
+├── config/                       # ⚙️ Configuration files
+│   ├── requirements.txt          # Production dependencies
+│   ├── requirements-dev.txt      # Development dependencies
+│   ├── logging.json              # Advanced logging configuration
+│   ├── logging.conf              # Alternative logging format
+│   ├── base_config.py            # Base configuration class
+│   ├── dev_config.py             # Development environment config
+│   ├── prod_config.py            # Production environment config
+│   └── test_config.py            # Testing environment config
+├── bin/                          # 📦 Executable scripts
+│   ├── choynews                  # Main application entry point
+│   └── utils/                    # Additional utilities
+│       └── update_coinlist.py    # Cryptocurrency list updater
+├── data/                         # 📊 Data storage
+│   ├── cache/                    # API response cache
+│   ├── static/                   # Static data files
+│   └── *.db                      # SQLite databases
+├── docs/                         # 📚 Documentation
+│   ├── api-docs.md               # API documentation
+│   ├── developer-guide.md        # Development guide
+│   └── user/                     # User-focused documentation
+├── tools/                        # 🔧 Development tools
+│   └── deploy/                   # Deployment scripts
+├── logs/                         # 📝 Application logs
+├── Dockerfile                    # 🐳 Docker configuration
+├── Dockerfile.production         # 🐳 Production Docker configuration
+├── docker-compose.yml            # 🐳 Full production stack
+├── docker-compose.dev.yml        # 🐳 Development environment
+├── .env.example                  # 📋 Environment template
+├── conftest.py                   # 🧪 Global pytest configuration
+└── Makefile                      # 🔨 Development automation
 ```
 
 ### **🔌 Key Components**
@@ -435,7 +427,19 @@ choynews.egg-info/                # 📦 Package metadata
 | **bot_service.py** | Command routing + user interaction | All commands including new /about, error handling |
 | **telegram.py** | Low-level Telegram API | HTTP requests, message formatting, rate limiting |
 | **models.py** | User data + subscription logic | SQLite operations, timezone handling |
-| **memory.json** | Bot information storage | Dynamic /about content, feature descriptions |
+| **config system** | Environment-aware configuration | Dev/Prod/Test configs with validation |
+| **test suite** | Comprehensive testing | Unit, integration, fixtures with pytest |
+
+### **🏭 Professional Features**
+
+- **🧪 Complete Test Suite**: Unit tests, integration tests, fixtures with pytest
+- **📋 Multi-Environment Configs**: Separate dev/prod/test configurations with validation
+- **🐳 Docker Support**: Production & development containers with compose files
+- **📝 Advanced Logging**: JSON logging, multiple handlers, structured output
+- **🔨 Development Automation**: Comprehensive Makefile with 20+ commands
+- **🔒 Security**: Bandit security scanning, safety checks, non-root containers
+- **📊 Code Quality**: Black formatting, flake8 linting, mypy type checking
+- **🚀 CI/CD Ready**: GitHub Actions compatible, automated testing pipeline
 
 ### **🆕 Recent Enhancements**
 

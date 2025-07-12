@@ -1,0 +1,68 @@
+# Multi-stage Dockerfile for production optimization
+FROM python:3.12-slim as base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Development stage
+FROM base as development
+
+WORKDIR /app
+
+# Install development dependencies
+COPY config/requirements.txt config/requirements-dev.txt ./
+RUN pip install -r requirements.txt -r requirements-dev.txt
+
+# Copy source code
+COPY . .
+
+# Create directories
+RUN mkdir -p logs data/cache data/static
+
+# Production stage
+FROM base as production
+
+WORKDIR /app
+
+# Install only production dependencies
+COPY config/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy only necessary application files
+COPY api/ ./api/
+COPY core/ ./core/
+COPY data_modules/ ./data_modules/
+COPY services/ ./services/
+COPY utils/ ./utils/
+COPY bin/ ./bin/
+COPY config/ ./config/
+COPY data/static/ ./data/static/
+
+# Create runtime directories
+RUN mkdir -p logs data/cache
+
+# Create non-root user
+RUN groupadd -r choynews && useradd -r -g choynews choynews
+RUN chown -R choynews:choynews /app && chmod +x /app/bin/choynews
+
+USER choynews
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "from utils.config import Config; Config().validate()" || exit 1
+
+EXPOSE 8080
+
+CMD ["/app/bin/choynews", "--service", "both"]
