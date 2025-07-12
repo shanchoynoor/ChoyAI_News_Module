@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Main ChoyNewsBot application
+  choynews-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: production
+    container_name: choynews-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - choynews_cache:/app/data/cache
+    networks:
+      - choynews-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "from utils.config import Config; Config().validate()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: choynews-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-choynews_redis}
+    volumes:
+      - redis_data:/data
+    networks:
+      - choynews-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+# Networks
+networks:
+  choynews-network:
+    driver: bridge
+
+# Volumes
+volumes:
+  redis_data:
+    driver: local
+  choynews_cache:
+    driver: local

@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for production optimization
-FROM python:3.12-slim as base
+FROM python:3.12-slim AS base
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ COPY . .
 RUN mkdir -p logs data/cache data/static
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 WORKDIR /app
 
