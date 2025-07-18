@@ -1,4 +1,4 @@
-modules = ["python-3.12", "bash"]
+upm add python-dotenvpoetry add python-dotenvmodules = ["python-3.12", "bash"]
 compile = "make"
 
 [nix]
