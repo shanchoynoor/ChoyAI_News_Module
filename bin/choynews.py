@@ -144,3 +144,56 @@ def main():
 
 if __name__ == "__main__":
     main()
+#!/usr/bin/env python3
+"""
+ChoyNewsBot Main Entry Point
+
+This script starts the Telegram bot with proper argument parsing.
+"""
+
+import sys
+import os
+import argparse
+from pathlib import Path
+
+# Add the project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from core.bot import ChoyNewsBot
+from utils.logging import get_logger
+from utils.config import Config
+
+logger = get_logger(__name__)
+
+def main():
+    """Main entry point for the ChoyNewsBot."""
+    parser = argparse.ArgumentParser(description='ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence')
+    parser.add_argument('--service', choices=['bot', 'auto', 'both'], default='both',
+                      help='Service to run: bot (interactive), auto (scheduled), or both')
+    
+    args = parser.parse_args()
+    
+    try:
+        # Initialize configuration
+        if not Config.TELEGRAM_TOKEN:
+            logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
+            sys.exit(1)
+        
+        if args.service in ['bot', 'both']:
+            logger.info("Starting ChoyNewsBot...")
+            bot = ChoyNewsBot()
+            bot.run()
+        
+        if args.service in ['auto', 'both']:
+            logger.info("Auto news service not implemented yet")
+            
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Error starting bot: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

@@ -12,42 +12,51 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    """Application configuration class that loads from environment variables."""
-    
-    # Telegram configuration
-    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
-    AUTO_NEWS_CHAT_ID = os.getenv("AUTO_NEWS_CHAT_ID")
-    
-    # API keys
-    DEEPSEEK_API = os.getenv("DEEPSEEK_API")
-    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY")
-    WEATHERAPI_KEY = os.getenv("WEATHERAPI_KEY")
-    TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-    
-    # Application settings
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    LOG_FILE = os.getenv("LOG_FILE", "logs/choynews.log")
-    LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", 10485760))  # 10MB
-    LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", 3))
-    
-    # Scheduled times (24-hour format)
-    SCHEDULED_TIMES = [(8, 0), (13, 0), (19, 0), (23, 0)]
-    
-    # Data file paths
-    COINLIST_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "coinlist.json")
-    USER_TIMEZONE_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "user_timezones.db")
-    USER_SUBSCRIPTIONS_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "user_subscriptions.db")
-    USER_LOGS_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "user_logs.db")
-    
+    """Configuration class for the Choy News Bot."""
+
+    # Load environment variables from .env file if it exists
+    env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    if os.path.exists(env_file):
+        from dotenv import load_dotenv
+        load_dotenv(env_file)
+
+    # Telegram Bot Configuration
+    TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+
+    # News API Configuration
+    NEWS_API_KEY = os.getenv('NEWS_API_KEY', '')
+
+    # Weather API Configuration
+    WEATHERAPI_KEY = os.getenv('WEATHERAPI_KEY', '')
+
+    # Holiday API Configuration
+    CALENDARIFIC_API_KEY = os.getenv('CALENDARIFIC_API_KEY', '')
+
+    # DeepSeek API Configuration
+    DEEPSEEK_API = os.getenv('DEEPSEEK_API', '')
+
+    # Twelve Data API Configuration
+    TWELVE_DATA_API_KEY = os.getenv('TWELVE_DATA_API_KEY', '')
+
+    # Bot Configuration
+    DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+
+    # File paths
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    DATA_DIR = os.path.join(BASE_DIR, 'data')
+    LOG_FILE = os.path.join(BASE_DIR, 'logs', 'choynews.log')
+
     @classmethod
-    def validate(cls):
+    def validate_required_config(cls):
         """Validate that required configuration is present."""
-        missing = []
-        
-        if not cls.TELEGRAM_TOKEN:
-            missing.append("TELEGRAM_TOKEN or TELEGRAM_BOT_TOKEN")
-            
-        if missing:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
-        
+        required_vars = {
+            'TELEGRAM_BOT_TOKEN': cls.TELEGRAM_TOKEN,
+        }
+
+        missing_vars = [var for var, value in required_vars.items() if not value]
+
+        if missing_vars:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
         return True

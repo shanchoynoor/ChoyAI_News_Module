@@ -1,79 +1,26 @@
 #!/usr/bin/env python3
 """
-Simple database initialization script that doesn't require dependencies.
-Creates basic SQLite database tables without imports.
+Simple database initialization script for ChoyNewsBot.
 """
 
-import sqlite3
 import os
+import sqlite3
+from pathlib import Path
 
-def create_user_subscriptions_db():
-    """Create user subscriptions database."""
-    db_path = "data/user_subscriptions.db"
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            user_id INTEGER PRIMARY KEY,
-            chat_id INTEGER,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            preferred_time TEXT,
-            timezone TEXT,
-            is_active INTEGER DEFAULT 1,
-            crypto_alerts INTEGER DEFAULT 1,
-            market_updates INTEGER DEFAULT 1,
-            weather_info INTEGER DEFAULT 1,
-            world_news INTEGER DEFAULT 1,
-            tech_news INTEGER DEFAULT 1,
-            created_at TEXT,
-            last_updated TEXT,
-            last_sent TEXT
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
-    print("✅ User subscriptions database created")
+# Create data directory if it doesn't exist
+data_dir = Path(__file__).parent / "data"
+data_dir.mkdir(exist_ok=True)
 
-def create_user_logs_db():
-    """Create user logs database."""
-    db_path = "data/user_logs.db"
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            interaction_time TEXT,
-            message_type TEXT,
-            location TEXT,
-            last_interaction TEXT
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
-    print("✅ User logs database created")
+# Initialize news history database
+news_db_path = data_dir / "news_history.db"
 
-def create_news_history_db():
-    """Create news history database for deduplication."""
-    db_path = "data/news_history.db"
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    
-    conn = sqlite3.connect(db_path)
+def init_news_history_db():
+    """Initialize the news history database."""
+    print(f"Initializing news history database at {news_db_path}")
+
+    conn = sqlite3.connect(news_db_path)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS news_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,34 +33,68 @@ def create_news_history_db():
             url TEXT
         )
     ''')
-    
+
     conn.commit()
     conn.close()
-    print("✅ News history database created")
+    print("✅ News history database initialized")
 
-def main():
-    print("🗄️  Initializing ChoyNewsBot databases (simple version)...")
-    
-    try:
-        create_user_subscriptions_db()
-        create_user_logs_db()
-        create_news_history_db()
-        
-        print("\n✅ All databases initialized successfully!")
-        
-        # Show created databases
-        if os.path.exists("data"):
-            print("\n📋 Created databases:")
-            for file in sorted(os.listdir("data")):
-                if file.endswith('.db'):
-                    size = os.path.getsize(os.path.join("data", file))
-                    print(f"   📁 {file}: {size} bytes")
-                    
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return 1
-    
-    return 0
+def init_user_subscriptions_db():
+    """Initialize user subscriptions database."""
+    user_db_path = data_dir / "user_subscriptions.db"
+    print(f"Initializing user subscriptions database at {user_db_path}")
+
+    conn = sqlite3.connect(user_db_path)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE,
+            username TEXT,
+            subscribed INTEGER DEFAULT 1,
+            timezone TEXT DEFAULT 'Asia/Dhaka',
+            created_at TEXT,
+            updated_at TEXT
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+    print("✅ User subscriptions database initialized")
+
+def init_user_logs_db():
+    """Initialize user logs database."""
+    logs_db_path = data_dir / "user_logs.db"
+    print(f"Initializing user logs database at {logs_db_path}")
+
+    conn = sqlite3.connect(logs_db_path)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            command TEXT,
+            message TEXT,
+            timestamp TEXT,
+            success INTEGER
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+    print("✅ User logs database initialized")
 
 if __name__ == "__main__":
-    exit(main())
+    print("🚀 Initializing ChoyNewsBot databases...")
+
+    try:
+        init_news_history_db()
+        init_user_subscriptions_db()
+        init_user_logs_db()
+        print("\n✅ All databases initialized successfully!")
+        print("You can now start the bot with: python bin/choynews.py")
+    except Exception as e:
+        print(f"❌ Error initializing databases: {e}")
+        exit(1)

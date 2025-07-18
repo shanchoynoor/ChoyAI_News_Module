@@ -6,3 +6,19 @@ channel = "stable-24_05"
 
 [deployment]
 build = ["sh", "-c", "make"]
+
+[workflows]
+runButton = "ChoyNewsBot"
+
+[[workflows.workflow]]
+name = "ChoyNewsBot"
+author = 23844596
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python init_db_simple.py"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python bin/choynews.py --service bot"
