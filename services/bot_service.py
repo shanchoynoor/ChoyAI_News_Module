@@ -333,22 +333,35 @@ All systems operational! 🚀
         send_telegram("Sorry, there was an error retrieving server status. Please try again later.", chat_id)
 
 def handle_news_command(chat_id, user_id, args):
-    """Handle the /news command with compact format."""
+    """Handle the /news command with compact format and add inline keyboard for category navigation."""
     from api.telegram import send_telegram
     from core.news_fetcher import get_compact_news_digest
-    
     try:
         # Send loading message
         send_telegram("📰 Loading latest news...", chat_id)
-        
         # Build and send compact news digest
         digest = get_compact_news_digest()
-        
-        # Send the compact digest
-        send_telegram(digest, chat_id)
-        
+        # Add inline keyboard for category navigation
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [
+                InlineKeyboardButton("🇧🇩 LOCAL NEWS", callback_data='/local'),
+                InlineKeyboardButton("🌍 GLOBAL NEWS", callback_data='/global'),
+            ],
+            [
+                InlineKeyboardButton("🚀 TECH NEWS", callback_data='/tech'),
+                InlineKeyboardButton("🏆 SPORTS NEWS", callback_data='/sports'),
+            ],
+            [
+                InlineKeyboardButton("💼 FINANCE NEWS", callback_data='/finance'),
+                InlineKeyboardButton("💰 CRYPTO MARKET", callback_data='/cryptostats'),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        # Use the Telegram Bot API directly for sending with reply_markup
+        from api.telegram import send_telegram_with_markup
+        send_telegram_with_markup(digest, chat_id, reply_markup)
         logger.info(f"Sent compact news digest to user {user_id}")
-        
     except Exception as e:
         logger.error(f"Error generating compact news digest for user {user_id}: {e}")
         send_telegram(
@@ -359,7 +372,6 @@ def handle_news_command(chat_id, user_id, args):
 def handle_callback_query(callback_query):
     """
     Handle a callback query from a Telegram inline keyboard.
-    
     Args:
         callback_query (dict): Telegram callback query object
     """
@@ -369,14 +381,11 @@ def handle_callback_query(callback_query):
     chat_id = callback_query.get("message", {}).get("chat", {}).get("id")
     message_id = callback_query.get("message", {}).get("message_id")
     data = callback_query.get("data", "")
-    
     username = callback_query.get("from", {}).get("username")
     first_name = callback_query.get("from", {}).get("first_name")
     last_name = callback_query.get("from", {}).get("last_name")
-    
     if not data or not chat_id:
         return
-        
     # Log the interaction
     log_user_interaction(
         user_id=user_id,
@@ -386,11 +395,22 @@ def handle_callback_query(callback_query):
         message_type="callback",
         last_interaction=data
     )
-    
     logger.info(f"Received callback from {username or user_id}: {data}")
-    
-    # Process the callback data
-    # Implement callback handlers based on the data
+    # Handle category navigation
+    if data in ['/local', '/global', '/tech', '/sports', '/finance', '/cryptostats']:
+        if data == '/cryptostats':
+            handle_cryptostats_command(chat_id, user_id)
+        else:
+            category = data[1:]
+            handle_category_news_command(chat_id, user_id, category)
+        # Optionally, answer the callback to remove the loading spinner
+        try:
+            from api.telegram import answer_callback_query
+            answer_callback_query(query_id)
+        except Exception:
+            pass
+    # (You can add more callback handling here if needed)
+    # (No further news or content after this)
 
 def handle_weather_command(chat_id, user_id):
     """Handle the /weather command."""

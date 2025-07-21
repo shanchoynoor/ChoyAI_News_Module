@@ -1128,67 +1128,64 @@ def get_compact_crypto_market():
         logger.error(f"Error creating compact crypto market: {e}")
         return "💰 CRYPTO MARKET: [SEE MORE]\nData temporarily unavailable"
 
-def get_compact_news_section(section_title, entries, limit=4):
+def get_compact_news_section(section_title, entries, limit=4, lang='en'):
     """
-    Format news entries into compact format with SEE MORE button.
-    
+    Format news entries into compact format with [SEE MORE] button and [Details] links.
+    For local and sports news, use Bangla headlines if available.
     Args:
         section_title (str): Title of the section
         entries (list): List of news entries
         limit (int): Maximum number of entries to include
-        
+        lang (str): 'en' for English, 'bn' for Bangla
     Returns:
         str: Formatted compact section
     """
     if not entries:
         return f"{section_title}: [SEE MORE]\nNo recent news available."
-    
+
     formatted = f"{section_title}: [SEE MORE]\n"
-    
+
     for i, entry in enumerate(entries[:limit], 1):
-        title = entry.get('title', 'No title')
+        # For Bangla, use 'title_bn' if available, else fallback to 'title'
+        if lang == 'bn' and entry.get('title_bn'):
+            title = entry.get('title_bn', 'No title')
+        else:
+            title = entry.get('title', 'No title')
         source = entry.get('source', 'Unknown')
         time_ago = entry.get('time_ago', 'Unknown')
         link = entry.get('link', '')
-        
+
         # Truncate title if too long
         if len(title) > 80:
             title = title[:77] + "..."
-        
+
         # Make title clickable if link available and add [Details]
         if link:
             formatted += f"{i}. [{title}]({link}) - {source} ({time_ago}) [Details]\n"
         else:
             formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
-    
+
     return formatted
 
 def get_compact_news_digest():
     """
     Generate a compact news digest for the /news command.
-    
     Returns:
         str: Compact formatted news digest
     """
     try:
         from datetime import datetime
-        
         from utils.time_utils import get_bd_now, get_bd_time_str
-        
         # Get current time in Bangladesh timezone (UTC+6) - FIXED
         bd_now = get_bd_now()
         timestamp = get_bd_time_str(bd_now)
-        
         # Header
         digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n"
-        
         # Add holiday information if available
         holiday_info = get_bd_holidays().strip()
         if holiday_info:
             digest += holiday_info + "\n"
-        
         digest += "\n"
-        
         # Fetch news entries first
         local_entries = fetch_rss_entries({
             "Prothom Alo": "https://www.prothomalo.com/feed",
@@ -1197,89 +1194,51 @@ def get_compact_news_digest():
             "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
             "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
             "Samakal": "https://samakal.com/rss.xml"
-        }, limit=8, max_age_hours=6)  # Increased to 6 hours for more content
-        
+        }, limit=8, max_age_hours=6)
         global_entries = fetch_rss_entries({
             "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
             "CNN": "http://rss.cnn.com/rss/edition.rss",
             "Reuters": "http://feeds.reuters.com/reuters/topNews",
             "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
             "New York Post": "https://nypost.com/feed/"
-        }, limit=8, max_age_hours=6)  # Increased to 6 hours for more content
-        
+        }, limit=8, max_age_hours=6)
         tech_entries = fetch_rss_entries({
             "TechCrunch": "http://feeds.feedburner.com/TechCrunch/",
             "The Verge": "https://www.theverge.com/rss/index.xml",
             "Wired": "https://www.wired.com/feed/rss",
             "CNET": "https://www.cnet.com/rss/news/"
-        }, limit=8, max_age_hours=8)  # 8 hours for tech news
-        
-        # Sports - Use both international and Bangla sources
+        }, limit=8, max_age_hours=8)
         sports_entries = fetch_rss_entries({
             "ESPN": "https://www.espn.com/espn/rss/news",
             "BBC Sport": "http://feeds.bbci.co.uk/sport/rss.xml?edition=uk",
             "Sky Sports": "https://www.skysports.com/rss/12040",
             "সমকাল খেলা": "https://samakal.com/sports/rss.xml",
             "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed"
-        }, limit=8, max_age_hours=12)  # 12 hours for sports
-        
-        # Finance news - mix of international and local
+        }, limit=8, max_age_hours=12)
         finance_entries = fetch_rss_entries({
             "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
             "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/",
             "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
             "বণিক বার্তা": "https://www.bonikbarta.net/feed"
-        }, limit=8, max_age_hours=8)  # 8 hours for finance news
-        
-        # Check for breaking news across all entries
-        all_test_entries = (local_entries + global_entries + tech_entries + 
-                           sports_entries + finance_entries)
-        
-        breaking_count = 0
-        recent_count = 0
-        
-        for entry in all_test_entries:
-            time_ago = entry.get('time_ago', 'Unknown')
-            if "now" in time_ago or ("min ago" in time_ago and "min" in time_ago):
-                try:
-                    mins = int(time_ago.split("min")[0]) if "min ago" in time_ago else 0
-                    if mins <= 20 or "now" in time_ago:
-                        breaking_count += 1
-                    elif mins <= 60:
-                        recent_count += 1
-                except:
-                    pass
-        
-        # Add breaking news alert - REMOVED per user request
-        # if breaking_count > 0:
-        #     digest += f"🚨 BREAKING: {breaking_count} stories within 20 minutes\n"
-        # if recent_count > 0:
-        #     digest += f"⚡ RECENT: {recent_count} stories within 1 hour\n"
-        # if breaking_count > 0 or recent_count > 0:
-        #     digest += "\n"
-        
-        # Compact weather
+        }, limit=8, max_age_hours=8)
+        # Add compact weather
         digest += get_compact_weather() + "\n\n"
-        
-        # Add sections with clickable [SEE MORE] buttons
-        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries) + "\n"
-        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries) + "\n"
-        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries) + "\n"
-        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries) + "\n"
-        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries) + "\n"
-        
+        # Add sections with [SEE MORE] and [Details], Bangla for local/sports
+        digest += get_compact_news_section("🇧�� LOCAL NEWS", local_entries, lang='bn') + "\n"
+        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, lang='en') + "\n"
+        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, lang='en') + "\n"
+        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, lang='bn') + "\n"
+        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, lang='en') + "\n"
         # Compact crypto market with [SEE MORE] for /cryptostats
         crypto_market = get_compact_crypto_market()
         digest += crypto_market + "\n"
-        
         # Footer with proper spacing
         digest += "\n📌 Quick Navigation:\n"
         digest += "Type /help for complete command list or the commands (e.g., /local, /global, /tech, /sports, /finance, /weather, /cryptostats, /btc, btcstats etc.)\n\n"
         digest += "━━━━━━━━━━━━━━\n"
         digest += "🤖 By Shanchoy Noor"
-        
-        return digest
-        
+        # Ensure nothing is appended after the credit line
+        return digest.strip()
     except Exception as e:
         logger.error(f"Error generating compact news digest: {e}")
         return "📢 NEWS DIGEST\nTemporarily unavailable. Please try again later."
