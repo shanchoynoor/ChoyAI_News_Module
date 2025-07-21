@@ -1,8 +1,5 @@
 """
 Configuration management for the Choy News application.
-
-This module loads and provides access to all configuration settings
-from environment variables and config files.
 """
 
 import os
@@ -63,3 +60,8 @@ class Config:
             raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
         return True
+
+    @classmethod
+    def validate(cls):
+        # Placeholder for config validation logic
+        pass
