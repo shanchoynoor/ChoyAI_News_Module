@@ -11,6 +11,9 @@ from data_modules.models import log_user_interaction
 
 logger = get_logger(__name__)
 
+# In-memory store for news items for [Details] callbacks
+news_item_store = {}
+
 def handle_updates(updates):
     """
     Process Telegram update objects and handle messages/commands.
@@ -340,25 +343,13 @@ def handle_news_command(chat_id, user_id, args):
         # Send loading message
         send_telegram("📰 Loading latest news...", chat_id)
         # Build and send compact news digest
-        digest = get_compact_news_digest()
-        # Add inline keyboard for category navigation
+        digest, section_buttons = get_compact_news_digest()
+        # Add inline keyboard for [SEE MORE] buttons for each section
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard = [
-            [
-                InlineKeyboardButton("🇧🇩 LOCAL NEWS", callback_data='/local'),
-                InlineKeyboardButton("🌍 GLOBAL NEWS", callback_data='/global'),
-            ],
-            [
-                InlineKeyboardButton("🚀 TECH NEWS", callback_data='/tech'),
-                InlineKeyboardButton("🏆 SPORTS NEWS", callback_data='/sports'),
-            ],
-            [
-                InlineKeyboardButton("💼 FINANCE NEWS", callback_data='/finance'),
-                InlineKeyboardButton("💰 CRYPTO MARKET", callback_data='/cryptostats'),
-            ]
-        ]
+        keyboard = []
+        for title, command in section_buttons:
+            keyboard.append([InlineKeyboardButton(f"{title}: [SEE MORE]", callback_data=command)])
         reply_markup = InlineKeyboardMarkup(keyboard)
-        # Use the Telegram Bot API directly for sending with reply_markup
         from api.telegram import send_telegram_with_markup
         send_telegram_with_markup(digest, chat_id, reply_markup)
         logger.info(f"Sent compact news digest to user {user_id}")
@@ -404,6 +395,20 @@ def handle_callback_query(callback_query):
             category = data[1:]
             handle_category_news_command(chat_id, user_id, category)
         # Optionally, answer the callback to remove the loading spinner
+        try:
+            from api.telegram import answer_callback_query
+            answer_callback_query(query_id)
+        except Exception:
+            pass
+    # Handle [Details] button for news item
+    elif data.startswith('details_'):
+        news_id = data[len('details_'):]
+        item = news_item_store.get(news_id)
+        if item:
+            from core.news_fetcher import analyze_news_item
+            summary = analyze_news_item(item['title'], item['summary'], item['source'])
+            from api.telegram import send_telegram
+            send_telegram(summary, chat_id)
         try:
             from api.telegram import answer_callback_query
             answer_callback_query(query_id)
@@ -702,10 +707,9 @@ Type /help to explore all my features!
         send_telegram(fallback_message, chat_id)
 
 def handle_category_news_command(chat_id, user_id, category):
-    """Handle category-specific news commands (/local, /global, /tech, /sports, /finance)."""
+    """Handle category-specific news commands (/local, /global, /tech, /sports, /finance) with [Details] inline buttons."""
     from api.telegram import send_telegram
     from core.news_fetcher import get_category_news
-    
     try:
         # Send loading message
         category_names = {
@@ -717,13 +721,22 @@ def handle_category_news_command(chat_id, user_id, category):
         }
         category_name = category_names.get(category, category)
         send_telegram(f"📰 Loading {category_name} news...", chat_id)
-        
-        # Get category news
-        news_message = get_category_news(category, limit=10)
-        send_telegram(news_message, chat_id)
-        
+        # Get category news and news_items for [Details]
+        news_message, news_items = get_category_news(category, limit=10)
+        # Build inline keyboard with [Details] button for each news item
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = []
+        for item in news_items:
+            # Store news item in global store for callback lookup
+            news_item_store[item['id']] = item
+            keyboard.append([InlineKeyboardButton("[Details]", callback_data=f"details_{item['id']}")])
+        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+        from api.telegram import send_telegram_with_markup
+        if reply_markup:
+            send_telegram_with_markup(news_message, chat_id, reply_markup)
+        else:
+            send_telegram(news_message, chat_id)
         logger.info(f"Sent {category} news to user {user_id}")
-        
     except Exception as e:
         logger.error(f"Error getting {category} news for user {user_id}: {e}")
         send_telegram(

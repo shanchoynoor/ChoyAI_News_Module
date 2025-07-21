@@ -1130,8 +1130,7 @@ def get_compact_crypto_market():
 
 def get_compact_news_section(section_title, entries, limit=4, lang='en'):
     """
-    Format news entries into compact format with [SEE MORE] button and [Details] links.
-    For local and sports news, use Bangla headlines if available.
+    Format news entries into compact format for the digest. [SEE MORE] will be handled as an inline button, not in the text.
     Args:
         section_title (str): Title of the section
         entries (list): List of news entries
@@ -1141,10 +1140,8 @@ def get_compact_news_section(section_title, entries, limit=4, lang='en'):
         str: Formatted compact section
     """
     if not entries:
-        return f"{section_title}: [SEE MORE]\nNo recent news available."
-
-    formatted = f"{section_title}: [SEE MORE]\n"
-
+        return f"{section_title}\nNo recent news available."
+    formatted = f"{section_title}\n"
     for i, entry in enumerate(entries[:limit], 1):
         # For Bangla, use 'title_bn' if available, else fallback to 'title'
         if lang == 'bn' and entry.get('title_bn'):
@@ -1154,34 +1151,28 @@ def get_compact_news_section(section_title, entries, limit=4, lang='en'):
         source = entry.get('source', 'Unknown')
         time_ago = entry.get('time_ago', 'Unknown')
         link = entry.get('link', '')
-
         # Truncate title if too long
         if len(title) > 80:
             title = title[:77] + "..."
-
         # Make title clickable if link available and add [Details]
         if link:
             formatted += f"{i}. [{title}]({link}) - {source} ({time_ago}) [Details]\n"
         else:
             formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
-
     return formatted
 
 def get_compact_news_digest():
     """
     Generate a compact news digest for the /news command.
     Returns:
-        str: Compact formatted news digest
+        tuple: (digest_text, section_buttons) where section_buttons is a list of (section_title, command)
     """
     try:
         from datetime import datetime
         from utils.time_utils import get_bd_now, get_bd_time_str
-        # Get current time in Bangladesh timezone (UTC+6) - FIXED
         bd_now = get_bd_now()
         timestamp = get_bd_time_str(bd_now)
-        # Header
         digest = f"📢 TOP NEWS HEADLINES\n{timestamp}\n"
-        # Add holiday information if available
         holiday_info = get_bd_holidays().strip()
         if holiday_info:
             digest += holiday_info + "\n"
@@ -1216,45 +1207,48 @@ def get_compact_news_digest():
             "প্রথম আলো খেলা": "https://www.prothomalo.com/sports/feed"
         }, limit=8, max_age_hours=12)
         finance_entries = fetch_rss_entries({
-            "Reuters Business": "http://feeds.reuters.com/reuters/businessNews",
-            "MarketWatch": "http://feeds.marketwatch.com/marketwatch/topstories/",
+            "Reuters Business": "https://www.reutersagency.com/feed/?best-topics=business",
+            "MarketWatch": "https://www.marketwatch.com/rss/topstories",
             "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
             "বণিক বার্তা": "https://www.bonikbarta.net/feed"
         }, limit=8, max_age_hours=8)
-        # Add compact weather
         digest += get_compact_weather() + "\n\n"
-        # Add sections with [SEE MORE] and [Details], Bangla for local/sports
+        # Prepare section buttons for inline keyboard
+        section_buttons = [
+            ("🇧🇩 LOCAL NEWS", "/local"),
+            ("🌍 GLOBAL NEWS", "/global"),
+            ("🚀 TECH NEWS", "/tech"),
+            ("🏆 SPORTS NEWS", "/sports"),
+            ("💼 FINANCE NEWS", "/finance"),
+            ("💰 CRYPTO MARKET", "/cryptostats")
+        ]
+        # Add sections (4 news per section)
         digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, lang='bn') + "\n"
         digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, lang='en') + "\n"
         digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, lang='en') + "\n"
         digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, lang='bn') + "\n"
         digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, lang='en') + "\n"
-        # Compact crypto market with [SEE MORE] for /cryptostats
         crypto_market = get_compact_crypto_market()
         digest += crypto_market + "\n"
-        # Footer with proper spacing
         digest += "\n📌 Quick Navigation:\n"
         digest += "Type /help for complete command list or the commands (e.g., /local, /global, /tech, /sports, /finance, /weather, /cryptostats, /btc, btcstats etc.)\n\n"
         digest += "━━━━━━━━━━━━━━\n"
         digest += "🤖 By Shanchoy Noor"
-        # Ensure nothing is appended after the credit line
-        return digest.strip()
+        return digest.strip(), section_buttons
     except Exception as e:
         logger.error(f"Error generating compact news digest: {e}")
-        return "📢 NEWS DIGEST\nTemporarily unavailable. Please try again later."
+        return "📢 NEWS DIGEST\nTemporarily unavailable. Please try again later.", []
 
 # ===================== EXISTING CRYPTO DATA =====================
 
 def get_category_news(category, limit=10):
     """
     Get detailed news for a specific category.
-    
     Args:
         category (str): Category type ('local', 'global', 'tech', 'sports', 'finance')
         limit (int): Number of news items to return
-        
     Returns:
-        str: Formatted news list for the category
+        tuple: (formatted_news, news_items) where news_items is a list of dicts with id, title, summary, source
     """
     try:
         if category == 'local':
@@ -1317,7 +1311,7 @@ def get_category_news(category, limit=10):
             title = "💼 FINANCE NEWS"
             
         else:
-            return f"❌ Unknown category: {category}"
+            return f"❌ Unknown category: {category}", []
         
         # Fetch entries with more reasonable age limits
         if category in ['local', 'global']:
@@ -1332,7 +1326,7 @@ def get_category_news(category, limit=10):
             max_age = 12
         entries = fetch_rss_entries(sources, limit=30, max_age_hours=max_age)  # Get more to ensure we have enough
         if not entries:
-            return f"{title}\nNo news available at the moment."
+            return f"{title}\nNo news available at the moment.", []
         # Filter for only recent news (<= 30 min ago)
         def parse_minutes_ago(time_ago):
             if 'min' in time_ago:
@@ -1346,38 +1340,49 @@ def get_category_news(category, limit=10):
                 return 999
         filtered_entries = []
         source_counts = {}
-        for entry in entries:
+        for idx, entry in enumerate(entries):
             mins = parse_minutes_ago(entry.get('time_ago', '999min ago'))
             if mins <= 30:
                 source = entry.get('source', 'Unknown')
                 count = source_counts.get(source, 0)
                 if count < 3:
-                    filtered_entries.append(entry)
+                    filtered_entries.append((idx, entry))
                     source_counts[source] = count + 1
             if len(filtered_entries) >= limit:
                 break
         if not filtered_entries:
-            return f"{title}\nNo recent news available (last 30 min)."
-        # Format the response with clickable headlines
+            return f"{title}\nNo recent news available (last 30 min).", []
+        # Format the response with clickable headlines and prepare news_items for [Details]
         response = f"{title}\n"
         response += "━━━━━━━━━━━━━━\n"
-        for i, entry in enumerate(filtered_entries, 1):
+        news_items = []
+        for i, (idx, entry) in enumerate(filtered_entries, 1):
             title_text = entry.get('title', 'No title')
             source = entry.get('source', 'Unknown')
             time_ago = entry.get('time_ago', 'Unknown')
             link = entry.get('link', '')
+            summary = entry.get('summary', '')
             # Truncate title if too long
             if len(title_text) > 100:
                 title_text = title_text[:97] + "..."
             if link:
-                response += f"{i}. [{title_text}]({link}) - {source} ({time_ago})\n"
+                response += f"{i}. [{title_text}]({link}) - {source} ({time_ago})"
             else:
-                response += f"{i}. {title_text} - {source} ({time_ago})\n"
+                response += f"{i}. {title_text} - {source} ({time_ago})"
+            # Add [Details] as inline button (handled in bot_service)
+            response += "\n"
+            # Prepare news_items for callback
+            news_items.append({
+                'id': f'{category}_{idx}',
+                'title': entry.get('title', ''),
+                'summary': summary,
+                'source': source
+            })
         response += "\nType /news to go back to main digest."
-        return response
+        return response, news_items
     except Exception as e:
         logger.error(f"Error fetching {category} news: {e}")
-        return f"❌ Error fetching {category} news. Please try again later."
+        return f"❌ Error fetching {category} news. Please try again later.", []
 
 def analyze_news_item(title, summary="", source=""):
     """
