@@ -47,6 +47,9 @@ class Config:
     DATA_DIR = os.path.join(BASE_DIR, 'data')
     LOG_FILE = os.path.join(BASE_DIR, 'logs', 'choynews.log')
 
+    LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB per log file
+    LOG_BACKUP_COUNT = 5  # Keep up to 5 backup log files
+
     @classmethod
     def validate_required_config(cls):
         """Validate that required configuration is present."""
