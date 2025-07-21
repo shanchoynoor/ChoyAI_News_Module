@@ -48,6 +48,13 @@ def send_telegram(message, chat_id, parse_mode="Markdown"):
         logger.error(f"Error sending telegram message: {str(e)}")
         return None
 
+def send_telegram_with_markup(text, chat_id, reply_markup):
+    from telegram import Bot
+    import os
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    bot = Bot(token=bot_token)
+    bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode='Markdown')
+
 def get_updates(offset=None, timeout=30):
     """
     Get updates from the Telegram API.

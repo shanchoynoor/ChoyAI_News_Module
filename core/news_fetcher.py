@@ -1224,7 +1224,7 @@ def get_compact_news_digest():
         # Add compact weather
         digest += get_compact_weather() + "\n\n"
         # Add sections with [SEE MORE] and [Details], Bangla for local/sports
-        digest += get_compact_news_section("🇧�� LOCAL NEWS", local_entries, lang='bn') + "\n"
+        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, lang='bn') + "\n"
         digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, lang='en') + "\n"
         digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, lang='en') + "\n"
         digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, lang='bn') + "\n"
@@ -1330,31 +1330,51 @@ def get_category_news(category, limit=10):
             max_age = 24  # 24 hours for finance news
         else:
             max_age = 12
-            
-        entries = fetch_rss_entries(sources, limit=15, max_age_hours=max_age)  # Get more to ensure we have enough
-        
+        entries = fetch_rss_entries(sources, limit=30, max_age_hours=max_age)  # Get more to ensure we have enough
         if not entries:
             return f"{title}\nNo news available at the moment."
-        
-        # Format the response
+        # Filter for only recent news (<= 30 min ago)
+        def parse_minutes_ago(time_ago):
+            if 'min' in time_ago:
+                try:
+                    return int(time_ago.split('min')[0].strip())
+                except:
+                    return 999
+            elif 'now' in time_ago:
+                return 0
+            else:
+                return 999
+        filtered_entries = []
+        source_counts = {}
+        for entry in entries:
+            mins = parse_minutes_ago(entry.get('time_ago', '999min ago'))
+            if mins <= 30:
+                source = entry.get('source', 'Unknown')
+                count = source_counts.get(source, 0)
+                if count < 3:
+                    filtered_entries.append(entry)
+                    source_counts[source] = count + 1
+            if len(filtered_entries) >= limit:
+                break
+        if not filtered_entries:
+            return f"{title}\nNo recent news available (last 30 min)."
+        # Format the response with clickable headlines
         response = f"{title}\n"
         response += "━━━━━━━━━━━━━━\n"
-        
-        for i, entry in enumerate(entries[:limit], 1):
+        for i, entry in enumerate(filtered_entries, 1):
             title_text = entry.get('title', 'No title')
             source = entry.get('source', 'Unknown')
             time_ago = entry.get('time_ago', 'Unknown')
-            
+            link = entry.get('link', '')
             # Truncate title if too long
             if len(title_text) > 100:
                 title_text = title_text[:97] + "..."
-            
-            response += f"{i}. {title_text} - {source} ({time_ago})\n"
-        
+            if link:
+                response += f"{i}. [{title_text}]({link}) - {source} ({time_ago})\n"
+            else:
+                response += f"{i}. {title_text} - {source} ({time_ago})\n"
         response += "\nType /news to go back to main digest."
-        
         return response
-        
     except Exception as e:
         logger.error(f"Error fetching {category} news: {e}")
         return f"❌ Error fetching {category} news. Please try again later."
