@@ -16,8 +16,8 @@ from utils.time_utils import time_in_range
 logger = get_logger(__name__)
 
 # Initialize database paths
-USER_SUBSCRIPTIONS_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "user_subscriptions.db")
-USER_LOGS_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "user_logs.db")
+USER_SUBSCRIPTIONS_DB = os.path.join("data", "user_subscriptions.db")
+USER_LOGS_DB = os.path.join("data", "user_logs.db")
 
 def init_user_subscriptions_db():
     """Initialize the user subscriptions database."""
