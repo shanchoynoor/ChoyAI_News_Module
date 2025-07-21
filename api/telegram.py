@@ -51,9 +51,10 @@ def send_telegram(message, chat_id, parse_mode="Markdown"):
 def send_telegram_with_markup(text, chat_id, reply_markup):
     from telegram import Bot
     import os
+    import asyncio
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     bot = Bot(token=bot_token)
-    bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode='Markdown')
+    asyncio.run(bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode='Markdown'))
 
 def get_updates(offset=None, timeout=30):
     """

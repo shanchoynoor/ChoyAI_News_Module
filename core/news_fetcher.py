@@ -370,10 +370,10 @@ def format_news(section_title, entries, limit=5):
 def get_local_news():
     """Fetch local Bangladesh news."""
     bd_sources = {
-        "Prothom Alo": "https://www.prothomalo.com/feed",
-        "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
-        "BDNews24": "https://bdnews24.com/feed",
-        "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
+        "Prothom Alo": "https://en.prothomalo.com/rss",
+        "The Daily Star": "https://www.thedailystar.net/rss.xml",
+        "BDNews24": "https://bangla.bdnews24.com/feed/",
+        "Dhaka Tribune": "https://www.dhakatribune.com/feed",
         "Jugantor": "https://www.jugantor.com/rss.xml",
         "Samakal": "https://samakal.com/rss.xml",
         "Jagonews24": "https://www.jagonews24.com/rss.xml",
@@ -389,7 +389,7 @@ def get_global_news():
     global_sources = {
         "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
         "CNN": "http://rss.cnn.com/rss/edition.rss",
-        "Reuters": "http://feeds.reuters.com/reuters/topNews",
+        "Reuters": "https://www.reutersagency.com/feed/?best-topics=top-news",
         "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
         "New York Post": "https://nypost.com/feed/",
         "The Guardian": "https://www.theguardian.com/world/rss",
@@ -1188,17 +1188,17 @@ def get_compact_news_digest():
         digest += "\n"
         # Fetch news entries first
         local_entries = fetch_rss_entries({
-            "Prothom Alo": "https://www.prothomalo.com/feed",
-            "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
-            "BDNews24": "https://bdnews24.com/feed",
-            "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
+            "Prothom Alo": "https://en.prothomalo.com/rss",
+            "The Daily Star": "https://www.thedailystar.net/rss.xml",
+            "BDNews24": "https://bangla.bdnews24.com/feed/",
+            "Dhaka Tribune": "https://www.dhakatribune.com/feed",
             "Kaler Kantho": "https://www.kalerkantho.com/rss.xml",
             "Samakal": "https://samakal.com/rss.xml"
         }, limit=8, max_age_hours=6)
         global_entries = fetch_rss_entries({
             "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
             "CNN": "http://rss.cnn.com/rss/edition.rss",
-            "Reuters": "http://feeds.reuters.com/reuters/topNews",
+            "Reuters": "https://www.reutersagency.com/feed/?best-topics=top-news",
             "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
             "New York Post": "https://nypost.com/feed/"
         }, limit=8, max_age_hours=6)
@@ -1259,10 +1259,10 @@ def get_category_news(category, limit=10):
     try:
         if category == 'local':
             sources = {
-                "Prothom Alo": "https://www.prothomalo.com/feed",
-                "The Daily Star": "https://www.thedailystar.net/frontpage/rss.xml",
-                "BDNews24": "https://bdnews24.com/feed",
-                "Dhaka Tribune": "https://www.dhakatribune.com/articles.rss",
+                "Prothom Alo": "https://en.prothomalo.com/rss",
+                "The Daily Star": "https://www.thedailystar.net/rss.xml",
+                "BDNews24": "https://bangla.bdnews24.com/feed/",
+                "Dhaka Tribune": "https://www.dhakatribune.com/feed",
                 "Jugantor": "https://www.jugantor.com/rss.xml",
                 "Samakal": "https://samakal.com/rss.xml"
             }
@@ -1272,7 +1272,7 @@ def get_category_news(category, limit=10):
             sources = {
                 "BBC": "http://feeds.bbci.co.uk/news/rss.xml",
                 "CNN": "http://rss.cnn.com/rss/edition.rss",
-                "Reuters": "http://feeds.reuters.com/reuters/topNews",
+                "Reuters": "https://www.reutersagency.com/feed/?best-topics=top-news",
                 "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
                 "The Guardian": "https://www.theguardian.com/world/rss",
                 "New York Post": "https://nypost.com/feed/"
