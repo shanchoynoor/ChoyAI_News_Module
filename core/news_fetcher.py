@@ -132,70 +132,44 @@ def get_hours_ago(published_time_str):
 def fetch_rss_entries(sources, limit=5, max_age_hours=2):
     """
     Fetch RSS entries from multiple sources, prioritizing recent news.
-    
     Args:
         sources (dict): Dictionary of source_name: rss_url
         limit (int): Maximum number of entries per source
         max_age_hours (int): Maximum age of news in hours (default 2 hours)
-        
     Returns:
         list: List of recent news entries with metadata
     """
     all_entries = []
-    very_recent_entries = []  # Less than 20 minutes
-    recent_entries = []       # 20 minutes to 2 hours
-    
     for source_name, rss_url in sources.items():
         try:
             logger.info(f"Fetching RSS from {source_name}: {rss_url}")
-            
-            # Set timeout and headers
             headers = {
                 'User-Agent': 'ChoyNewsBot/1.0 (+https://github.com/shanchoynoor/ChoyAI_News_Module)'
             }
-            
             response = requests.get(rss_url, headers=headers, timeout=15)
             response.raise_for_status()
-            
-            # Parse RSS feed
             feed = feedparser.parse(response.content)
-            
             if not feed.entries:
                 logger.warning(f"No entries found in RSS feed: {source_name}")
                 continue
-            
             logger.info(f"Found {len(feed.entries)} entries from {source_name}")
-                
-            # Process entries
-            for entry in feed.entries[:limit*2]:  # Get more entries to filter recent ones
+            for entry in feed.entries[:limit*2]:
                 try:
-                    # Extract publication time - try multiple fields
-                    pub_time = (entry.get('published') or 
-                              entry.get('updated') or 
-                              entry.get('pubDate') or 
-                              entry.get('date') or '')
-                    
+                    pub_time = (entry.get('published') or entry.get('updated') or entry.get('pubDate') or entry.get('date') or '')
                     pub_time_dt = None
                     time_ago = "Unknown"
-                    hours_diff = 999  # Default to very old
-                    
-                    # If we have a published_parsed field, use it for more accuracy
+                    hours_diff = 999
                     if hasattr(entry, 'published_parsed') and entry.published_parsed:
                         try:
                             import time
-                            # Convert struct_time to datetime
                             pub_time_struct = entry.published_parsed
                             pub_time_dt = datetime(*pub_time_struct[:6])
-                            
-                            # Calculate time difference
                             now = datetime.now()
                             time_diff = now - pub_time_dt
                             hours_diff = time_diff.total_seconds() / 3600
-                            
                             if hours_diff < 0:
-                                hours_diff = abs(hours_diff)  # Handle future times
-                            
-                            if hours_diff < 1/60:  # Less than 1 minute
+                                hours_diff = abs(hours_diff)
+                            if hours_diff < 1/60:
                                 time_ago = "now"
                             elif hours_diff < 1:
                                 minutes_diff = int(time_diff.total_seconds() / 60)
@@ -207,7 +181,6 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
                                 time_ago = f"{days_diff}d ago"
                         except:
                             time_ago = get_hours_ago(pub_time)
-                            # Try to extract hours for filtering
                             if "min ago" in time_ago:
                                 try:
                                     hours_diff = int(time_ago.split("min")[0]) / 60
@@ -222,7 +195,6 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
                                 hours_diff = 0
                     else:
                         time_ago = get_hours_ago(pub_time)
-                        # Try to extract hours for filtering
                         if "min ago" in time_ago:
                             try:
                                 hours_diff = int(time_ago.split("min")[0]) / 60
@@ -236,20 +208,11 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
                         elif "now" in time_ago:
                             hours_diff = 0
                         elif "d ago" in time_ago:
-                            hours_diff = 25  # Older than 24 hours
-                    
-                    # Skip very old news (older than max_age_hours)
-                    if hours_diff > max_age_hours:
-                        continue
-                    
-                    # Clean title
+                            hours_diff = 25
                     title = entry.get('title', 'No title').strip()
                     if len(title) > 100:
                         title = title[:97] + "..."
-                    
-                    # Extract link
                     link = entry.get('link', '')
-                    
                     entry_data = {
                         'title': title,
                         'link': link,
@@ -259,77 +222,27 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
                         'hours_diff': hours_diff,
                         'summary': entry.get('summary', '')[:200] + "..." if entry.get('summary') else ''
                     }
-                    
-                    # Categorize by recency
-                    if hours_diff <= 1/3:  # 20 minutes or less
-                        very_recent_entries.append(entry_data)
-                    else:
-                        recent_entries.append(entry_data)
-                    
+                    all_entries.append(entry_data)
                 except Exception as e:
                     logger.warning(f"Error processing entry from {source_name}: {e}")
                     continue
-                    
         except requests.RequestException as e:
             logger.error(f"Error fetching RSS from {source_name}: {e}")
             continue
         except Exception as e:
             logger.error(f"Unexpected error with {source_name}: {e}")
             continue
-    
-    # Prioritize very recent news
-    if very_recent_entries:
-        logger.info(f"Found {len(very_recent_entries)} very recent entries (≤20min)")
-        all_entries = very_recent_entries
-        # If we have enough very recent news, just add a few recent ones for context
-        if len(very_recent_entries) >= limit:
-            all_entries = very_recent_entries[:limit]
-        else:
-            # Add some recent entries to fill up
-            remaining_slots = limit - len(very_recent_entries)
-            all_entries.extend(recent_entries[:remaining_slots])
-    else:
-        logger.info(f"No very recent news found, using recent entries (≤{max_age_hours}hr). Found {len(recent_entries)} recent entries")
-        all_entries = recent_entries
-    
-    logger.info(f"Returning {len(all_entries)} total entries out of requested {limit}")
-    
-    # Sort by time (newest first)
-    try:
-        all_entries.sort(key=lambda x: x.get('hours_diff', 999))
-    except:
-        # Fallback sorting
-        try:
-            def get_sort_time(entry):
-                time_str = entry.get('published', '')
-                if not time_str:
-                    return datetime.min
-                
-                try:
-                    if "GMT" in time_str or "UTC" in time_str:
-                        clean_str = time_str.replace("GMT", "").replace("UTC", "").strip()
-                        return datetime.strptime(clean_str, "%a, %d %b %Y %H:%M:%S")
-                    elif "+0000" in time_str or "+0600" in time_str:
-                        parts = time_str.rsplit(' ', 1)
-                        if len(parts) == 2:
-                            clean_str = parts[0]
-                            return datetime.strptime(clean_str, "%a, %d %b %Y %H:%M:%S")
-                    elif "T" in time_str:
-                        if time_str.endswith('Z'):
-                            return datetime.strptime(time_str[:-1], "%Y-%m-%dT%H:%M:%S")
-                        else:
-                            return datetime.strptime(time_str[:19], "%Y-%m-%dT%H:%M:%S")
-                    elif ',' in time_str:
-                        return datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S")
-                    else:
-                        return datetime.strptime(time_str[:19], "%Y-%m-%d %H:%M:%S")
-                except:
-                    return datetime.min
-            
-            all_entries.sort(key=get_sort_time, reverse=True)
-        except:
-            pass
-        
+    # Sort all entries by publish time (newest first)
+    all_entries.sort(key=lambda x: x.get('hours_diff', 999))
+    # Try to get only entries within 0.5 hours (30min)
+    recent_entries = [e for e in all_entries if e.get('hours_diff', 999) <= 0.5]
+    if recent_entries:
+        return recent_entries[:limit]
+    # If no recent entries, try to get entries within 2 hours
+    two_hour_entries = [e for e in all_entries if e.get('hours_diff', 999) <= 2]
+    if two_hour_entries:
+        return two_hour_entries[:limit]
+    # If still nothing, return the most recent available
     return all_entries[:limit]
 
 def format_news(section_title, entries, limit=5):
@@ -1165,7 +1078,9 @@ def get_compact_news_digest():
     """
     Generate a compact news digest for the /news command.
     Returns:
-        tuple: (digest_text, section_buttons) where section_buttons is a list of (section_title, command)
+        tuple: (digest_text, section_data, main_buttons)
+        - section_data: list of dicts with keys: title, command, news_items (each news_item: id, title, link, source, time, summary)
+        - main_buttons: list of (title, command) for the 2x3 grid at the bottom
     """
     try:
         from datetime import datetime
@@ -1212,9 +1127,49 @@ def get_compact_news_digest():
             "প্রথম আলো অর্থনীতি": "https://www.prothomalo.com/business/feed",
             "বণিক বার্তা": "https://www.bonikbarta.net/feed"
         }, limit=8, max_age_hours=8)
+        # Prepare section data for each news section
+        def build_news_items(entries, section, lang='en'):
+            items = []
+            for idx, entry in enumerate(entries[:4]):
+                if lang == 'bn' and entry.get('title_bn'):
+                    title = entry.get('title_bn', 'No title')
+                else:
+                    title = entry.get('title', 'No title')
+                items.append({
+                    'id': f'{section}_{idx}',
+                    'title': title,
+                    'link': entry.get('link', ''),
+                    'source': entry.get('source', 'Unknown'),
+                    'time': entry.get('time_ago', 'Unknown'),
+                    'summary': entry.get('summary', '')
+                })
+            return items
+        section_data = [
+            {'title': '🇧🇩 LOCAL NEWS', 'command': '/local', 'news_items': build_news_items(local_entries, 'local', lang='bn')},
+            {'title': '🌍 GLOBAL NEWS', 'command': '/global', 'news_items': build_news_items(global_entries, 'global', lang='en')},
+            {'title': '🚀 TECH NEWS', 'command': '/tech', 'news_items': build_news_items(tech_entries, 'tech', lang='en')},
+            {'title': '🏆 SPORTS NEWS', 'command': '/sports', 'news_items': build_news_items(sports_entries, 'sports', lang='bn')},
+            {'title': '💼 FINANCE NEWS', 'command': '/finance', 'news_items': build_news_items(finance_entries, 'finance', lang='en')},
+        ]
+        # Compose digest text (no [Details] or [SEE MORE] in text)
         digest += get_compact_weather() + "\n\n"
-        # Prepare section buttons for inline keyboard
-        section_buttons = [
+        for section in section_data:
+            digest += f"{section['title']}\n"
+            for i, item in enumerate(section['news_items'], 1):
+                if item['link']:
+                    digest += f"{i}. [{item['title']}]({item['link']}) - {item['source']} ({item['time']})\n"
+                else:
+                    digest += f"{i}. {item['title']} - {item['source']} ({item['time']})\n"
+            digest += "\n"
+        # Crypto market section
+        crypto_market = get_compact_crypto_market()
+        digest += crypto_market + "\n"
+        digest += "\n📌 Quick Navigation:\n"
+        digest += "Type /help for complete command list or the commands (e.g., /local, /global, /tech, /sports, /finance, /weather, /cryptostats, /btc, btcstats etc.)\n\n"
+        digest += "━━━━━━━━━━━━━━\n"
+        digest += "🤖 By Shanchoy Noor"
+        # Main category buttons for 2x3 grid
+        main_buttons = [
             ("🇧🇩 LOCAL NEWS", "/local"),
             ("🌍 GLOBAL NEWS", "/global"),
             ("🚀 TECH NEWS", "/tech"),
@@ -1222,22 +1177,10 @@ def get_compact_news_digest():
             ("💼 FINANCE NEWS", "/finance"),
             ("💰 CRYPTO MARKET", "/cryptostats")
         ]
-        # Add sections (4 news per section)
-        digest += get_compact_news_section("🇧🇩 LOCAL NEWS", local_entries, lang='bn') + "\n"
-        digest += get_compact_news_section("🌍 GLOBAL NEWS", global_entries, lang='en') + "\n"
-        digest += get_compact_news_section("🚀 TECH NEWS", tech_entries, lang='en') + "\n"
-        digest += get_compact_news_section("🏆 SPORTS NEWS", sports_entries, lang='bn') + "\n"
-        digest += get_compact_news_section("💼 FINANCE NEWS", finance_entries, lang='en') + "\n"
-        crypto_market = get_compact_crypto_market()
-        digest += crypto_market + "\n"
-        digest += "\n📌 Quick Navigation:\n"
-        digest += "Type /help for complete command list or the commands (e.g., /local, /global, /tech, /sports, /finance, /weather, /cryptostats, /btc, btcstats etc.)\n\n"
-        digest += "━━━━━━━━━━━━━━\n"
-        digest += "🤖 By Shanchoy Noor"
-        return digest.strip(), section_buttons
+        return digest.strip(), section_data, main_buttons
     except Exception as e:
         logger.error(f"Error generating compact news digest: {e}")
-        return "📢 NEWS DIGEST\nTemporarily unavailable. Please try again later.", []
+        return "📢 NEWS DIGEST\nTemporarily unavailable. Please try again later.", [], []
 
 # ===================== EXISTING CRYPTO DATA =====================
 

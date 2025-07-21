@@ -336,19 +336,30 @@ All systems operational! 🚀
         send_telegram("Sorry, there was an error retrieving server status. Please try again later.", chat_id)
 
 def handle_news_command(chat_id, user_id, args):
-    """Handle the /news command with compact format and add inline keyboard for category navigation."""
+    """Handle the /news command with compact format and add inline keyboard for category navigation and details."""
     from api.telegram import send_telegram
     from core.news_fetcher import get_compact_news_digest
     try:
         # Send loading message
         send_telegram("📰 Loading latest news...", chat_id)
         # Build and send compact news digest
-        digest, section_buttons = get_compact_news_digest()
-        # Add inline keyboard for [SEE MORE] buttons for each section
+        digest, section_data, main_buttons = get_compact_news_digest()
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         keyboard = []
-        for title, command in section_buttons:
-            keyboard.append([InlineKeyboardButton(f"{title}: [SEE MORE]", callback_data=command)])
+        # For each section, add a [SEE MORE] button next to the section title
+        for section in section_data:
+            see_more_btn = InlineKeyboardButton(f"{section['title']}: [SEE MORE]", callback_data=section['command'])
+            keyboard.append([see_more_btn])
+            # For each news item, add a [Details] button
+            for item in section['news_items']:
+                news_item_store[item['id']] = item
+                keyboard.append([InlineKeyboardButton(f"[Details] {item['title'][:20]}...", callback_data=f"details_{item['id']}")])
+        # Add a 2x3 grid of main category buttons at the bottom
+        grid = []
+        for i in range(0, len(main_buttons), 3):
+            row = [InlineKeyboardButton(title, callback_data=command) for title, command in main_buttons[i:i+3]]
+            grid.append(row)
+        keyboard.extend(grid)
         reply_markup = InlineKeyboardMarkup(keyboard)
         from api.telegram import send_telegram_with_markup
         send_telegram_with_markup(digest, chat_id, reply_markup)
