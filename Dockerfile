@@ -31,13 +31,14 @@ RUN mkdir -p /app/logs /app/data/cache /app/data/static
 
 # Copy application code
 COPY . .
+COPY bin/ ./bin/
 
 # Create non-root user for security
 RUN groupadd -r choynews && useradd -r -g choynews choynews
 
 # Set proper permissions
 RUN chown -R choynews:choynews /app && \
-    chmod +x /app/bin/choynews
+    chmod +x /app/bin/choynews.py
 
 # Switch to non-root user
 USER choynews
@@ -50,4 +51,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 8080
 
 # Default command
-CMD ["/app/bin/choynews", "--service", "both"]
+ENTRYPOINT ["python", "/app/bin/choynews.py"]

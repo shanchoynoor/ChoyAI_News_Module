@@ -70,3 +70,4 @@ gunicorn>=21.2.0
 
 # Environment management
 python-decouple>=3.8
+timezonefinder==5.2.0
