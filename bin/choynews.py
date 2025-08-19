@@ -11,9 +11,11 @@ import logging
 import threading
 import argparse
 from dotenv import load_dotenv
+from pathlib import Path
 
 # Add project root to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 
 from utils.config import Config
 from utils.logging import setup_logging, get_logger
@@ -50,6 +52,7 @@ def run_auto_news():
     
     # Initialize database
     init_user_subscriptions_db()
+    init_user_logs_db()
     
     try:
         while True:
@@ -66,19 +69,27 @@ def run_auto_news():
                     logger.info(f"Found {len(users)} users for scheduled time {current_time}")
                     for user in users:
                         try:
+                            # Check if we should send news to this user
+                            if not should_send_news(user):
+                                continue
+                                
                             # Build personalized digest
                             digest = build_news_digest(user)
+                            if not digest:
+                                logger.warning(f"No digest generated for user {user.get('user_id')}")
+                                continue
                             
                             # Send digest to user
                             chat_id = user.get("chat_id")
-                            send_telegram(digest, chat_id)
-                            
-                            # Update last sent time
-                            update_last_sent(user.get("user_id"))
-                            
-                            logger.info(f"Sent news digest to user {user.get('user_id')}")
+                            if chat_id and send_telegram(digest, chat_id):
+                                # Update last sent time only on success
+                                update_last_sent(user.get("user_id"))
+                                logger.info(f"Sent news digest to user {user.get('user_id')}")
+                            else:
+                                logger.error(f"Failed to send digest to user {user.get('user_id')}")
+                                
                         except Exception as e:
-                            logger.error(f"Error sending to user {user.get('user_id')}: {e}")
+                            logger.error(f"Error processing user {user.get('user_id')}: {e}")
                 
                 # Sleep for 1 minute
                 time.sleep(60)
@@ -102,97 +113,85 @@ def main():
     setup_logging("main")
     logger = get_logger("main")
     
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python bin/choynews.py --service bot     # Interactive bot only
+  python bin/choynews.py --service auto    # Auto news delivery only  
+  python bin/choynews.py --service both    # Both services (default)
+        """
+    )
+    parser.add_argument("--service", choices=["bot", "auto", "both"], default="both",
+                        help="Which service to run: 'bot' (interactive), 'auto' (scheduled), or 'both' (default)")
+    parser.add_argument("--debug", action="store_true", 
+                        help="Enable debug logging")
+    args = parser.parse_args()
+    
+    # Set debug logging if requested
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+    
     # Validate configuration
     try:
         Config.validate()
-    except ValueError as e:
+        if not Config.TELEGRAM_TOKEN:
+            raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
+    except (ValueError, AttributeError) as e:
         logger.error(f"Configuration error: {e}")
+        logger.info("Make sure your .env file contains TELEGRAM_BOT_TOKEN")
         sys.exit(1)
-    
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Choy News Bot")
-    parser.add_argument("--service", choices=["bot", "auto", "both"], default="both",
-                        help="Which service to run: 'bot', 'auto', or 'both' (default)")
-    args = parser.parse_args()
     
     logger.info(f"Starting Choy News with service: {args.service}")
     
     try:
-        # Start requested services
+        threads = []
+        
+        # Start bot service in background if requested
         if args.service in ["bot", "both"]:
-            # Run in a separate thread
-            bot_thread = threading.Thread(target=run_bot)
+            bot_thread = threading.Thread(target=run_bot, name="BotThread")
             bot_thread.daemon = True
             bot_thread.start()
+            threads.append(bot_thread)
             logger.info("Bot service started in background thread")
             
+        # Start auto news service
         if args.service in ["auto", "both"]:
-            logger.info("Starting auto news service")
-            run_auto_news()  # This will block the main thread
-            
-        # If only bot was started, we need to keep the main thread alive
-        if args.service == "bot":
-            while True:
-                time.sleep(60)
+            if args.service == "both":
+                # Run auto news in background thread
+                auto_thread = threading.Thread(target=run_auto_news, name="AutoNewsThread")
+                auto_thread.daemon = True
+                auto_thread.start()
+                threads.append(auto_thread)
+                logger.info("Auto news service started in background thread")
+            else:
+                # Run auto news in main thread
+                logger.info("Starting auto news service")
+                run_auto_news()
+                
+        # If running both services, keep main thread alive
+        if args.service == "both":
+            try:
+                while any(thread.is_alive() for thread in threads):
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Received shutdown signal")
+                
+        # If only bot was started, keep main thread alive
+        elif args.service == "bot":
+            try:
+                while threads[0].is_alive():
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Received shutdown signal")
                 
     except KeyboardInterrupt:
-        logger.info("Received shutdown signal. Exiting...")
+        logger.info("Shutting down services...")
         sys.exit(0)
     except Exception as e:
         logger.critical(f"Fatal error: {e}", exc_info=True)
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-#!/usr/bin/env python3
-"""
-ChoyNewsBot Main Entry Point
-
-This script starts the Telegram bot with proper argument parsing.
-"""
-
-import sys
-import os
-import argparse
-from pathlib import Path
-
-# Add the project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-from core.bot import ChoyNewsBot
-from utils.logging import get_logger
-from utils.config import Config
-
-logger = get_logger(__name__)
-
-def main():
-    """Main entry point for the ChoyNewsBot."""
-    parser = argparse.ArgumentParser(description='ChoyNewsBot - AI-Powered Breaking News & Crypto Intelligence')
-    parser.add_argument('--service', choices=['bot', 'auto', 'both'], default='both',
-                      help='Service to run: bot (interactive), auto (scheduled), or both')
-    
-    args = parser.parse_args()
-    
-    try:
-        # Initialize configuration
-        if not Config.TELEGRAM_TOKEN:
-            logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
-            sys.exit(1)
-        
-        if args.service in ['bot', 'both']:
-            logger.info("Starting ChoyNewsBot...")
-            bot = ChoyNewsBot()
-            bot.run()
-        
-        if args.service in ['auto', 'both']:
-            logger.info("Auto news service not implemented yet")
-            
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Error starting bot: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

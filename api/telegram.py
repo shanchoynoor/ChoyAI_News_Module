@@ -6,6 +6,7 @@ This module provides functions for sending messages and retrieving updates from 
 
 import requests
 import logging
+import os
 from utils.config import Config
 from utils.logging import get_logger
 
@@ -32,7 +33,7 @@ def send_telegram(message, chat_id, parse_mode="Markdown"):
         }
         
         response = requests.post(url, json=payload)
-        response.raise_for_status()  # Raise exception for 4XX/5XX responses
+        response.raise_for_status()
         
         data = response.json()
         if data.get("ok"):
@@ -49,12 +50,14 @@ def send_telegram(message, chat_id, parse_mode="Markdown"):
         return None
 
 def send_telegram_with_markup(text, chat_id, reply_markup):
-    from telegram import Bot
-    import os
-    import asyncio
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    bot = Bot(token=bot_token)
-    asyncio.run(bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode='Markdown'))
+    try:
+        from telegram import Bot
+        import asyncio
+        bot_token = Config.TELEGRAM_TOKEN or os.getenv("TELEGRAM_BOT_TOKEN")
+        bot = Bot(token=bot_token)
+        asyncio.run(bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode='Markdown'))
+    except Exception as e:
+        logger.error(f"Error sending markup message: {e}")
 
 def get_updates(offset=None, timeout=30):
     """
