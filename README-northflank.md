@@ -12,16 +12,7 @@ If your Telegram bot is not responding on Northflank, follow these steps:
 ```
 
 **Environment Variables** (set these individually in Northflank):
-```
-TELEGRAM_BOT_TOKEN=7814094161:AAETeXoaaKKiEn-f0_eqAD0E1Ej7NzMcIXc
-DEEPSEEK_API_KEY=sk-c4a39fed278944c08bac571dae3655d3
-WEATHERAPI_KEY=3c10be7e7e344bdfa42130020250407
-CALENDARIFIC_API_KEY=EGQWwZ8aIvQQ2E8uXkbbvuIJugXhmSjN
-TWELVE_DATA_API_KEY=c99fa9536eee44acaee038a840a7f309
-COINGECKO_API_KEY=CG-9C6w3YASi2NMRk8mWtxUgn4h
-LOG_LEVEL=INFO
-PYTHONPATH=/app
-```
+
 
 ### 2. Alternative Start Command (if script doesn't work):
 ```bash
@@ -42,6 +33,8 @@ Set to `/app` (project root)
 2. **Verify Environment Variables** are properly set
 3. **Test Telegram API** connectivity
 4. **Check Dependencies** are installed
+5. **Check File Permissions** - ensure `data/` directory is writable
+6. **Database Issues** - SQLite database needs write permissions
 
 ## 📋 Common Issues & Solutions
 
@@ -53,6 +46,12 @@ Set to `/app` (project root)
 
 ### Issue: Dependencies not installed
 **Solution:** Use the build command above or ensure `requirements.txt` is accessible
+
+### Issue: Permission denied: '/app/core/../../data'
+**Solution:** The `data/` directory needs write permissions. The startup script now handles this.
+
+### Issue: SQLite database creation fails
+**Solution:** Ensure the application has write permissions to create `data/news_history.db`
 
 ### Issue: Working directory issues
 **Solution:** Set working directory to `/app` in Northflank service settings

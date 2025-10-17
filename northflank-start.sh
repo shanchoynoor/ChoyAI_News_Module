@@ -17,9 +17,11 @@ else
     echo "Warning: config/requirements.txt not found"
 fi
 
-# Create necessary directories
+# Create necessary directories with proper permissions
 echo "Creating directories..."
 mkdir -p logs data/cache data/static
+chmod -R 755 logs data
+chmod 644 data/cache/.gitkeep 2>/dev/null || true
 
 # Set environment variables (fallback if not set by Northflank)
 export PYTHONPATH="${PYTHONPATH}:/app"
@@ -47,14 +49,21 @@ print('Environment validation passed!')
 echo "Testing Telegram API connection..."
 python3 -c "
 import sys
+import os
 sys.path.insert(0, '.')
+
+# Check environment variables
+telegram_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+print(f'TELEGRAM_BOT_TOKEN present: {\"Yes\" if telegram_token else \"No\"} (length: {len(telegram_token)})')
+
 from api.telegram import get_updates
 try:
     updates = get_updates()
     print(f'Telegram API test successful! Received {len(updates) if updates else 0} updates')
 except Exception as e:
     print(f'Telegram API test failed: {e}')
-    sys.exit(1)
+    # Don't exit on API test failure - might be network issue
+    print('Continuing with startup despite API test failure...')
 "
 
 # Start the bot
