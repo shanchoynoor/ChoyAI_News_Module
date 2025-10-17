@@ -29,8 +29,8 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
     try:
         # Import advanced news fetcher functions
         from core.advanced_news_fetcher import (
-            get_breaking_local_news, get_breaking_global_news, get_breaking_tech_news, 
-            get_breaking_sports_news, get_breaking_crypto_news, fetch_crypto_market_with_ai,
+            get_breaking_local_news, get_breaking_global_news, get_breaking_tech_news,
+            get_breaking_sports_news, get_breaking_finance_news, fetch_crypto_market_with_ai,
             get_dhaka_weather, get_bd_holidays
         )
         
@@ -109,7 +109,7 @@ def build_news_digest(user=None, include_crypto=True, include_weather=True, incl
             sections.append("*🏆 SPORTS NEWS:*\n1. 📰 News updates will be available shortly...\n2. 🔍 Breaking news being monitored...\n3. 📈 Latest developments being tracked...\n4. ⏰ Updates coming soon...\n5. 📝 News compilation in progress...\n")
         
         try:
-            crypto_news = get_breaking_crypto_news()
+            crypto_news = get_breaking_finance_news()
             sections.append(crypto_news if crypto_news and crypto_news.strip() else "*🪙 FINANCE & CRYPTO NEWS:*\n1. 📊 Cryptocurrency market movements being analyzed...\n2. 🔗 DeFi protocol updates being tracked...\n3. ⛓️ Blockchain developments coming soon...\n4. 📜 Digital asset regulatory news in progress...\n5. 💹 Crypto trading insights being compiled...\n")
         except Exception as e:
             logger.warning(f"Error getting crypto news: {e}")

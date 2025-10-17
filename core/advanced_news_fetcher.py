@@ -487,7 +487,7 @@ def format_news_section(section_title, entries, limit=4):
             continue
             
         count += 1
-        formatted += f"{count}. {title} - {source} ({time_ago}) Details\n"
+        formatted += f"{count}. {title} - {source} ({time_ago})\n"
         
         try:
             mark_news_as_sent(entry['hash'], title, source, entry.get('published', ''), entry.get('category', ''), entry.get('link', ''))
@@ -612,7 +612,7 @@ def get_dhaka_weather():
         uv = current.get("uv", 0)
         uv_level = "Minimal" if uv <= 2 else "Low" if uv <= 5 else "Moderate" if uv <= 7 else "High"
         
-        return f"WEATHER\n{temp_c}°C | {condition}\nAir: {aqi_text} ({us_epa}) | UV: {uv_level} ({uv}/11)\n"
+        return f"☀️ WEATHER NOW\n🌡️ Temperature: {temp_c}°C - {temp_c}°C\n☁️ Condition: {condition}\n🫧 Air Quality: {aqi_text} ({us_epa})\n🔆 UV Index: {uv_level} ({uv}/11)\n"
         
     except Exception as e:
         logger.error(f"Weather error: {e}")
