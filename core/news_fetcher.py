@@ -9,6 +9,7 @@ import feedparser
 import json
 import os
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils.logging import get_logger
 from utils.config import Config
 
@@ -139,37 +140,39 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
     Returns:
         list: List of recent news entries with metadata
     """
-    all_entries = []
-    for source_name, rss_url in sources.items():
+    headers = {
+        'User-Agent': 'ChoyNewsBot/1.0 (+https://github.com/shanchoynoor/ChoyAI_News_Module)'
+    }
+
+    def _process_feed(source_name, rss_url):
+        entries_out = []
         try:
             logger.info(f"Fetching RSS from {source_name}: {rss_url}")
-            headers = {
-                'User-Agent': 'ChoyNewsBot/1.0 (+https://github.com/shanchoynoor/ChoyAI_News_Module)'
-            }
-            response = requests.get(rss_url, headers=headers, timeout=15)
+            with requests.Session() as session:
+                response = session.get(rss_url, headers=headers, timeout=6)
             response.raise_for_status()
+
             feed = feedparser.parse(response.content)
             if not feed.entries:
                 logger.warning(f"No entries found in RSS feed: {source_name}")
-                continue
-            logger.info(f"Found {len(feed.entries)} entries from {source_name}")
-            for entry in feed.entries[:limit*2]:
+                return entries_out
+
+            for entry in feed.entries[:limit * 2]:
                 try:
                     pub_time = (entry.get('published') or entry.get('updated') or entry.get('pubDate') or entry.get('date') or '')
-                    pub_time_dt = None
                     time_ago = "Unknown"
                     hours_diff = 999
-                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+
+                    parsed_dt_struct = getattr(entry, 'published_parsed', None) or getattr(entry, 'updated_parsed', None)
+                    if parsed_dt_struct:
                         try:
-                            import time
-                            pub_time_struct = entry.published_parsed
-                            pub_time_dt = datetime(*pub_time_struct[:6])
+                            pub_time_dt = datetime(*parsed_dt_struct[:6])
                             now = datetime.now()
                             time_diff = now - pub_time_dt
                             hours_diff = time_diff.total_seconds() / 3600
                             if hours_diff < 0:
                                 hours_diff = abs(hours_diff)
-                            if hours_diff < 1/60:
+                            if hours_diff < 1 / 60:
                                 time_ago = "now"
                             elif hours_diff < 1:
                                 minutes_diff = int(time_diff.total_seconds() / 60)
@@ -179,41 +182,34 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
                             else:
                                 days_diff = int(hours_diff / 24)
                                 time_ago = f"{days_diff}d ago"
-                        except:
+                        except Exception:
                             time_ago = get_hours_ago(pub_time)
-                            if "min ago" in time_ago:
-                                try:
-                                    hours_diff = int(time_ago.split("min")[0]) / 60
-                                except:
-                                    hours_diff = 0.5
-                            elif "hr ago" in time_ago:
-                                try:
-                                    hours_diff = int(time_ago.split("hr")[0])
-                                except:
-                                    hours_diff = 1
-                            elif "now" in time_ago:
-                                hours_diff = 0
                     else:
                         time_ago = get_hours_ago(pub_time)
-                        if "min ago" in time_ago:
-                            try:
-                                hours_diff = int(time_ago.split("min")[0]) / 60
-                            except:
-                                hours_diff = 0.5
-                        elif "hr ago" in time_ago:
-                            try:
-                                hours_diff = int(time_ago.split("hr")[0])
-                            except:
-                                hours_diff = 1
-                        elif "now" in time_ago:
-                            hours_diff = 0
-                        elif "d ago" in time_ago:
-                            hours_diff = 25
+
+                    if "min ago" in time_ago:
+                        try:
+                            hours_diff = int(time_ago.split("min")[0]) / 60
+                        except Exception:
+                            hours_diff = 0.5
+                    elif "hr ago" in time_ago:
+                        try:
+                            hours_diff = int(time_ago.split("hr")[0])
+                        except Exception:
+                            hours_diff = 1
+                    elif "now" in time_ago:
+                        hours_diff = 0
+                    elif "d ago" in time_ago:
+                        hours_diff = 25
+
                     title = entry.get('title', 'No title').strip()
+                    # Remove [Details] prefix if present
+                    if title.startswith('[Details]'):
+                        title = title[9:].strip()
                     if len(title) > 100:
                         title = title[:97] + "..."
                     link = entry.get('link', '')
-                    entry_data = {
+                    entries_out.append({
                         'title': title,
                         'link': link,
                         'source': source_name,
@@ -221,28 +217,49 @@ def fetch_rss_entries(sources, limit=5, max_age_hours=2):
                         'time_ago': time_ago,
                         'hours_diff': hours_diff,
                         'summary': entry.get('summary', '')[:200] + "..." if entry.get('summary') else ''
-                    }
-                    all_entries.append(entry_data)
+                    })
                 except Exception as e:
                     logger.warning(f"Error processing entry from {source_name}: {e}")
                     continue
         except requests.RequestException as e:
             logger.error(f"Error fetching RSS from {source_name}: {e}")
-            continue
         except Exception as e:
             logger.error(f"Unexpected error with {source_name}: {e}")
-            continue
+        return entries_out
+
+    all_entries = []
+    max_workers = min(8, max(1, len(sources)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_process_feed, name, url) for name, url in sources.items()]
+        for future in as_completed(futures):
+            try:
+                all_entries.extend(future.result())
+            except Exception as e:
+                logger.error(f"RSS fetch worker failed: {e}")
+
     # Sort all entries by publish time (newest first)
     all_entries.sort(key=lambda x: x.get('hours_diff', 999))
-    # Try to get only entries within 0.5 hours (30min)
-    recent_entries = [e for e in all_entries if e.get('hours_diff', 999) <= 0.5]
+
+    if max_age_hours is None:
+        return all_entries[:limit]
+
+    try:
+        max_age_hours = float(max_age_hours)
+    except Exception:
+        max_age_hours = 2.0
+
+    if max_age_hours <= 0:
+        return all_entries[:limit]
+
+    recent_threshold = min(0.5, max_age_hours)
+    recent_entries = [e for e in all_entries if e.get('hours_diff', 999) <= recent_threshold]
     if recent_entries:
         return recent_entries[:limit]
-    # If no recent entries, try to get entries within 2 hours
-    two_hour_entries = [e for e in all_entries if e.get('hours_diff', 999) <= 2]
-    if two_hour_entries:
-        return two_hour_entries[:limit]
-    # If still nothing, return the most recent available
+
+    age_entries = [e for e in all_entries if e.get('hours_diff', 999) <= max_age_hours]
+    if age_entries:
+        return age_entries[:limit]
+
     return all_entries[:limit]
 
 def format_news(section_title, entries, limit=5):
@@ -1061,17 +1078,20 @@ def get_compact_news_section(section_title, entries, limit=4, lang='en'):
             title = entry.get('title_bn', 'No title')
         else:
             title = entry.get('title', 'No title')
+        # Remove [Details] prefix if present
+        if title.startswith('[Details]'):
+            title = title[9:].strip()
         source = entry.get('source', 'Unknown')
         time_ago = entry.get('time_ago', 'Unknown')
         link = entry.get('link', '')
         # Truncate title if too long
         if len(title) > 80:
             title = title[:77] + "..."
-        # Make title clickable if link available and add [Details]
+        # Make title clickable if link available
         if link:
-            formatted += f"{i}. [{title}]({link}) - {source} ({time_ago}) [Details]\n"
+            formatted += f"{i}. [{title}]({link}) - {source} ({time_ago})\n"
         else:
-            formatted += f"{i}. {title} - {source} ({time_ago}) [Details]\n"
+            formatted += f"{i}. {title} - {source} ({time_ago})\n"
     return formatted
 
 def get_compact_news_digest():
@@ -1135,6 +1155,9 @@ def get_compact_news_digest():
                     title = entry.get('title_bn', 'No title')
                 else:
                     title = entry.get('title', 'No title')
+                # Remove [Details] prefix if present
+                if title.startswith('[Details]'):
+                    title = title[9:].strip()
                 items.append({
                     'id': f'{section}_{idx}',
                     'title': title,
@@ -1270,7 +1293,7 @@ def get_category_news(category, limit=10):
         entries = fetch_rss_entries(sources, limit=30, max_age_hours=max_age)  # Get more to ensure we have enough
         if not entries:
             return f"{title}\nNo news available at the moment.", []
-        # Filter for only recent news (<= 30 min ago)
+        # Filter for recent news; 30 minutes is often too strict due to feed update cadence.
         def parse_minutes_ago(time_ago):
             if 'min' in time_ago:
                 try:
@@ -1280,12 +1303,18 @@ def get_category_news(category, limit=10):
             elif 'now' in time_ago:
                 return 0
             else:
+                if 'hr' in time_ago:
+                    try:
+                        return int(time_ago.split('hr')[0].strip()) * 60
+                    except:
+                        return 999
                 return 999
         filtered_entries = []
         source_counts = {}
+        max_recent_minutes = 6 * 60
         for idx, entry in enumerate(entries):
             mins = parse_minutes_ago(entry.get('time_ago', '999min ago'))
-            if mins <= 30:
+            if mins <= max_recent_minutes:
                 source = entry.get('source', 'Unknown')
                 count = source_counts.get(source, 0)
                 if count < 3:
@@ -1294,13 +1323,16 @@ def get_category_news(category, limit=10):
             if len(filtered_entries) >= limit:
                 break
         if not filtered_entries:
-            return f"{title}\nNo recent news available (last 30 min).", []
+            return f"{title}\nNo recent news available (last 6 hours).", []
         # Format the response with clickable headlines and prepare news_items for [Details]
         response = f"{title}\n"
         response += "━━━━━━━━━━━━━━\n"
         news_items = []
         for i, (idx, entry) in enumerate(filtered_entries, 1):
             title_text = entry.get('title', 'No title')
+            # Remove [Details] prefix if present
+            if title_text.startswith('[Details]'):
+                title_text = title_text[9:].strip()
             source = entry.get('source', 'Unknown')
             time_ago = entry.get('time_ago', 'Unknown')
             link = entry.get('link', '')
